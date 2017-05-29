@@ -650,7 +650,7 @@ struct KinFuApp
   enum { PCD_BIN = 1, PCD_ASCII = 2, PLY = 3, MESH_PLY = 7, MESH_VTK = 8 };
   
   KinFuApp(pcl::Grabber& source, float vsz, int icp, int viz, boost::shared_ptr<CameraPoseProcessor> pose_processor=boost::shared_ptr<CameraPoseProcessor> () ) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
-      registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), scene_cloud_view_(viz), image_view_(viz), time_ms_(0), icp_(icp), viz_(viz), pose_processor_ (pose_processor)
+      registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), scene_cloud_view_(viz), image_view_(viz), time_ms_(0), icp_(icp), viz_(viz), pose_processor_ (pose_processor), recording_ (false)
   {    
     //Init Kinfu Tracker
     Eigen::Vector3f volume_size = Vector3f::Constant (vsz/*meters*/);    
@@ -745,6 +745,16 @@ struct KinFuApp
   }
 
   void
+  toggleRecording()
+  {
+    if (use_device_ && registration_){
+      recording_ = !recording_;
+    }
+    cout << "Recording ONI: " << (recording_ ? "ON" : "Off (requires registration mode )") << endl;
+  }
+
+
+  void
   toggleIndependentCamera()
   {
     independent_camera_ = !independent_camera_;
@@ -766,7 +776,7 @@ struct KinFuApp
   void execute(const PtrStepSz<const unsigned short>& depth, const PtrStepSz<const KinfuTracker::PixelRGB>& rgb24, bool has_data)
   {        
     bool has_image = false;
-      
+
     if (has_data)
     {
       depth_device_.upload (depth.data, depth.step, depth.rows, depth.cols);

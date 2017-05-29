@@ -931,6 +931,7 @@ struct KinFuApp
     data_ready_cond_.notify_one();
   }
 
+  
   void
   source_cb3 (const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr & DC3)
   {
@@ -966,6 +967,57 @@ struct KinFuApp
     }
     data_ready_cond_.notify_one ();
   }
+
+  void startRecording() {
+    pcl::OpenNIGrabber * current_grabber = ( pcl::OpenNIGrabber * )( &capture_ );
+    openni_wrapper::OpenNIDevice & device = * current_grabber->getDevice();
+    xn::Context & context = device.getContext();
+    cout << "Synchronization mode : " << ( device.isSynchronized() ? "On" : "Off" ) << endl;
+
+    xn::EnumerationErrors errors;
+    XnStatus rc;
+    rc = device.getContext().CreateAnyProductionTree( XN_NODE_TYPE_RECORDER, NULL, xn_recorder_, &errors );
+    CHECK_RC_ERR(rc, "Create recorder", errors);
+
+    time_t rawtime;
+    struct tm *timeinfo;
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    XnChar strFileName[XN_FILE_MAX_PATH];
+    sprintf(strFileName, "%04d%02d%02d-%02d%02d%02d.oni",
+    timeinfo->tm_year+1900, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+    xn_recorder_.SetDestination(XN_RECORD_MEDIUM_FILE, strFileName);
+    printf("Creating recording file %s\n", strFileName);
+
+     //XnUInt64 nprop;
+     //device.getDepthGenerator().GetIntProperty( "InputFormat", nprop );
+     //cout << nprop << endl;
+     //device.getDepthGenerator().GetIntProperty( "OutputFormat", nprop );
+     //cout << nprop << endl;
+     //device.getImageGenerator().GetIntProperty( "InputFormat", nprop );
+     //cout << nprop << endl;
+     //device.getImageGenerator().GetIntProperty( "OutputFormat", nprop );
+     //cout << nprop << endl;
+
+    // Create mock nodes based on the image generator, to save image
+    rc = context.CreateMockNodeBasedOn( device.getImageGenerator(), NULL, xn_mock_image_ );
+    CHECK_RC(rc, "Create image node");
+    rc = xn_recorder_.AddNodeToRecording( xn_mock_image_, XN_CODEC_JPEG );
+    CHECK_RC(rc, "Add image node");
+    xn_mock_image_.SetData( xn_image_ );
+
+    // Create mock nodes based on the depth generator, to save depth
+    rc = context.CreateMockNodeBasedOn( device.getDepthGenerator(), NULL, xn_mock_depth_ );
+    CHECK_RC(rc, "Create depth node");
+    rc = xn_recorder_.AddNodeToRecording( xn_mock_depth_, XN_CODEC_16Z_EMB_TABLES );
+    CHECK_RC(rc, "Add depth node");
+    xn_mock_depth_.SetData( xn_depth_ );
+  }
+
+  void stopRecording() {
+    xn_recorder_.Release();
+  }
+
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   void

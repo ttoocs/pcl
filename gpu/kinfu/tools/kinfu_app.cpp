@@ -671,7 +671,7 @@ struct KinFuApp
 {
   enum { PCD_BIN = 1, PCD_ASCII = 2, PLY = 3, MESH_PLY = 7, MESH_VTK = 8 };
   
-  KinFuApp(pcl::Grabber& source, float vsz, int icp, int viz, boost::shared_ptr<CameraPoseProcessor> pose_processor=boost::shared_ptr<CameraPoseProcessor> () ) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), recording_ (false), independent_camera_ (false),  registration_ (false), integrate_colors_ (false), pcd_source_ (false),  focal_length_(-1.f), capture_ (source), scene_cloud_view_(viz), image_view_(viz), time_ms_(0), icp_(icp), viz_(viz), pose_processor_ (pose_processor)
+  KinFuApp(pcl::Grabber& source, float vsz, int icp, int viz, boost::shared_ptr<CameraPoseProcessor> pose_processor=boost::shared_ptr<CameraPoseProcessor> () ) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), recording_ (false), frame_num_ (0), independent_camera_ (false),  registration_ (false), integrate_colors_ (false), pcd_source_ (false),  focal_length_(-1.f), capture_ (source), scene_cloud_view_(viz), image_view_(viz), time_ms_(0), icp_(icp), viz_(viz), pose_processor_ (pose_processor)
   {    
     //Init Kinfu Tracker
     Eigen::Vector3f volume_size = Vector3f::Constant (vsz/*meters*/);    
@@ -1073,7 +1073,9 @@ if  (registration_){ //There is a pid_device, but in the SPCL it is never set to
 
       if (!triggered_capture)
           capture_.start (); // Start stream
-
+      if ( recording_ )
+          startRecording(); //Start recording
+      
       bool scene_view_not_stopped= viz_ ? !scene_cloud_view_.cloud_viewer_->wasStopped () : true;
       bool image_view_not_stopped= viz_ ? !image_view_.viewerScene_->wasStopped () : true;
           
@@ -1081,7 +1083,16 @@ if  (registration_){ //There is a pid_device, but in the SPCL it is never set to
       { 
         if (triggered_capture)
             capture_.start(); // Triggers new frame
+        
+
+
         bool has_data = data_ready_cond_.timed_wait (lock, boost::posix_time::millisec(100));        
+        
+        if ( recording_ && has_data ) {
+          xn_mock_depth_.SetData( xn_depth_, frame_num_, frame_num_ * 30000 + 1 );
+          xn_mock_image_.SetData( xn_image_, frame_num_, frame_num_ * 30000 );
+          xn_recorder_.Record();
+        }
                        
         try { this->execute (depth_, rgb24_, has_data); }
         catch (const std::bad_alloc& /*e*/) { cout << "Bad alloc" << endl; break; }
@@ -1093,6 +1104,10 @@ if  (registration_){ //There is a pid_device, but in the SPCL it is never set to
       
       if (!triggered_capture)     
           capture_.stop (); // Stop stream
+
+      if ( recording_ ){
+          stopRecording();
+      }
     }
     c.disconnect();
   }
@@ -1171,6 +1186,7 @@ if  (registration_){ //There is a pid_device, but in the SPCL it is never set to
   xn::DepthMetaData xn_depth_;
   xn::ImageMetaData xn_image_;
   xn::Recorder xn_recorder_;
+  int frame_num_;
 
   bool independent_camera_;
 
@@ -1306,6 +1322,7 @@ print_cli_help ()
   cout << "    -volume_size <size_in_meters>           : define integration volume size" << endl;
   cout << "    --depth-intrinsics <fx>,<fy>[,<cx>,<cy> : set the intrinsics of the depth camera" << endl;
   cout << "    -save_pose <pose_file.csv>              : write tracked camera positions to the specified file" << endl;
+  cout << "    -record                                 : record the stream to .oni file" << endl;
   cout << "Valid depth data sources:" << endl; 
   cout << "    -dev <device> (default), -oni <oni_file>, -pcd <pcd_file or directory>" << endl;
   cout << "";
@@ -1436,6 +1453,9 @@ main (int argc, char* argv[])
         return -1;
     }   
   }
+
+  if (pc::find_switch (argc, argv, "-record") )
+    app.toggleRecording();
 
   // executing
   try { app.startMainLoop (triggered_capture); }

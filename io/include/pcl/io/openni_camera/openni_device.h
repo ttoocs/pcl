@@ -436,6 +436,28 @@ namespace openni_wrapper
         return ret;
       }
 
+      /** \brief StanfordPCL hacks */
+      xn::Context & getContext() {
+        return context_;
+      }
+
+      /** \brief StanfordPCL hacks */
+      xn::DepthGenerator & getDepthGenerator() {
+        return depth_generator_;
+      }
+
+      /** \brief StanfordPCL hacks */
+      xn::ImageGenerator & getImageGenerator() {
+        return image_generator_;
+      }
+
+      /** \brief StanfordPCL hacks */
+      xn::IRGenerator & getIRGenerator() {
+        return ir_generator_;
+      }
+
+      
+
     private:
       // make OpenNIDevice non copyable
       OpenNIDevice (OpenNIDevice const &);

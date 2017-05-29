@@ -80,6 +80,28 @@
 #endif
 typedef pcl::ScopeTime ScopeTimeT;
 
+//---------------------------------------------------------------------------
+// SPCL Macros
+//---------------------------------------------------------------------------
+#define CHECK_RC(rc, what)                      \
+  if (rc != XN_STATUS_OK)                     \
+  {                               \
+    printf("%s failed: %s\n", what, xnGetStatusString(rc));   \
+    return;                         \
+  }
+
+#define CHECK_RC_ERR(rc, what, errors)      \
+{                       \
+  if (rc == XN_STATUS_NO_NODE_PRESENT)    \
+  {                     \
+    XnChar strError[1024];          \
+    errors.ToString(strError, 1024);    \
+    printf("%s\n", strError);       \
+  }                     \
+  CHECK_RC(rc, what)              \
+}
+
+
 #include "../src/internal.h"
 
 using namespace std;
@@ -649,8 +671,7 @@ struct KinFuApp
 {
   enum { PCD_BIN = 1, PCD_ASCII = 2, PLY = 3, MESH_PLY = 7, MESH_VTK = 8 };
   
-  KinFuApp(pcl::Grabber& source, float vsz, int icp, int viz, boost::shared_ptr<CameraPoseProcessor> pose_processor=boost::shared_ptr<CameraPoseProcessor> () ) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
-      registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), scene_cloud_view_(viz), image_view_(viz), time_ms_(0), icp_(icp), viz_(viz), pose_processor_ (pose_processor), recording_ (false)
+  KinFuApp(pcl::Grabber& source, float vsz, int icp, int viz, boost::shared_ptr<CameraPoseProcessor> pose_processor=boost::shared_ptr<CameraPoseProcessor> () ) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), recording_ (false), independent_camera_ (false),  registration_ (false), integrate_colors_ (false), pcd_source_ (false),  focal_length_(-1.f), capture_ (source), scene_cloud_view_(viz), image_view_(viz), time_ms_(0), icp_(icp), viz_(viz), pose_processor_ (pose_processor)
   {    
     //Init Kinfu Tracker
     Eigen::Vector3f volume_size = Vector3f::Constant (vsz/*meters*/);    
@@ -747,7 +768,8 @@ struct KinFuApp
   void
   toggleRecording()
   {
-    if (use_device_ && registration_){
+//    if (use_device_ && registration_){
+if  (registration_){ //There is a pid_device, but in the SPCL it is never set to anything but "used"
       recording_ = !recording_;
     }
     cout << "Recording ONI: " << (recording_ ? "ON" : "Off (requires registration mode )") << endl;
@@ -1141,6 +1163,14 @@ struct KinFuApp
   bool scan_;
   bool scan_mesh_;
   bool scan_volume_;
+
+  //Recording things:
+  bool recording_;
+  xn::MockDepthGenerator xn_mock_depth_;
+  xn::MockImageGenerator xn_mock_image_;
+  xn::DepthMetaData xn_depth_;
+  xn::ImageMetaData xn_image_;
+  xn::Recorder xn_recorder_;
 
   bool independent_camera_;
 

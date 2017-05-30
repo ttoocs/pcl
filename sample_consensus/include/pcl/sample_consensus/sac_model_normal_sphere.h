@@ -69,6 +69,7 @@ namespace pcl
   class SampleConsensusModelNormalSphere : public SampleConsensusModelSphere<PointT>, public SampleConsensusModelFromNormals<PointT, PointNT>
   {
     public:
+      using SampleConsensusModel<PointT>::model_name_;
       using SampleConsensusModel<PointT>::input_;
       using SampleConsensusModel<PointT>::indices_;
       using SampleConsensusModel<PointT>::radius_min_;
@@ -88,22 +89,36 @@ namespace pcl
 
       /** \brief Constructor for base SampleConsensusModelNormalSphere.
         * \param[in] cloud the input point cloud dataset
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelNormalSphere (const PointCloudConstPtr &cloud) 
-        : SampleConsensusModelSphere<PointT> (cloud)
+      SampleConsensusModelNormalSphere (const PointCloudConstPtr &cloud, 
+                                        bool random = false) 
+        : SampleConsensusModelSphere<PointT> (cloud, random)
         , SampleConsensusModelFromNormals<PointT, PointNT> ()
       {
+        model_name_ = "SampleConsensusModelNormalSphere";
+        sample_size_ = 4;
+        model_size_ = 4;
       }
 
       /** \brief Constructor for base SampleConsensusModelNormalSphere.
         * \param[in] cloud the input point cloud dataset
         * \param[in] indices a vector of point indices to be used from \a cloud
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelNormalSphere (const PointCloudConstPtr &cloud, const std::vector<int> &indices) 
-        : SampleConsensusModelSphere<PointT> (cloud, indices)
+      SampleConsensusModelNormalSphere (const PointCloudConstPtr &cloud, 
+                                        const std::vector<int> &indices,
+                                        bool random = false) 
+        : SampleConsensusModelSphere<PointT> (cloud, indices, random)
         , SampleConsensusModelFromNormals<PointT, PointNT> ()
       {
+        model_name_ = "SampleConsensusModelNormalSphere";
+        sample_size_ = 4;
+        model_size_ = 4;
       }
+      
+      /** \brief Empty destructor */
+      virtual ~SampleConsensusModelNormalSphere () {}
 
       /** \brief Select all the points which respect the given model coefficients as inliers.
         * \param[in] model_coefficients the coefficients of a sphere model that we need to compute distances to
@@ -139,10 +154,13 @@ namespace pcl
     	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     protected:
+      using SampleConsensusModel<PointT>::sample_size_;
+      using SampleConsensusModel<PointT>::model_size_;
+
       /** \brief Check whether a model is valid given the user constraints.
         * \param[in] model_coefficients the set of model coefficients
         */
-      bool 
+      virtual bool
       isModelValid (const Eigen::VectorXf &model_coefficients);
 
   };

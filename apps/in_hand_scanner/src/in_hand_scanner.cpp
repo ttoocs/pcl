@@ -40,47 +40,441 @@
 
 #include <pcl/apps/in_hand_scanner/in_hand_scanner.h>
 
-#include <pcl/common/transforms.h>
+#include <QApplication>
+#include <QtCore>
+#include <QKeyEvent>
+#include <QPainter>
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+#include <QtConcurrent/QtConcurrent>
+#endif
+
 #include <pcl/exceptions.h>
+#include <pcl/common/time.h>
+#include <pcl/common/transforms.h>
 #include <pcl/io/openni_grabber.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl/apps/in_hand_scanner/custom_interactor_style.h>
+#include <pcl/io/ply_io.h>
+#include <pcl/io/vtk_io.h>
+#include <pcl/geometry/get_boundary.h>
+#include <pcl/geometry/mesh_conversion.h>
 #include <pcl/apps/in_hand_scanner/icp.h>
 #include <pcl/apps/in_hand_scanner/input_data_processing.h>
 #include <pcl/apps/in_hand_scanner/integration.h>
-#include <pcl/apps/in_hand_scanner/impl/common_functions.hpp>
+#include <pcl/apps/in_hand_scanner/mesh_processing.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 
-pcl::ihs::InHandScanner::InHandScanner (int argc, char** argv)
-  : mutex_                 (),
-    run_                   (true),
-    visualization_fps_     (),
+pcl::ihs::InHandScanner::InHandScanner (Base* parent)
+  : Base                   (parent),
+    mutex_                 (),
     computation_fps_       (),
+    visualization_fps_     (),
     running_mode_          (RM_UNPROCESSED),
     iteration_             (0),
-
-    visualizer_            (),
-    interactor_style_      (),
-    draw_crop_box_         (false),
-    pivot_                 (0.f, 0.f, 0.f, 1.f),
-
     grabber_               (),
+    starting_grabber_      (false),
     new_data_connection_   (),
-
     input_data_processing_ (new InputDataProcessing ()),
-
     icp_                   (new ICP ()),
-    transformation_        (Transformation::Identity ()),
-
+    transformation_        (Eigen::Matrix4f::Identity ()),
     integration_           (new Integration ()),
-
-    cloud_data_draw_       (),
-    mesh_model_draw_       (new Mesh ()),
-    mesh_model_            (new Mesh ())
-
+    mesh_processing_       (new MeshProcessing ()),
+    mesh_model_            (new Mesh ()),
+    destructor_called_     (false)
 {
-  std::cerr << "Initializing the grabber ...\n  ";
+  // http://doc.qt.digia.com/qt/qmetatype.html#qRegisterMetaType
+  qRegisterMetaType <pcl::ihs::InHandScanner::RunningMode> ("RunningMode");
+
+  Base::setScalingFactor (0.01);
+
+  // Initialize the pivot
+  const float x_min = input_data_processing_->getXMin ();
+  const float x_max = input_data_processing_->getXMax ();
+  const float y_min = input_data_processing_->getYMin ();
+  const float y_max = input_data_processing_->getYMax ();
+  const float z_min = input_data_processing_->getZMin ();
+  const float z_max = input_data_processing_->getZMax ();
+
+  Base::setPivot (Eigen::Vector3d ((x_min + x_max) / 2., (y_min + y_max) / 2., (z_min + z_max) / 2.));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+pcl::ihs::InHandScanner::~InHandScanner ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  destructor_called_ = true;
+
+  if (grabber_ && grabber_->isRunning ()) grabber_->stop ();
+  if (new_data_connection_.connected ())  new_data_connection_.disconnect ();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::startGrabber ()
+{
+  QtConcurrent::run (boost::bind (&pcl::ihs::InHandScanner::startGrabberImpl, this));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::showUnprocessedData ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  std::cerr << "Showing the unprocessed input data.\n";
+  Base::setDrawBox (false);
+  Base::setColoring (Base::COL_RGB);
+
+  running_mode_ = RM_UNPROCESSED;
+  emit runningModeChanged (running_mode_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::showProcessedData ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  std::cerr << "Showing the processed input data.\n";
+  Base::setDrawBox (true);
+  Base::setColoring (Base::COL_RGB);
+
+  running_mode_ = RM_PROCESSED;
+  emit runningModeChanged (running_mode_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::registerContinuously ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  std::cerr << "Continuous registration.\n";
+  Base::setDrawBox (true);
+  Base::setColoring (Base::COL_VISCONF);
+
+  running_mode_ = RM_REGISTRATION_CONT;
+  emit runningModeChanged (running_mode_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::registerOnce ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  std::cerr << "Single registration.\n";
+  Base::setDrawBox (true);
+
+  running_mode_ = RM_REGISTRATION_SINGLE;
+  emit runningModeChanged (running_mode_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::showModel ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  std::cerr << "Show the model\n";
+  Base::setDrawBox (false);
+
+  running_mode_ = RM_SHOW_MODEL;
+  emit runningModeChanged (running_mode_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::removeUnfitVertices ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  std::cerr << "Removing unfit vertices ...\n";
+
+  integration_->removeUnfitVertices (mesh_model_);
+  if (mesh_model_->emptyVertices ())
+  {
+    std::cerr << "Mesh got empty -> Reset\n";
+    lock.unlock ();
+    this->reset ();
+  }
+  else
+  {
+    lock.unlock ();
+    this->showModel ();
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::reset ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  std::cerr << "Reset the scanning pipeline.\n";
+
+  mesh_model_->clear ();
+  Base::removeAllMeshes ();
+
+  iteration_      = 0;
+  transformation_ = Eigen::Matrix4f::Identity ();
+
+  lock.unlock ();
+  this->showUnprocessedData ();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::saveAs (const std::string& filename, const FileType& filetype)
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  pcl::PolygonMesh pm;
+  pcl::geometry::toFaceVertexMesh (*mesh_model_, pm);
+
+  switch (filetype)
+  {
+    case FT_PLY: pcl::io::savePLYFile (filename, pm); break;
+    case FT_VTK: pcl::io::saveVTKFile (filename, pm); break;
+    default:                                          break;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::keyPressEvent (QKeyEvent* event)
+{
+  // Don't allow keyboard callbacks while the grabber is starting up.
+  if (starting_grabber_)  return;
+  if (destructor_called_) return;
+
+  switch (event->key ())
+  {
+    case Qt::Key_1: this->showUnprocessedData ();      break;
+    case Qt::Key_2: this->showProcessedData ();        break;
+    case Qt::Key_3: this->registerContinuously ();     break;
+    case Qt::Key_4: this->registerOnce ();             break;
+    case Qt::Key_5: this->showModel ();                break;
+    case Qt::Key_6: this->removeUnfitVertices ();      break;
+    case Qt::Key_0: this->reset ();                    break;
+    case Qt::Key_C: Base::resetCamera ();              break;
+    case Qt::Key_K: Base::toggleColoring ();           break;
+    case Qt::Key_S: Base::toggleMeshRepresentation (); break;
+    default:                                           break;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::newDataCallback (const CloudXYZRGBAConstPtr& cloud_in)
+{
+  Base::calcFPS (computation_fps_); // Must come before the lock!
+
+  boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  pcl::StopWatch sw;
+
+  // Input data processing
+  CloudXYZRGBNormalPtr cloud_data;
+  CloudXYZRGBNormalPtr cloud_discarded;
+  if (running_mode_ == RM_SHOW_MODEL)
+  {
+    cloud_data = CloudXYZRGBNormalPtr (new CloudXYZRGBNormal ());
+  }
+  else if (running_mode_ == RM_UNPROCESSED)
+  {
+    if (!input_data_processing_->calculateNormals (cloud_in, cloud_data))
+      return;
+  }
+  else if (running_mode_ >= RM_PROCESSED)
+  {
+    if (!input_data_processing_->segment (cloud_in, cloud_data, cloud_discarded))
+      return;
+  }
+
+  double time_input_data_processing = sw.getTime ();
+
+  // Registration & integration
+  if (running_mode_ >= RM_REGISTRATION_CONT)
+  {
+    std::cerr << "\nGlobal iteration " << iteration_ << "\n";
+    std::cerr << "Input data processing:\n"
+              << "  - time                           : "
+              << std::setw (8) << std::right << time_input_data_processing << " ms\n";
+
+    if (iteration_ == 0)
+    {
+      transformation_ = Eigen::Matrix4f::Identity ();
+
+      sw.reset ();
+      integration_->reconstructMesh (cloud_data, mesh_model_);
+      std::cerr << "Integration:\n"
+                << "  - time reconstruct mesh          : "
+                << std::setw (8) << std::right << sw.getTime () << " ms\n";
+
+      cloud_data = CloudXYZRGBNormalPtr (new CloudXYZRGBNormal ());
+      ++iteration_;
+    }
+    else
+    {
+      Eigen::Matrix4f T_final = Eigen::Matrix4f::Identity ();
+      if (icp_->findTransformation (mesh_model_, cloud_data, transformation_, T_final))
+      {
+        transformation_ = T_final;
+
+        sw.reset ();
+        integration_->merge (cloud_data, mesh_model_, transformation_);
+        std::cerr << "Integration:\n"
+                  << "  - time merge                     : "
+                  << std::setw (8) << std::right << sw.getTime () << " ms\n";
+
+        sw.reset ();
+        integration_->age (mesh_model_);
+        std::cerr << "  - time age                       : "
+                  << std::setw (8) << std::right << sw.getTime () << " ms\n";
+
+        sw.reset ();
+        std::vector <Mesh::HalfEdgeIndices> boundary_collection;
+        pcl::geometry::getBoundBoundaryHalfEdges (*mesh_model_, boundary_collection, 1000);
+        std::cerr << "  - time compute boundary          : "
+                  << std::setw (8) << std::right << sw.getTime () << " ms\n";
+
+        sw.reset ();
+        mesh_processing_->processBoundary (*mesh_model_, boundary_collection);
+        std::cerr << "  - time mesh processing           : "
+                  << std::setw (8) << std::right << sw.getTime () << " ms\n";
+
+        cloud_data = CloudXYZRGBNormalPtr (new CloudXYZRGBNormal ());
+        ++iteration_;
+      }
+    }
+  }
+
+  // Visualization & copy back some variables
+  double time_model = 0;
+  double time_data  = 0;
+
+  if (mesh_model_->empty ()) Base::setPivot ("data");
+  else                       Base::setPivot ("model");
+
+  sw.reset ();
+  Base::addMesh (mesh_model_, "model", Eigen::Isometry3d (transformation_.inverse ().cast <double> ()));
+  time_model = sw.getTime ();
+
+  sw.reset ();
+  Base::addMesh (cloud_data , "data"); // Converts to a mesh for visualization
+
+  if (running_mode_ < RM_REGISTRATION_CONT && cloud_discarded)
+  {
+    Base::addMesh (cloud_discarded, "cloud_discarded");
+  }
+  else
+  {
+    Base::removeMesh ("cloud_discarded");
+  }
+  time_data = sw.getTime ();
+
+  if (running_mode_ >= RM_REGISTRATION_CONT)
+  {
+    std::cerr << "Copy to visualization thread:\n"
+              << "  - time model                     : "
+              << std::setw (8) << std::right << time_model << " ms\n"
+              << "  - time data                      : "
+              << std::setw (8) << std::right << time_data << " ms\n";
+  }
+
+  if (running_mode_ == RM_REGISTRATION_SINGLE)
+  {
+    lock.unlock ();
+    this->showProcessedData ();
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::paintEvent (QPaintEvent* event)
+{
+  // boost::mutex::scoped_lock lock (mutex_);
+  if (destructor_called_) return;
+
+  Base::calcFPS (visualization_fps_);
+  Base::BoxCoefficients coeffs (input_data_processing_->getXMin (),
+                                input_data_processing_->getXMax (),
+                                input_data_processing_->getYMin (),
+                                input_data_processing_->getYMax (),
+                                input_data_processing_->getZMin (),
+                                input_data_processing_->getZMax (),
+                                Eigen::Isometry3d::Identity ());
+  Base::setBoxCoefficients (coeffs);
+
+  Base::setVisibilityConfidenceNormalization (static_cast <float> (integration_->getMinDirections ()));
+  // lock.unlock ();
+
+  Base::paintEvent (event);
+  this->drawText (); // NOTE: Must come AFTER the opengl calls
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::drawText ()
+{
+  QPainter painter (this);
+  painter.setPen (Qt::white);
+  QFont font;
+
+  if (starting_grabber_)
+  {
+    font.setPointSize (this->width () / 20);
+    painter.setFont (font);
+    painter.drawText (0, 0, this->width (), this->height (), Qt::AlignHCenter | Qt::AlignVCenter, "Starting the grabber.\n Please wait.");
+  }
+  else
+  {
+    std::string vis_fps ("Visualization: "), comp_fps ("Computation: ");
+
+    vis_fps.append  (visualization_fps_.str ()).append (" fps");
+    comp_fps.append (computation_fps_.str   ()).append (" fps");
+
+    const std::string str = std::string (comp_fps).append ("\n").append (vis_fps);
+
+    font.setPointSize (this->width () / 50);
+
+    painter.setFont (font);
+    painter.drawText (0, 0, this->width (), this->height (), Qt::AlignBottom | Qt::AlignLeft, str.c_str ());
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::InHandScanner::startGrabberImpl ()
+{
+  boost::mutex::scoped_lock lock (mutex_);
+  starting_grabber_ = true;
+  lock.unlock ();
+
   try
   {
     grabber_ = GrabberPtr (new Grabber ());
@@ -90,382 +484,15 @@ pcl::ihs::InHandScanner::InHandScanner (int argc, char** argv)
     std::cerr << "ERROR in in_hand_scanner.cpp: " << e.what () << std::endl;
     exit (EXIT_FAILURE);
   }
-  std::cerr << "DONE\n";
 
-  // Visualizer
-  visualizer_ = PCLVisualizerPtr (new PCLVisualizer (argc, argv, "PCL in-hand scanner", pcl::ihs::CustomInteractorStyle::New ()));
+  lock.lock ();
+  if (destructor_called_) return;
 
-  // TODO: Adapt this to the resolution of the grabbed image
-  // grabber_->getDevice ()->get??
-  visualizer_->getRenderWindow ()->SetSize (640, 480);
-
-  interactor_style_ = dynamic_cast <InteractorStylePtr> (visualizer_->getInteractorStyle ().GetPointer ());
-  if (!interactor_style_)
-  {
-    std::cerr << "ERROR in in_hand_scanner.cpp: Could not get the custom interactor style\n";
-    exit (EXIT_FAILURE);
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-pcl::ihs::InHandScanner::~InHandScanner ()
-{
-  if (grabber_ && grabber_->isRunning ()) grabber_->stop ();
-  if (new_data_connection_.connected ())  new_data_connection_.disconnect ();
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::run ()
-{
-  // Visualizer callbacks
-  visualizer_->registerKeyboardCallback (&pcl::ihs::InHandScanner::keyboardCallback, *this);
-
-  // Grabber callbacks
-  boost::function <void (const CloudInputConstPtr&)> new_data_cb = boost::bind (&pcl::ihs::InHandScanner::newDataCallback, this, _1);
+  boost::function <void (const CloudXYZRGBAConstPtr&)> new_data_cb = boost::bind (&pcl::ihs::InHandScanner::newDataCallback, this, _1);
   new_data_connection_ = grabber_->registerCallback (new_data_cb);
-
   grabber_->start ();
 
-  // Visualization loop
-  while (run_ && !visualizer_->wasStopped ())
-  {
-    this->calcFPS (visualization_fps_);
-
-    visualizer_->spinOnce ();
-
-    this->drawClouds ();
-    this->drawMesh ();
-    this->drawCropBox ();
-    this->drawFPS ();
-
-    interactor_style_->setPivot (pivot_.cast <double> ().head <3> ());
-
-    // TODO: Test if this works
-    //  vtkCamera*const cam = visualizer_->getRenderWindow ()->GetRenderers ()->GetFirstRenderer ()->GetActiveCamera ();
-    //  const Eigen::Vector3d pos = Eigen::Map<Eigen::Vector3d> (cam->GetPosition ());
-    //  cam->SetFocalPoint (pivot_.cast <double> ().data ());
-    //  cam->SetPosition (pos.cast <double> ().data ());
-
-    boost::this_thread::sleep (boost::posix_time::microseconds (100));
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::quit ()
-{
-  boost::mutex::scoped_lock lock (mutex_);
-
-  run_ = false;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::setRunningMode (const RunningMode& mode)
-{
-  boost::mutex::scoped_lock lock (mutex_);
-
-  running_mode_ = mode;
-
-  switch (running_mode_)
-  {
-    case RM_SHOW_MODEL:
-    {
-      draw_crop_box_ = false;
-      std::cerr << "Show the model\n";
-      break;
-    }
-    case RM_UNPROCESSED:
-    {
-      draw_crop_box_ = false;
-      std::cerr << "Showing the unprocessed input data\n";
-      break;
-    }
-    case RM_PROCESSED:
-    {
-      draw_crop_box_ = true;
-      std::cerr << "Showing the processed input data\n";
-      break;
-    }
-    case RM_REGISTRATION_CONT:
-    {
-      draw_crop_box_ = true;
-      std::cerr << "Continuous registration\n";
-      break;
-    }
-    case RM_REGISTRATION_SINGLE:
-    {
-      draw_crop_box_ = true;
-      std::cerr << "Single registration\n";
-      break;
-    }
-    default:
-    {
-      std::cerr << "ERROR in in_hand_scanner.cpp: Unknown command!\n";
-      exit (EXIT_FAILURE);
-      break;
-    }
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::resetRegistration ()
-{
-  boost::mutex::scoped_lock lock (mutex_);
-
-  running_mode_    = RM_PROCESSED;
-  iteration_       = 0;
-  transformation_  = Transformation::Identity ();
-  mesh_model_draw_ = MeshPtr (new Mesh ());
-  mesh_model_->clear ();
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::resetCamera ()
-{
-  boost::mutex::scoped_lock lock (mutex_);
-
-  interactor_style_->resetCamera ();
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::newDataCallback (const CloudInputConstPtr& cloud_in)
-{
-  boost::mutex::scoped_lock lock (mutex_);
-  if (!run_) return;
-
-  this->calcFPS (computation_fps_);
-
-  // Input data processing
-  CloudProcessedPtr cloud_data;
-  if      (running_mode_ == RM_SHOW_MODEL)  cloud_data = CloudProcessedPtr (new CloudProcessed ());
-  else if (running_mode_ == RM_UNPROCESSED) cloud_data = input_data_processing_->calculateNormals (cloud_in);
-  else if (running_mode_ >= RM_PROCESSED)   cloud_data = input_data_processing_->process (cloud_in);
-
-  // Registration & integration
-  if (running_mode_ >= RM_REGISTRATION_CONT)
-  {
-    if(running_mode_ == RM_REGISTRATION_SINGLE)
-    {
-      running_mode_ = RM_PROCESSED;
-    }
-
-    if (iteration_ == 0)
-    {
-      transformation_ = Transformation::Identity ();
-      integration_->reconstructMesh (cloud_data, mesh_model_);
-      cloud_data = CloudProcessedPtr (new CloudProcessed ());
-      ++iteration_;
-    }
-    else
-    {
-      Transformation T = Transformation::Identity ();
-      if (icp_->findTransformation (mesh_model_, cloud_data, transformation_, T))
-      {
-        transformation_ = T;
-        integration_->merge (cloud_data, mesh_model_, transformation_);
-        integration_->age (mesh_model_);
-        cloud_data = CloudProcessedPtr (new CloudProcessed ());
-
-        // Does not work here because multiple threads!
-        // interactor_style_->transformCamera (InteractorStyle::Quaternion (T.topLeftCorner <3, 3> ().cast <double> ()), T.topRightCorner <3, 1> ().cast <double> ());
-
-        ++iteration_;
-      }
-    }
-  }
-
-  // Set the clouds for visualization
-  cloud_data_draw_ = cloud_data;
-  if (!mesh_model_draw_)                mesh_model_draw_ = MeshPtr (new Mesh ());
-  if (running_mode_ != RM_UNPROCESSED) *mesh_model_draw_ = *mesh_model_;
-
-  // TODO: put this into the visualization thread.
-  Eigen::Vector4f pivot (0.f, 0.f, 0.f, 1.f);
-  if (mesh_model_draw_->sizeVertexes () && pcl::compute3DCentroid (*mesh_model_draw_, pivot)) pivot_ = pivot;
-  else if (pcl::compute3DCentroid (*cloud_data_draw_, pivot))                                 pivot_ = pivot;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::drawClouds ()
-{
-  // Get the clouds
-  CloudProcessedPtr cloud_data_temp;
-  if (mutex_.try_lock ())
-  {
-    cloud_data_temp.swap (cloud_data_draw_);
-    mutex_.unlock ();
-  }
-  if (!cloud_data_temp) return;
-
-  // Draw the clouds
-  pcl::visualization::PointCloudColorHandlerRGBField <PointProcessed> ch (cloud_data_temp);
-  if (!visualizer_->updatePointCloud <PointProcessed> (cloud_data_temp, ch, "cloud_data"))
-  {
-    visualizer_->addPointCloud <PointProcessed> (cloud_data_temp, ch, "cloud_data");
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::drawMesh ()
-{
-  // Get the mesh
-  MeshPtr mesh_model_temp;
-  if (mutex_.try_lock ())
-  {
-    mesh_model_temp.swap (mesh_model_draw_);
-    mutex_.unlock ();
-  }
-  if (!mesh_model_temp) return;
-  if (!mesh_model_temp->sizeVertexes ())
-  {
-    // TODO: addPolygonMesh does not remove the mesh if it is empty: "[0;m[1;31m[addPolygonMesh] No vertices given!"
-    visualizer_->removePolygonMesh ("mesh_model");
-    return;
-  }
-
-  // Convert to cloud + indices for visualization
-  typedef pcl::Vertices                         Face;
-  typedef std::vector <Face>                    Faces;
-  typedef Mesh::VertexConstIterator             VCI;
-  typedef Mesh::FaceConstIterator               FCI;
-  typedef Mesh::VertexAroundFaceConstCirculator VAFCCirc;
-
-  Face          triangle; triangle.vertices.resize (3);
-  CloudModelPtr vertexes (new CloudModel ());
-  Faces         triangles;
-  vertexes->reserve (mesh_model_temp->sizeVertexes ());
-  triangles.reserve (3 * mesh_model_temp->sizeFaces ());
-
-  for (VCI it=mesh_model_temp->beginVertexes (); it!=mesh_model_temp->endVertexes (); ++it)
-  {
-    vertexes->push_back (*it);
-  }
-
-  for (FCI it=mesh_model_temp->beginFaces (); it!=mesh_model_temp->endFaces (); ++it)
-  {
-    VAFCCirc circ = mesh_model_temp->getVertexAroundFaceConstCirculator (*it);
-    triangle.vertices [0] = (circ++).getDereferencedIndex ().getIndex ();
-    triangle.vertices [1] = (circ++).getDereferencedIndex ().getIndex ();
-    triangle.vertices [2] = (circ  ).getDereferencedIndex ().getIndex ();
-    triangles.push_back (triangle);
-  }
-
-  if (!visualizer_->updatePolygonMesh <PointModel> (vertexes, triangles, "mesh_model"))
-  {
-    visualizer_->addPolygonMesh <PointModel> (vertexes, triangles, "mesh_model");
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::drawCropBox ()
-{
-  static bool crop_box_added = false;
-  if (draw_crop_box_ && !crop_box_added)
-  {
-    float x_min, x_max, y_min, y_max, z_min, z_max;
-    input_data_processing_->getCropBox (x_min, x_max, y_min, y_max, z_min, z_max);
-    visualizer_->addCube (x_min, x_max, y_min, y_max, z_min, z_max, 1., 1., 1., "crop_box");
-    crop_box_added = true;
-  }
-  else  if (!draw_crop_box_ && crop_box_added)
-  {
-    visualizer_->removeShape ("crop_box");
-    crop_box_added = false;
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::drawFPS ()
-{
-  std::string vis_fps ("Visualization: "), comp_fps ("Computation: ");
-  bool draw = false;
-
-  if (mutex_.try_lock ())
-  {
-    vis_fps.append (visualization_fps_.str ()).append (" fps");
-    comp_fps.append (computation_fps_.str ()).append (" fps");
-    draw = true;
-    mutex_.unlock ();
-  }
-
-  if (!draw) return;
-
-  if (!visualizer_->updateText (vis_fps, 1, 15, "visualization_fps"))
-  {
-    visualizer_->addText (vis_fps, 1, 15, "visualization_fps");
-  }
-
-  if (!visualizer_->updateText (comp_fps, 1, 30, "computation_fps"))
-  {
-    visualizer_->addText (comp_fps, 1, 30, "computation_fps");
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void
-pcl::ihs::InHandScanner::keyboardCallback (const pcl::visualization::KeyboardEvent& event, void*)
-{
-  if(!event.keyDown ())
-  {
-    return;
-  }
-
-  switch (event.getKeyCode ())
-  {
-    case 'h': case 'H':
-    {
-      std::cerr << "======================================================================\n"
-                << "Help:\n"
-                << "----------------------------------------------------------------------\n"
-                << "q, ESC: Quit the application\n"
-                << "----------------------------------------------------------------------\n"
-                << "1     : Shows the unprocessed input data\n"
-                << "2     : Shows the processed input data\n"
-                << "3     : Registers new data to the first acquired data continuously\n"
-                << "4     : Registers new data once and returns to '2'\n"
-                << "5     : Shows the model shape\n"
-                << "0     : Reset the registration\n"
-                << "----------------------------------------------------------------------\n"
-                << "c     : Reset the camera\n"
-                << "======================================================================\n";
-      break;
-    }
-    case   0: // Special key
-    {
-      break;
-    }
-    case  27: // ESC
-    case 'q': this->quit ();                                 break;
-    case '1': this->setRunningMode (RM_UNPROCESSED);         break;
-    case '2': this->setRunningMode (RM_PROCESSED);           break;
-    case '3': this->setRunningMode (RM_REGISTRATION_CONT);   break;
-    case '4': this->setRunningMode (RM_REGISTRATION_SINGLE); break;
-    case '5': this->setRunningMode (RM_SHOW_MODEL);          break;
-    case '0': this->resetRegistration ();                    break;
-    case 'c': this->resetCamera ();                          break;
-    default:                                                 break;
-  }
+  starting_grabber_ = false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

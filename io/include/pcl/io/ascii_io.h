@@ -39,7 +39,7 @@
 #define PCL_IO_ASCII_IO_H_
 
 #include <pcl/io/file_io.h>
-#include <sensor_msgs/PointField.h>
+#include <pcl/PCLPointField.h>
 #include <pcl/common/io.h>
 
 
@@ -79,12 +79,12 @@ namespace pcl
         * to the next byte after the header (e.g., 513).
         */
       virtual int
-      readHeader (const std::string &file_name, sensor_msgs::PointCloud2 &cloud,
+      readHeader (const std::string &file_name, pcl::PCLPointCloud2 &cloud,
                   Eigen::Vector4f &origin, Eigen::Quaternionf &orientation,
                   int &file_version, int &data_type, unsigned int &data_idx, const int offset = 0) ;
 
 
-      /** \brief Read a point cloud data from a FILE file and store it into a sensor_msgs/PointCloud2.
+      /** \brief Read a point cloud data from a FILE file and store it into a pcl/PCLPointCloud2.
         * \param[in] file_name the name of the file containing the actual PointCloud data
         * \param[out] cloud the resultant PointCloud message read from disk
         * \param[out] origin the sensor acquisition origin (only for > FILE_V7 - null if not present)
@@ -97,22 +97,32 @@ namespace pcl
         * to the next byte after the header (e.g., 513).
         */
       virtual int
-      read (const std::string &file_name, sensor_msgs::PointCloud2 &cloud,
+      read (const std::string &file_name, pcl::PCLPointCloud2 &cloud,
             Eigen::Vector4f &origin, Eigen::Quaternionf &orientation, int &file_version,
             const int offset = 0);
+
+      /** \brief Set the ascii file point fields.
+        */
+      template<typename PointT>
+      void setInputFields ();
 
       /** \brief Set the ascii file point fields using a list of fields.
         * \param[in] fields  is a list of point fields, in order, in the input ascii file
         */
       void 
-      setInputFields (const std::vector<sensor_msgs::PointField>& fields);
+      setInputFields (const std::vector<pcl::PCLPointField>& fields);
 
 
       /** \brief Set the ascii file point fields using a point type.
         * \param[in] p  a point type
         */
       template<typename PointT>
-      void setInputFields (const PointT p = PointT ());
+      PCL_DEPRECATED ("Use setInputFields<PointT> () instead")
+      inline void setInputFields (const PointT p)
+      {
+        (void) p;
+        setInputFields<PointT> ();
+      }
 
 
       /** \brief Set the Separting characters for the ascii point fields 2.
@@ -132,7 +142,7 @@ namespace pcl
     protected:
       std::string sep_chars_;
       std::string extension_;
-      std::vector<sensor_msgs::PointField> fields_;
+      std::vector<pcl::PCLPointField> fields_;
       std::string name_;
 
 
@@ -143,7 +153,7 @@ namespace pcl
         *  returns the size of the parsed point field in bytes
         */
       int 
-      parse (const std::string& token, const sensor_msgs::PointField& field, uint8_t* data_target);
+      parse (const std::string& token, const pcl::PCLPointField& field, uint8_t* data_target);
 
       /** \brief Returns the size in bytes of a point field type.
         * \param[in] type   point field type
@@ -154,24 +164,9 @@ namespace pcl
 	};
 }
 
-//////////////////////////////////////////////////////////////////////////////
-template<typename PointT> void
-pcl::ASCIIReader::setInputFields (const PointT p)
-{
-  (void) p;
 
-  pcl::getFields<PointT> (fields_);
 
-  // Remove empty fields and adjust offset
-  int offset =0;
-  for (std::vector<sensor_msgs::PointField>::iterator field_iter = fields_.begin ();
-       field_iter != fields_.end (); field_iter++)
-  {
-    if (field_iter->name == "_") 
-      field_iter = fields_.erase (field_iter);
-    field_iter->offset = offset;
-    offset += typeSize (field_iter->datatype);
-  }
-}
+
+#include <pcl/io/impl/ascii_io.hpp>
 
 #endif    // PCL_IO_ASCII_IO_H_

@@ -64,7 +64,7 @@ printHelp (int, char **argv)
   print_info ("                     -file file_name          = PCD file to be read from\n");
   print_info ("                     -dir directory_path      = directory path to PCD file(s) to be read from\n");
   print_info ("                     -fps frequency           = frames per second\n");
-  print_info ("                     -repeat                  = optional parameter that tells wheter the PCD file(s) should be \"grabbed\" in a endless loop.\n");
+  print_info ("                     -repeat                  = optional parameter that tells whether the PCD file(s) should be \"grabbed\" in a endless loop.\n");
   print_info ("\n");
   print_info ("                     -cam (*)                 = use given camera settings as initial view\n");
   print_info (stderr, " (*) [Clipping Range / Focal Point / Position / ViewUp / Distance / Window Size / Window Pos] or use a <filename.cam> that contains the same information.\n");
@@ -164,7 +164,7 @@ main (int argc, char** argv)
     float ax_x = 0.0, ax_y = 0.0, ax_z = 0.0;
     pcl::console::parse_3x_arguments (argc, argv, "-ax_pos", ax_x, ax_y, ax_z, false);
     // Draw XYZ axes if command-line enabled
-    cloud_viewer->addCoordinateSystem (axes, ax_x, ax_y, ax_z);
+    cloud_viewer->addCoordinateSystem (axes, ax_x, ax_y, ax_z, "global");
   }
 
   float frames_per_second = 0; // 0 means only if triggered!
@@ -232,7 +232,7 @@ main (int argc, char** argv)
   std::string mouse_msg_2D ("Mouse coordinates in image viewer");
   std::string key_msg_2D ("Key event for image viewer");
 
-#if DISPLAY_IMAGE
+#ifdef DISPLAY_IMAGE
   img_viewer->registerMouseCallback (&mouse_callback, static_cast<void*> (&mouse_msg_2D));
   img_viewer->registerKeyboardCallback(&keyboard_callback, static_cast<void*> (&key_msg_2D));
 #endif

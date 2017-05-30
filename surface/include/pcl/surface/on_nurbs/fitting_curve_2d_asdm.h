@@ -49,8 +49,7 @@ namespace pcl
   namespace on_nurbs
   {
 
-    /** \brief Fitting a 2D B-Spline curve to 2D point-clouds using squared-distance-minimization
-      *  and optionally asymmetric-distance-minimization
+    /** \brief Fitting a 2D B-Spline curve to 2D point-clouds using asymmetric squared-distance-minimization
       *  Based on paper: TODO
       * \author Thomas Mörwald
       * \ingroup surface
@@ -78,13 +77,13 @@ namespace pcl
         assemble (const Parameter &parameter);
 
         /** \brief Solve system of equations using Eigen or UmfPack (can be defined in on_nurbs.cmake),
-          * and updates B-Spline curve if a solution can be obtained. 
+          * and updates B-Spline curve if a solution can be obtained.
           */
         virtual double
         solve (double damp = 1.0);
 
         /** \brief Update curve according to the current system of equations.
-          * \param[in] damp damping factor from one iteration to the other. 
+          * \param[in] damp damping factor from one iteration to the other.
           */
         virtual double
         updateCurve (double damp);

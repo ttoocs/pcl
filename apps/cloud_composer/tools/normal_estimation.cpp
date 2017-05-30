@@ -4,9 +4,11 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/point_types.h>
 
-
-Q_EXPORT_PLUGIN2(cloud_composer_normal_estimation_tool, pcl::cloud_composer::NormalEstimationToolFactory)
-
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+  Q_EXPORT_PLUGIN2(cloud_composer_normal_estimation_tool, pcl::cloud_composer::NormalEstimationToolFactory)
+#else
+  Q_PLUGIN_METADATA(IID "cloud_composer.ToolFactory/1.0")
+#endif
 
 pcl::cloud_composer::NormalEstimationTool::NormalEstimationTool (PropertiesModel* parameter_model, QObject* parent)
   : NewItemTool (parameter_model, parent)
@@ -21,7 +23,7 @@ pcl::cloud_composer::NormalEstimationTool::~NormalEstimationTool ()
 }
 
 QList <pcl::cloud_composer::CloudComposerItem*>
-pcl::cloud_composer::NormalEstimationTool::performAction (ConstItemList input_data, PointTypeFlags::PointType type)
+pcl::cloud_composer::NormalEstimationTool::performAction (ConstItemList input_data, PointTypeFlags::PointType)
 {
   QList <CloudComposerItem*> output;
   const CloudComposerItem* input_item;
@@ -37,16 +39,16 @@ pcl::cloud_composer::NormalEstimationTool::performAction (ConstItemList input_da
   }
   input_item = input_data.value (0);
     
-  sensor_msgs::PointCloud2::ConstPtr input_cloud;
+  pcl::PCLPointCloud2::ConstPtr input_cloud;
   if (input_item->type () == CloudComposerItem::CLOUD_ITEM)
   {
     double radius = parameter_model_->getProperty("Radius").toDouble();
     qDebug () << "Received Radius = " <<radius;
-    sensor_msgs::PointCloud2::ConstPtr input_cloud = input_item->data (ItemDataRole::CLOUD_BLOB).value <sensor_msgs::PointCloud2::ConstPtr> ();
+    pcl::PCLPointCloud2::ConstPtr input_cloud = input_item->data (ItemDataRole::CLOUD_BLOB).value <pcl::PCLPointCloud2::ConstPtr> ();
     qDebug () << "Got cloud size = "<<input_cloud->width;
     //////////////// THE WORK - COMPUTING NORMALS ///////////////////
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromROSMsg (*input_cloud, *cloud); 
+    pcl::fromPCLPointCloud2 (*input_cloud, *cloud);
     // Create the normal estimation class, and pass the input dataset to it
     pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
     ne.setInputCloud (cloud);
@@ -84,7 +86,7 @@ pcl::cloud_composer::NormalEstimationToolFactory::createToolParameterModel (QObj
 {
   PropertiesModel* parameter_model = new PropertiesModel(parent);
   
-  parameter_model->addProperty ("Radius", 0.02,  Qt::ItemIsEditable | Qt::ItemIsEnabled);
+  parameter_model->addProperty ("Radius", 0.04,  Qt::ItemIsEditable | Qt::ItemIsEnabled);
   
   return parameter_model;
 }

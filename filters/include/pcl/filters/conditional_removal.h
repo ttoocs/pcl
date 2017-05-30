@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -37,7 +37,7 @@
 
 #ifndef PCL_FILTER_FIELD_VAL_CONDITION_H_
 #define PCL_FILTER_FIELD_VAL_CONDITION_H_
-
+#include <pcl/common/eigen.h>
 #include <pcl/filters/filter.h>
 
 namespace pcl
@@ -88,8 +88,8 @@ namespace pcl
   class ComparisonBase
   {
     public:
-      typedef boost::shared_ptr<ComparisonBase<PointT> > Ptr;
-      typedef boost::shared_ptr<const ComparisonBase<PointT> > ConstPtr;
+      typedef boost::shared_ptr< ComparisonBase<PointT> > Ptr;
+      typedef boost::shared_ptr< const ComparisonBase<PointT> > ConstPtr;
 
       /** \brief Constructor. */
       ComparisonBase () : capable_ (false), field_name_ (), offset_ (), op_ () {}
@@ -132,8 +132,9 @@ namespace pcl
     using ComparisonBase<PointT>::capable_;
 
     public:
-      typedef boost::shared_ptr<FieldComparison<PointT> > Ptr;
-      typedef boost::shared_ptr<const FieldComparison<PointT> > ConstPtr;
+      typedef boost::shared_ptr< FieldComparison<PointT> > Ptr;
+      typedef boost::shared_ptr< const FieldComparison<PointT> > ConstPtr;
+
 
       /** \brief Construct a FieldComparison
         * \param field_name the name of the field that contains the data we want to compare
@@ -195,6 +196,9 @@ namespace pcl
     using ComparisonBase<PointT>::op_;
 
     public:
+      typedef boost::shared_ptr< PackedRGBComparison<PointT> > Ptr;
+      typedef boost::shared_ptr< const PackedRGBComparison<PointT> > ConstPtr;
+
       /** \brief Construct a PackedRGBComparison
         * \param component_name either "r", "g" or "b"
         * \param op the operator to use when making the comparison
@@ -239,6 +243,9 @@ namespace pcl
     using ComparisonBase<PointT>::op_;
 
     public:
+      typedef boost::shared_ptr< PackedHSIComparison<PointT> > Ptr;
+      typedef boost::shared_ptr< const PackedHSIComparison<PointT> > ConstPtr;
+ 
       /** \brief Construct a PackedHSIComparison 
         * \param component_name either "h", "s" or "i"
         * \param op the operator to use when making the comparison
@@ -310,6 +317,9 @@ namespace pcl
       /** \brief Constructor.
        */
       TfQuadraticXYZComparison ();
+      
+      /** \brief Empty destructor */
+      virtual ~TfQuadraticXYZComparison () {}
 
       /** \brief Constructor.
        * \param op the operator "[OP]" of the comparison "p'Ap + 2v'p + c [OP] 0".
@@ -617,6 +627,8 @@ namespace pcl
         * being removed by the filter
         * \param extract_removed_indices extract filtered indices from indices vector
         */
+      PCL_DEPRECATED ("ConditionalRemoval(ConditionBasePtr condition, bool extract_removed_indices = false) is deprecated, "
+      "please use the setCondition (ConditionBasePtr condition) function instead.")
       ConditionalRemoval (ConditionBasePtr condition, bool extract_removed_indices = false) :
         Filter<PointT>::Filter (extract_removed_indices), capable_ (false), keep_organized_ (false), condition_ (),
         user_filter_value_ (std::numeric_limits<float>::quiet_NaN ())
@@ -671,8 +683,6 @@ namespace pcl
         */
       void
       applyFilter (PointCloud &output);
-
-      typedef typename pcl::traits::fieldList<PointT>::type FieldList;
 
       /** \brief True if capable. */
       bool capable_;

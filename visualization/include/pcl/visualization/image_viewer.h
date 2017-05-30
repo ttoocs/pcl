@@ -42,12 +42,22 @@
 #include <pcl/pcl_macros.h>
 #include <pcl/point_types.h>
 #include <pcl/console/print.h>
+#include <pcl/visualization/interactor.h>
 #include <pcl/visualization/interactor_style.h>
-#include <pcl/visualization/vtk.h>
-#include <pcl/visualization/boost.h>
 #include <pcl/visualization/vtk/pcl_image_canvas_source_2d.h>
+#include <pcl/visualization/vtk/pcl_context_item.h>
 #include <pcl/geometry/planar_polygon.h>
 #include <pcl/correspondence.h>
+
+#include <boost/shared_array.hpp>
+
+#include <vtkVersion.h>
+#include <vtkInteractorStyleImage.h>
+
+class vtkImageSlice;
+class vtkContextActor;
+class vtkImageViewer;
+class vtkImageFlip;
 
 namespace pcl
 {
@@ -118,6 +128,17 @@ namespace pcl
         /** \brief Destructor. */
         virtual ~ImageViewer ();
        
+#if ((VTK_MAJOR_VERSION > 5) || ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION > 4)))
+        /** \brief Set up the interactor style. By default the interactor style is set to
+          * vtkInteractorStyleImage you can use this to set it to another type.
+          * \param[in] style user set interactor style.
+          */
+        void
+        setInteractorStyle (vtkInteractorObserver *style)
+        {
+          interactor_->SetInteractorStyle (style);
+        }
+#endif
         /** \brief Show a monochrome 2D image on screen.
           * \param[in] data the input data representing the image
           * \param[in] width the width of the image
@@ -409,18 +430,35 @@ namespace pcl
         markPoint (size_t u, size_t v, Vector3ub fg_color, Vector3ub bg_color = red_color, double radius = 3.0,
                    const std::string &layer_id = "points", double opacity = 1.0);
 
+        /** \brief Sets the pixel at coordinates(u,v) to color while setting the neighborhood to another
+          * \param[in] uv the u/x, v/y coordinate of the pixels to be marked
+          * \param[in] fg_color the pixel color
+          * \param[in] bg_color the neighborhood color
+          * \param[in] size edge of the square surrounding each pixel
+          * \param[in] layer_id the name of the layer (default: "markers")
+          * \param[in] opacity the opacity of the layer (default: 1.0)
+          */
+        void
+        markPoints (const std::vector<int>& uv, Vector3ub fg_color, Vector3ub bg_color = red_color, double size = 3.0,
+                    const std::string &layer_id = "markers", double opacity = 1.0);
+
+        /** \brief Sets the pixel at coordinates(u,v) to color while setting the neighborhood to another (float coordinates version).
+          * \param[in] uv the u/x, v/y coordinate of the pixels to be marked
+          * \param[in] fg_color the pixel color
+          * \param[in] bg_color the neighborhood color
+          * \param[in] size edge of the square surrounding each pixel
+          * \param[in] layer_id the name of the layer (default: "markers")
+          * \param[in] opacity the opacity of the layer (default: 1.0)
+          */
+        void
+        markPoints (const std::vector<float>& uv, Vector3ub fg_color, Vector3ub bg_color = red_color, double size = 3.0,
+                    const std::string &layer_id = "markers", double opacity = 1.0);
+
         /** \brief Set the window title name
           * \param[in] name the window title
           */
         void
-        setWindowTitle (const std::string& name)
-        {
-#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION >= 10))
-          win_->SetWindowName (name.c_str ());
-#else
-          image_viewer_->GetRenderWindow ()->SetWindowName (name.c_str ());
-#endif
-        }
+        setWindowTitle (const std::string& name);
 
         /** \brief Spin method. Calls the interactor and runs an internal loop. */
         void 
@@ -503,43 +541,35 @@ namespace pcl
           * \param[in] y where to move the window to (Y)
           */
         void
-        setPosition (int x, int y)
-        {
-#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION >= 10))
-          win_->SetPosition (x, y);
-#else
-          image_viewer_->GetRenderWindow ()->SetPosition (x, y);
-#endif
-        }
+        setPosition (int x, int y);
 
         /** \brief Set the window size in screen coordinates.
           * \param[in] xw window size in horizontal (pixels)
           * \param[in] yw window size in vertical (pixels)
           */
         void
-        setSize (int xw, int yw)
-        {
-#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION >= 10))
-          win_->SetSize (xw, yw);
-#else
-          image_viewer_->GetRenderWindow ()->SetSize (xw, yw);
-#endif
-        }
+        setSize (int xw, int yw);
 
         /** \brief Return the window size in pixels. */
-        inline int*
-        getSize ()
-        {
-#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION >= 10))
-          return (win_->GetSize ());
-#else
-          return (image_viewer_->GetRenderWindow ()->GetSize ());
-#endif
-        }
+        int*
+        getSize ();
 
         /** \brief Returns true when the user tried to close the window */
         bool
         wasStopped () const { return (stopped_); }
+
+        /** \brief Stop the interaction and close the visualizaton window. */
+        void
+        close ()
+        {
+          stopped_ = true;
+          // This tends to close the window...
+#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION <= 4))
+          interactor_->stopLoop ();
+#else
+          interactor_->TerminateApp ();
+#endif
+        }
 
         /** \brief Add a circle shape from a point and a radius
           * \param[in] x the x coordinate of the circle center
@@ -727,6 +757,31 @@ namespace pcl
         addLine (unsigned int x_min, unsigned int y_min, unsigned int x_max, unsigned int y_max,
                  const std::string &layer_id = "line", double opacity = 1.0);
 
+        /** \brief Add a 2D text with a given color
+          * \param[in] x the X coordinate
+          * \param[in] y the Y coordinate
+          * \param[in] text the text string to be displayed
+          * \param[in] r the red channel of the color that the line should be rendered with (0.0 -> 1.0)
+          * \param[in] g the green channel of the color that the line should be rendered with (0.0 -> 1.0)
+          * \param[in] b the blue channel of the color that the line should be rendered with (0.0 -> 1.0)
+          * \param[in] layer_id the 2D layer ID where we want the extra information to be drawn.
+          * \param[in] opacity the opacity of the layer: 0 for invisible, 1 for opaque. (default: 1.0)
+          */
+        bool
+        addText (unsigned int x, unsigned int y, const std::string& text,
+                 double r, double g, double b,
+                 const std::string &layer_id = "line", double opacity = 1.0);
+
+        /** \brief Add a 2D text with a given color
+          * \param[in] x the X coordinate
+          * \param[in] y the Y coordinate
+          * \param[in] text the text string to be displayed
+          * \param[in] layer_id the 2D layer ID where we want the extra information to be drawn.
+          * \param[in] opacity the opacity of the layer: 0 for invisible, 1 for opaque. (default: 1.0)
+          */
+        bool
+        addText (unsigned int x, unsigned int y, const std::string& text,
+                 const std::string &layer_id = "line", double opacity = 1.0);
 
         /** \brief Add a generic 2D mask to an image 
           * \param[in] image the organized point cloud dataset containing the image data
@@ -847,13 +902,13 @@ namespace pcl
         resetStoppedFlag () { stopped_ = false; }
 
         /** \brief Fire up a mouse event with a specified event ID
-          * \param[int] event_id the id of the event
+          * \param[in] event_id the id of the event
           */
         void 
         emitMouseEvent (unsigned long event_id);
         
         /** \brief Fire up a keyboard event with a specified event ID
-          * \param[int] event_id the id of the event
+          * \param[in] event_id the id of the event
           */
         void 
         emitKeyboardEvent (unsigned long event_id);
@@ -881,7 +936,11 @@ namespace pcl
             int timer_id = *static_cast<int*> (call_data);
             if (timer_id != right_timer_id)
               return;
+#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION <= 4))
+            window->interactor_->stopLoop ();
+#else
             window->interactor_->TerminateApp ();
+#endif
           }
           int right_timer_id;
           ImageViewer* window;
@@ -900,7 +959,11 @@ namespace pcl
             if (event_id != vtkCommand::ExitEvent)
               return;
             window->stopped_ = true;
+#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION <= 4))
+            window->interactor_->stopLoop ();
+#else
             window->interactor_->TerminateApp ();
+#endif
           }
           ImageViewer* window;
         };
@@ -909,10 +972,9 @@ namespace pcl
         /** \brief Internal structure describing a layer. */
         struct Layer
         {
-          Layer () : canvas (), layer_name (), opacity () {}
-          vtkSmartPointer<PCLImageCanvasSource2D> canvas;
+          Layer () : actor (), layer_name () {}
+          vtkSmartPointer<vtkContextActor> actor;
           std::string layer_name;
-          double opacity;
         };
 
         typedef std::vector<Layer> LayerMap;
@@ -930,7 +992,11 @@ namespace pcl
         boost::signals2::signal<void (const pcl::visualization::MouseEvent&)> mouse_signal_;
         boost::signals2::signal<void (const pcl::visualization::KeyboardEvent&)> keyboard_signal_;
         
+#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION <= 4))
+        vtkSmartPointer<PCLVisualizerInteractor> interactor_;
+#else
         vtkSmartPointer<vtkRenderWindowInteractor> interactor_;
+#endif
         vtkSmartPointer<vtkCallbackCommand> mouse_command_;
         vtkSmartPointer<vtkCallbackCommand> keyboard_command_;
 
@@ -947,7 +1013,7 @@ namespace pcl
         /** \brief The renderer. */
         vtkSmartPointer<vtkRenderer> ren_;
 
-#if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION >= 10))
+#if !((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION <= 10))
         /** \brief Global prop. This is the actual "actor". */
         vtkSmartPointer<vtkImageSlice> slice_;
 #endif
@@ -966,14 +1032,19 @@ namespace pcl
         /** \brief Global timer ID. Used in destructor only. */
         int timer_id_;
 
-        /** \brief Internal blender used to overlay 2D geometry over the image. */
-        vtkSmartPointer<vtkImageBlend> blend_;
+        // /** \brief Internal blender used to overlay 2D geometry over the image. */
+        // vtkSmartPointer<vtkImageBlend> blend_;
  
         /** \brief Internal list with different 2D layers shapes. */
         LayerMap layer_map_;
 
         /** \brief Image reslice, used for flipping the image. */
         vtkSmartPointer<vtkImageFlip> algo_;
+
+        /** \brief Internal data array. Used everytime add***Image is called. 
+          * Cleared, everytime the render loop is executed. 
+          */
+        std::vector<unsigned char*> image_data_;
 
         struct LayerComparator
         {
@@ -985,8 +1056,8 @@ namespace pcl
           {
             return (layer.layer_name == str_);
           }
-        };
-
+        };        
+        
       public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     };

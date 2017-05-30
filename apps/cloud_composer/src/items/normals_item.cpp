@@ -42,15 +42,18 @@ pcl::cloud_composer::NormalsItem::paintView (boost::shared_ptr<pcl::visualizatio
   if (parent ()->type () == CLOUD_ITEM)
   {
     QVariant cloud_ptr = parent ()->data (ItemDataRole::CLOUD_BLOB);
-    sensor_msgs::PointCloud2::ConstPtr cloud_blob = cloud_ptr.value<sensor_msgs::PointCloud2::ConstPtr> ();
+    pcl::PCLPointCloud2::ConstPtr cloud_blob = cloud_ptr.value<pcl::PCLPointCloud2::ConstPtr> ();
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromROSMsg (*cloud_blob, *cloud); 
+    pcl::fromPCLPointCloud2 (*cloud_blob, *cloud);
     double scale = properties_->getProperty ("Scale").toDouble ();
     int level = properties_->getProperty ("Level").toInt ();
     qDebug () << "Removing old normals...";
     vis->removePointCloud (getId ().toStdString ());
     qDebug () << QString("Adding point cloud normals, level=%1, scale=%2").arg(level).arg(scale);
     vis->addPointCloudNormals<pcl::PointXYZ, pcl::Normal> (cloud, normals_ptr_, level, scale, getId ().toStdString ());
+    std::cout << cloud->points[0]<<std::endl;
+    std::cout << normals_ptr_->points[0]<<std::endl;
+    
   }
   else
     qWarning () << "Normal item inserted, but parent not a cloud. Don't know how to draw that!";

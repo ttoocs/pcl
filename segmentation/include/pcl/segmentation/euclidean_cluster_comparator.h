@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -127,7 +127,8 @@ namespace pcl
       }
 
       /** \brief Set the tolerance in meters for difference in perpendicular distance (d component of plane equation) to the plane between neighboring points, to be considered part of the same plane.
-        * \param[in] distance_threshold the tolerance in meters
+        * \param[in] distance_threshold the tolerance in meters 
+        * \param depth_dependent
         */
       inline void
       setDistanceThreshold (float distance_threshold, bool depth_dependent)
@@ -178,12 +179,20 @@ namespace pcl
         if ( (*exclude_labels_)[label1] || (*exclude_labels_)[label2])
           return false;
         
+        float dist_threshold = distance_threshold_;
+        if (depth_dependent_)
+        {
+          Eigen::Vector3f vec = input_->points[idx1].getVector3fMap ();
+          float z = vec.dot (z_axis_);
+          dist_threshold *= z * z;
+        }
+
         float dx = input_->points[idx1].x - input_->points[idx2].x;
         float dy = input_->points[idx1].y - input_->points[idx2].y;
         float dz = input_->points[idx1].z - input_->points[idx2].z;
         float dist = sqrtf (dx*dx + dy*dy + dz*dz);
 
-        return (dist < distance_threshold_);
+        return (dist < dist_threshold);
       }
       
     protected:

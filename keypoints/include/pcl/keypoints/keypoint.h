@@ -55,6 +55,9 @@ namespace pcl
   class Keypoint : public PCLBase<PointInT>
   {
     public:
+      typedef boost::shared_ptr<Keypoint<PointInT, PointOutT> > Ptr;
+      typedef boost::shared_ptr<const Keypoint<PointInT, PointOutT> > ConstPtr;
+
       using PCLBase<PointInT>::indices_;
       using PCLBase<PointInT>::input_;
 
@@ -81,6 +84,9 @@ namespace pcl
         search_radius_ (0), 
         k_ (0) 
       {};
+      
+      /** \brief Empty destructor */
+      virtual ~Keypoint () {}
 
       /** \brief Provide a pointer to the input dataset that we need to estimate features at every point for.
         * \param cloud the const boost shared pointer to a PointCloud message
@@ -126,6 +132,12 @@ namespace pcl
       /** \brief Get the sphere radius used for determining the neighbors. */
       inline double
       getRadiusSearch () { return (search_radius_); }
+
+      /** \brief \return the keypoints indices in the input cloud.
+        * \note not all the daughter classes populate the keypoints indices so check emptiness before use.
+        */
+      pcl::PointIndicesConstPtr
+      getKeypointsIndices () { return (keypoints_indices_); }
 
       /** \brief Base method for key point detection for all points given in <setInputCloud (), setIndices ()> using
         * the surface in setSearchSurface () and the spatial locator in setSearchMethod ()
@@ -180,6 +192,9 @@ namespace pcl
 
       /** \brief The number of K nearest neighbors to use for each point. */
       int k_;
+
+      /** \brief Indices of the keypoints in the input cloud. */
+      pcl::PointIndicesPtr keypoints_indices_;
 
       /** \brief Get a string representation of the name of this class. */
       inline const std::string&

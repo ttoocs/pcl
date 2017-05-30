@@ -47,8 +47,7 @@ namespace pcl
 {
   namespace on_nurbs
   {
-    /** \brief Fitting a 2D B-Spline curve to 2D point-clouds using point-distance-minimization
-      * and optionally asymmetric-distance-minimization
+    /** \brief Fitting a 2D B-Spline curve to 2D point-clouds using asymmetric point-distance-minimization
       * Based on paper: TODO
       * \author Thomas Mörwald
       * \ingroup surface
@@ -77,14 +76,12 @@ namespace pcl
         struct FitParameter
         {
           pcl::on_nurbs::FittingCurve2dAPDM::Parameter param;
-          unsigned refinement;
-          double addCPsAccuracy;
-          unsigned addCPsIteration;
-          unsigned maxCPs;
+          double addCPsAccuracy;        // add CPs at points where this threshold is exceeded
+          unsigned addCPsIteration;     // add CPs at every "addCPsIteration" iteration
+          unsigned maxCPs;              // maximum number of CPs
 
-          double fitAvgError;
-          double fitMaxError;
-          unsigned fitMaxSteps;
+          double accuracy;              // threshold for incremental change of CPs (termination criterion)
+          unsigned iterations;          // maximum number of fitting iterations
         };
 
         ON_TextLog m_out;

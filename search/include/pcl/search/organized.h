@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -210,7 +210,7 @@ namespace pcl
           * \param[in] k number of maximum nn interested in
           * \param[in] queue priority queue with k NN
           * \param[in] index index on point to be tested
-          * \return wheter the top element changed or not.
+          * \return whether the top element changed or not.
           */
         inline bool 
         testPoint (const PointT& query, unsigned k, std::priority_queue<Entry>& queue, unsigned index) const

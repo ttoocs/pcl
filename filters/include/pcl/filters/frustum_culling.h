@@ -82,6 +82,11 @@ namespace pcl
     typedef typename PointCloud::ConstPtr PointCloudConstPtr;
 
     public:
+
+      typedef boost::shared_ptr< FrustumCulling<PointT> > Ptr;
+      typedef boost::shared_ptr< const FrustumCulling<PointT> > ConstPtr;
+
+
       using Filter<PointT>::getClassName;
 
       FrustumCulling (bool extract_removed_indices = false) 
@@ -97,6 +102,21 @@ namespace pcl
 
       /** \brief Set the pose of the camera w.r.t the origin
         * \param[in] camera_pose the camera pose
+        *
+        * Note: This assumes a coordinate system where X is forward, 
+        * Y is up, and Z is right. To convert from the traditional camera 
+        * coordinate system (X right, Y down, Z forward), one can use:
+        *
+        * \code
+        * Eigen::Matrix4f pose_orig = //pose in camera coordinates
+        * Eigen::Matrix4f cam2robot;
+        * cam2robot << 0, 0, 1, 0
+        *              0,-1, 0, 0
+        *              1, 0, 0, 0
+        *              0, 0, 0, 1;
+        * Eigen::Matrix4f pose_new = pose_orig * cam2robot;
+        * fc.setCameraPose (pose_new);
+        * \endcode
         */
       void 
       setCameraPose (const Eigen::Matrix4f& camera_pose)
@@ -214,5 +234,9 @@ namespace pcl
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 }
+
+#ifdef PCL_NO_PRECOMPILE
+#include <pcl/filters/impl/frustum_culling.hpp>
+#endif
 
 #endif

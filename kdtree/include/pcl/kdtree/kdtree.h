@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2009-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -33,8 +34,6 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: kdtree.h 35873 2011-02-09 00:58:01Z rusu $
- *
  */
 
 #ifndef PCL_KDTREE_KDTREE_H_
@@ -45,6 +44,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_representation.h>
 #include <pcl/common/io.h>
+#include <pcl/common/copy_point.h>
 
 namespace pcl
 {
@@ -176,11 +176,7 @@ namespace pcl
                        std::vector<int> &k_indices, std::vector<float> &k_sqr_distances) const
       {
         PointT p;
-        // Copy all the data fields from the input cloud to the output one
-        typedef typename pcl::traits::fieldList<PointT>::type FieldListInT;
-        typedef typename pcl::traits::fieldList<PointTDiff>::type FieldListOutT;
-        typedef typename pcl::intersect<FieldListInT, FieldListOutT>::type FieldList;
-        pcl::for_each_type <FieldList> (pcl::NdConcatenateFunctor <PointTDiff, PointT> (point, p));
+        copyPoint (point, p);
         return (nearestKSearch (p, k, k_indices, k_sqr_distances));
       }
 
@@ -272,11 +268,7 @@ namespace pcl
                      std::vector<float> &k_sqr_distances, unsigned int max_nn = 0) const
       {
         PointT p;
-        // Copy all the data fields from the input cloud to the output one
-        typedef typename pcl::traits::fieldList<PointT>::type FieldListInT;
-        typedef typename pcl::traits::fieldList<PointTDiff>::type FieldListOutT;
-        typedef typename pcl::intersect<FieldListInT, FieldListOutT>::type FieldList;
-        pcl::for_each_type <FieldList> (pcl::NdConcatenateFunctor <PointTDiff, PointT> (point, p));
+        copyPoint (point, p);
         return (radiusSearch (p, radius, k_indices, k_sqr_distances, max_nn));
       }
 

@@ -37,7 +37,8 @@
 
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/io/impl/vtk_lib_io.hpp>
-#include <sensor_msgs/PointCloud2.h>
+#include <pcl/PCLPointCloud2.h>
+#include <vtkVersion.h>
 #include <vtkCellArray.h>
 #include <vtkCellData.h>
 #include <vtkDoubleArray.h>
@@ -45,31 +46,32 @@
 #include <vtkImageShiftScale.h>
 #include <vtkPNGWriter.h>
 
+// Support for VTK 7.1 upwards
+#ifdef vtkGenericDataArray_h
+#define SetTupleValue SetTypedTuple
+#define InsertNextTupleValue InsertNextTypedTuple
+#define GetTupleValue GetTypedTuple
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int
 pcl::io::loadPolygonFile (const std::string &file_name, pcl::PolygonMesh& mesh)
 {
-  if (!boost::filesystem::exists(file_name) || boost::filesystem::is_directory(file_name))
-  {
-    PCL_ERROR ("[pcl::io::loadPolygonFile]: No such file or directory.\n");
-    return (0);
-  }
+  std::string extension = file_name.substr (file_name.find_last_of (".") + 1);
 
-  // TODO: how to adequately catch exceptions thrown by the vtk readers?!
-  std::string extension = boost::filesystem::extension(file_name);
-  if ( extension == ".pcd" ) // no Polygon, but only a point cloud
+  if (extension == "pcd") // no Polygon, but only a point cloud
   {
     pcl::io::loadPCDFile (file_name, mesh.cloud);
     mesh.polygons.resize (0);
     return (static_cast<int> (mesh.cloud.width * mesh.cloud.height));
   }
-  else if (extension == ".vtk")
+  else if (extension == "vtk")
    return (pcl::io::loadPolygonFileVTK (file_name, mesh));
-  else if (extension == ".ply")
+  else if (extension == "ply")
    return (pcl::io::loadPolygonFilePLY (file_name, mesh));
-  else if (extension == ".obj")
+  else if (extension == "obj")
     return (pcl::io::loadPolygonFileOBJ (file_name, mesh));
-  else if (extension == ".stl" )
+  else if (extension == "stl" )
     return (pcl::io::loadPolygonFileSTL (file_name, mesh));
   else
   {
@@ -79,28 +81,21 @@ pcl::io::loadPolygonFile (const std::string &file_name, pcl::PolygonMesh& mesh)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int
-pcl::io::savePolygonFile (const std::string &file_name, const pcl::PolygonMesh& mesh)
+bool
+pcl::io::savePolygonFile (const std::string &file_name,
+                          const pcl::PolygonMesh& mesh,
+                          const bool binary_format)
 {
-  // TODO: what about binary/ASCII modes?!?!?!
   // TODO: what about sensor position and orientation?!?!?!?
-
-  // TODO: how to adequately catch exceptions thrown by the vtk writers?!
-
-  std::string extension = boost::filesystem::extension (file_name);
-  if (extension == ".pcd") // no Polygon, but only a point cloud
-  {
-    int error_code = pcl::io::savePCDFile (file_name, mesh.cloud);
-    if (error_code != 0)
-      return (0);
-    return (static_cast<int> (mesh.cloud.width * mesh.cloud.height));
-  }
-  else if (extension == ".vtk")
-   return (pcl::io::savePolygonFileVTK (file_name, mesh));
-  else if (extension == ".ply")
-   return (pcl::io::savePolygonFilePLY (file_name, mesh));
-  else if (extension == ".stl" )
-    return (pcl::io::savePolygonFileSTL (file_name, mesh));
+  std::string extension = file_name.substr (file_name.find_last_of (".") + 1);
+  if (extension == "pcd")  // no Polygon, but only a point cloud
+    return (pcl::io::savePCDFile (file_name, mesh.cloud, Eigen::Vector4f::Zero (), Eigen::Quaternionf::Identity (), binary_format) == 0);
+  else if (extension == "vtk")
+    return (pcl::io::savePolygonFileVTK (file_name, mesh, binary_format));
+  else if (extension == "ply")
+    return (pcl::io::savePolygonFilePLY (file_name, mesh, binary_format));
+  else if (extension == "stl")
+    return (pcl::io::savePolygonFileSTL (file_name, mesh, binary_format));
   else
   {
     PCL_ERROR ("[pcl::io::savePolygonFile]: Unsupported file type (%s)\n", extension.c_str ());
@@ -151,6 +146,20 @@ pcl::io::loadPolygonFileOBJ (const std::string &file_name, pcl::PolygonMesh& mes
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int
+pcl::io::loadPolygonFileOBJ (const std::string &file_name, pcl::TextureMesh& mesh)
+{
+  vtkSmartPointer<vtkOBJReader> ply_reader = vtkSmartPointer<vtkOBJReader>::New ();
+  ply_reader->SetFileName (file_name.c_str ());
+  ply_reader->Update ();
+
+  vtkSmartPointer<vtkPolyData> poly_data = ply_reader->GetOutput ();
+
+  return (pcl::io::vtk2mesh (poly_data, mesh));
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+int
 pcl::io::loadPolygonFileSTL (const std::string &file_name, pcl::PolygonMesh& mesh)
 {
   vtkSmartPointer<vtkPolyData> poly_data = vtkSmartPointer<vtkPolyData>::New ();
@@ -164,52 +173,81 @@ pcl::io::loadPolygonFileSTL (const std::string &file_name, pcl::PolygonMesh& mes
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int
-pcl::io::savePolygonFileVTK (const std::string &file_name, const pcl::PolygonMesh& mesh)
+bool
+pcl::io::savePolygonFileVTK (const std::string &file_name,
+                             const pcl::PolygonMesh& mesh,
+                             const bool binary_format)
 {
   vtkSmartPointer<vtkPolyData> poly_data = vtkSmartPointer<vtkPolyData>::New ();
 
   pcl::io::mesh2vtk (mesh, poly_data);
 
   vtkSmartPointer<vtkPolyDataWriter> poly_writer = vtkSmartPointer<vtkPolyDataWriter>::New ();
+#if VTK_MAJOR_VERSION < 6
   poly_writer->SetInput (poly_data);
-  poly_writer->SetFileName (file_name.c_str ());
-  poly_writer->Write ();
+#else
+  poly_writer->SetInputData (poly_data);
+#endif
 
-  return (static_cast<int> (mesh.cloud.width * mesh.cloud.width));
+  if (binary_format)
+    poly_writer->SetFileTypeToBinary ();
+  else
+    poly_writer->SetFileTypeToASCII ();
+
+  poly_writer->SetFileName (file_name.c_str ());
+  return (poly_writer->Write ());
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int
-pcl::io::savePolygonFilePLY (const std::string &file_name, const pcl::PolygonMesh& mesh)
+bool
+pcl::io::savePolygonFilePLY (const std::string &file_name,
+                             const pcl::PolygonMesh& mesh,
+                             const bool binary_format)
 {
   vtkSmartPointer<vtkPolyData> poly_data = vtkSmartPointer<vtkPolyData>::New ();
 
   pcl::io::mesh2vtk (mesh, poly_data);
 
   vtkSmartPointer<vtkPLYWriter> poly_writer = vtkSmartPointer<vtkPLYWriter>::New ();
+#if VTK_MAJOR_VERSION < 6
   poly_writer->SetInput (poly_data);
+#else
+  poly_writer->SetInputData (poly_data);
+#endif
+
+  if (binary_format)
+    poly_writer->SetFileTypeToBinary ();
+  else
+    poly_writer->SetFileTypeToASCII ();
+
   poly_writer->SetFileName (file_name.c_str ());
 	poly_writer->SetArrayName ("Colors");
-  poly_writer->Write ();
-
-  return (static_cast<int> (mesh.cloud.width * mesh.cloud.width));
+  return (poly_writer->Write ());
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int
-pcl::io::savePolygonFileSTL (const std::string &file_name, const pcl::PolygonMesh& mesh)
+bool
+pcl::io::savePolygonFileSTL (const std::string &file_name,
+                             const pcl::PolygonMesh& mesh,
+                             const bool binary_format)
 {
   vtkSmartPointer<vtkPolyData> poly_data = vtkSmartPointer<vtkPolyData>::New ();
 
   pcl::io::mesh2vtk (mesh, poly_data);
-
   vtkSmartPointer<vtkSTLWriter> poly_writer = vtkSmartPointer<vtkSTLWriter>::New ();
+#if VTK_MAJOR_VERSION < 6
   poly_writer->SetInput (poly_data);
-  poly_writer->SetFileName (file_name.c_str ());
-  poly_writer->Write ();
+#else
+  poly_writer->SetInputData (poly_data);
+#endif
 
-  return (static_cast<int> (mesh.cloud.width * mesh.cloud.width));
+  if (binary_format)
+    poly_writer->SetFileTypeToBinary ();
+  else
+    poly_writer->SetFileTypeToASCII ();
+
+  poly_writer->SetFileName (file_name.c_str ());
+  return (poly_writer->Write ());
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -244,7 +282,7 @@ pcl::io::vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data, pcl::PolygonMe
     xyz_cloud->points[i].z = static_cast<float> (point_xyz[2]);
   }
   // And put it in the mesh cloud
-  pcl::toROSMsg (*xyz_cloud, mesh.cloud);
+  pcl::toPCLPointCloud2 (*xyz_cloud, mesh.cloud);
 
 
   // Then the color information, if any
@@ -277,9 +315,9 @@ pcl::io::vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data, pcl::PolygonMe
       rgb_cloud->points[i].b = point_color[2];
     }
 
-    sensor_msgs::PointCloud2 rgb_cloud2;
-    pcl::toROSMsg (*rgb_cloud, rgb_cloud2);
-    sensor_msgs::PointCloud2 aux;
+    pcl::PCLPointCloud2 rgb_cloud2;
+    pcl::toPCLPointCloud2 (*rgb_cloud, rgb_cloud2);
+    pcl::PCLPointCloud2 aux;
     pcl::concatenateFields (rgb_cloud2, mesh.cloud, aux);
     mesh.cloud = aux;
   }
@@ -306,9 +344,9 @@ pcl::io::vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data, pcl::PolygonMe
       normal_cloud->points[i].normal_z = normal[2];
     }
 
-    sensor_msgs::PointCloud2 normal_cloud2;
-    pcl::toROSMsg (*normal_cloud, normal_cloud2);
-    sensor_msgs::PointCloud2 aux;
+    pcl::PCLPointCloud2 normal_cloud2;
+    pcl::toPCLPointCloud2 (*normal_cloud, normal_cloud2);
+    pcl::PCLPointCloud2 aux;
     pcl::concatenateFields (normal_cloud2, mesh.cloud, aux);
     mesh.cloud = aux;
   }
@@ -329,6 +367,47 @@ pcl::io::vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data, pcl::PolygonMe
       mesh.polygons[id_poly].vertices[i] = static_cast<int> (cell_points[i]);
     ++id_poly;
   }
+
+  return (static_cast<int> (nr_points));
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+int
+pcl::io::vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data, pcl::TextureMesh& mesh)
+{
+  /// TODO avoid copying here
+  PolygonMesh polygon_mesh;
+  vtk2mesh (poly_data, polygon_mesh);
+
+  mesh.cloud = polygon_mesh.cloud;
+  mesh.header = polygon_mesh.header;
+  /// TODO check for sub-meshes
+  mesh.tex_polygons.push_back (polygon_mesh.polygons);
+
+  // Add dummy material
+  mesh.tex_materials.push_back (pcl::TexMaterial ());
+  std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> > dummy;
+  mesh.tex_coordinates.push_back (dummy);
+
+  vtkIdType nr_points = poly_data->GetNumberOfPoints ();
+
+  // Handle the texture coordinates
+  vtkFloatArray* texture_coords = NULL;
+  if (poly_data->GetPointData () != NULL)
+    texture_coords = vtkFloatArray::SafeDownCast (poly_data->GetPointData ()->GetTCoords ());
+
+  if (texture_coords != NULL)
+  {
+    for (vtkIdType i = 0; i < nr_points; ++i)
+    {
+      float tex[2];
+      texture_coords->GetTupleValue (i, tex);
+      mesh.tex_coordinates.front ().push_back (Eigen::Vector2f (tex[0], tex[1]));
+    }
+  }
+  else
+    PCL_ERROR ("Could not find texture coordinates in the polydata\n");
 
   return (static_cast<int> (nr_points));
 }
@@ -436,9 +515,13 @@ pcl::io::saveRangeImagePlanarFilePNG (
 {
   vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
   image->SetDimensions(range_image.width, range_image.height, 1);
+#if VTK_MAJOR_VERSION < 6
   image->SetNumberOfScalarComponents(1);
   image->SetScalarTypeToFloat();
   image->AllocateScalars();
+#else
+  image->AllocateScalars (VTK_FLOAT, 1);
+#endif
 
   int* dims = image->GetDimensions();
 
@@ -457,7 +540,11 @@ pcl::io::saveRangeImagePlanarFilePNG (
 
   vtkSmartPointer<vtkImageShiftScale> shiftScaleFilter = vtkSmartPointer<vtkImageShiftScale>::New();
   shiftScaleFilter->SetOutputScalarTypeToUnsignedChar();
+#if VTK_MAJOR_VERSION < 6
   shiftScaleFilter->SetInputConnection(image->GetProducerPort());
+#else
+  shiftScaleFilter->SetInputData (image);
+#endif
   shiftScaleFilter->SetShift(-1.0f * image->GetScalarRange()[0]); // brings the lower bound to 0
   shiftScaleFilter->SetScale(newRange/oldRange);
   shiftScaleFilter->Update();
@@ -470,9 +557,11 @@ pcl::io::saveRangeImagePlanarFilePNG (
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void
-pcl::io::pointCloudTovtkPolyData(const sensor_msgs::PointCloud2Ptr& cloud, vtkSmartPointer<vtkPolyData>& poly_data)
+pcl::io::pointCloudTovtkPolyData(const pcl::PCLPointCloud2Ptr& cloud, vtkSmartPointer<vtkPolyData>& poly_data)
 {
-  poly_data = vtkSmartPointer<vtkPolyData>::New (); // OR poly_data->Reset();
+  if (!poly_data.GetPointer())
+    poly_data = vtkSmartPointer<vtkPolyData>::New (); // OR poly_data->Reset();
+
 
   // Add Points
   size_t x_idx = pcl::getFieldIndex (*cloud, std::string ("x") );
@@ -498,7 +587,7 @@ pcl::io::pointCloudTovtkPolyData(const sensor_msgs::PointCloud2Ptr& cloud, vtkSm
 
   // Add RGB
   int rgb_idx = pcl::getFieldIndex (*cloud, "rgb");
-  if (rgb_idx > 0)
+  if (rgb_idx != -1)
   {
     //std::cout << "Adding rgb" << std::endl;
     vtkSmartPointer<vtkUnsignedCharArray> colors = vtkSmartPointer<vtkUnsignedCharArray>::New ();
@@ -522,7 +611,7 @@ pcl::io::pointCloudTovtkPolyData(const sensor_msgs::PointCloud2Ptr& cloud, vtkSm
 
   // Add Intensity
   int intensity_idx = pcl::getFieldIndex (*cloud, "intensity");
-  if (intensity_idx > 0)
+  if (intensity_idx != -1)
   {
     //std::cout << "Adding intensity" << std::endl;
     vtkSmartPointer<vtkFloatArray> cloud_intensity = vtkSmartPointer<vtkFloatArray>::New ();
@@ -541,13 +630,13 @@ pcl::io::pointCloudTovtkPolyData(const sensor_msgs::PointCloud2Ptr& cloud, vtkSm
     }
 
     poly_data->GetCellData()->AddArray(cloud_intensity);
-    if (rgb_idx > 0)
+    if (rgb_idx == -1)
       poly_data->GetCellData()->SetActiveAttribute("intensity", vtkDataSetAttributes::SCALARS);
   }
+
   // Add Normals
   int normal_x_idx = pcl::getFieldIndex (*cloud, std::string ("normal_x") );
-
-  if (normal_x_idx > 0)
+  if (normal_x_idx != -1)
   {
     //std::cout << "Adding normals" << std::endl;
     vtkSmartPointer<vtkFloatArray> normals = vtkSmartPointer<vtkFloatArray>::New();

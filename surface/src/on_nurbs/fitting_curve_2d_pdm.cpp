@@ -36,6 +36,7 @@
  */
 
 #include <pcl/surface/on_nurbs/fitting_curve_2d_pdm.h>
+#include <pcl/pcl_macros.h>
 #include <stdexcept>
 
 using namespace pcl;
@@ -139,7 +140,7 @@ FittingCurve2dPDM::assemble (const Parameter &parameter)
 
   if (row < nrows)
   {
-    m_solver.resizeF (row);
+    m_solver.resize (row);
     if (!m_quiet)
       printf ("[FittingCurve2dPDM::assemble] Warning: rows do not match: %d %d\n", row, nrows);
   }
@@ -174,7 +175,7 @@ FittingCurve2dPDM::updateCurve (double damp)
     double x = m_solver.x (j, 0);
     double y = m_solver.x (j, 1);
 
-    cps_diff = sqrt ((x - cp_prev.x) * (x - cp_prev.x) + (y - cp_prev.y) * (y - cp_prev.y));
+    cps_diff += sqrt ((x - cp_prev.x) * (x - cp_prev.x) + (y - cp_prev.y) * (y - cp_prev.y));
 
     if (cps_diff > cps_diff_max)
       cps_diff_max = cps_diff;

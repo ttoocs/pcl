@@ -274,7 +274,9 @@ SequentialFitter::setCorners (pcl::PointIndices::Ptr &corners, bool flip_on_dema
 }
 
 void
-SequentialFitter::setProjectionMatrix (Eigen::Matrix4d &intrinsic, Eigen::Matrix4d &extrinsic)
+SequentialFitter::setProjectionMatrix (
+    const Eigen::Matrix4d &intrinsic, 
+    const Eigen::Matrix4d &extrinsic)
 {
   m_intrinsic = intrinsic;
   m_extrinsic = extrinsic;
@@ -457,8 +459,12 @@ SequentialFitter::getBoundaryNormals (std::vector<Eigen::Vector3d, Eigen::aligne
 }
 
 void
-SequentialFitter::getClosestPointOnNurbs (ON_NurbsSurface nurbs, Eigen::Vector3d pt, Eigen::Vector2d& params,
-                                          int maxSteps, double accuracy)
+SequentialFitter::getClosestPointOnNurbs (
+    ON_NurbsSurface nurbs, 
+    const Eigen::Vector3d &pt, 
+    Eigen::Vector2d& params,
+    int maxSteps, 
+    double accuracy)
 {
   Eigen::Vector3d p, tu, tv;
   double error;
@@ -477,13 +483,13 @@ SequentialFitter::grow (float max_dist, float max_angle, unsigned min_length, un
 
   if (unsigned (this->m_data.boundary.size ()) != num_bnd)
   {
-    printf ("[SequentialFitter::grow] %zu %u\n", this->m_data.boundary.size (), num_bnd);
+    printf ("[SequentialFitter::grow] %lu %u\n", this->m_data.boundary.size (), num_bnd);
     throw std::runtime_error ("[SequentialFitter::grow] size of boundary and boundary parameters do not match.");
   }
 
   if (this->m_boundary_indices->indices.size () != num_bnd)
   {
-    printf ("[SequentialFitter::grow] %zu %u\n", this->m_boundary_indices->indices.size (), num_bnd);
+    printf ("[SequentialFitter::grow] %lu %u\n", this->m_boundary_indices->indices.size (), num_bnd);
     throw std::runtime_error ("[SequentialFitter::grow] size of boundary indices and boundary parameters do not match.");
   }
 

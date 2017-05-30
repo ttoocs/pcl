@@ -16,7 +16,7 @@
  *    copyright notice, this list of conditions and the following
  *    disclaimer in the documentation and/or other materials provided
  *    with the distribution.
- *  * Neither the name of Willow Garage, Inc. nor the names of its
+ *  * Neither the name of the copyright holder(s) nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  * 
@@ -40,7 +40,7 @@
 
 #include <iostream>
 #include <vector>
-
+#include <pcl/common/eigen.h>
 #include <pcl/filters/sampling_surface_normal.h>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -48,7 +48,7 @@ template<typename PointT> void
 pcl::SamplingSurfaceNormal<PointT>::applyFilter (PointCloud &output)
 {
   std::vector <int> indices;
-  int npts = int (input_->points.size ());
+  size_t npts = input_->points.size ();
   for (unsigned int i = 0; i < npts; i++)
     indices.push_back (i);
 
@@ -125,7 +125,7 @@ pcl::SamplingSurfaceNormal<PointT>::partition (
     std::vector<int>& indices, PointCloud&  output)
 {
 	const int count (last - first);
-  if (count <= sample_)
+  if (count <= static_cast<int> (sample_))
   {
     samplePartition (cloud, first, last, indices, output);
     return;
@@ -164,7 +164,7 @@ pcl::SamplingSurfaceNormal<PointT>::samplePartition (
 {
   pcl::PointCloud <PointT> cloud;
   
-  for (unsigned int i = first; i < last; i++)
+  for (int i = first; i < last; i++)
   {
     PointT pt;
     pt.x = data.points[indices[i]].x;

@@ -51,7 +51,6 @@
 #ifdef HAVE_OPENCV
   #include <opencv2/opencv.hpp>
   #include <opencv2/gpu/gpu.hpp>
-  #include <pcl/gpu/utils/timers_opencv.hpp>
 #endif
 
 using namespace std;
@@ -80,7 +79,7 @@ pcl::gpu::KinfuTracker::KinfuTracker (int rows, int cols) : rows_(rows), cols_(c
   tsdf_volume_ = TsdfVolume::Ptr( new TsdfVolume(volume_resolution) );
   tsdf_volume_->setSize(volume_size);
   
-  setDepthIntrinsics (525.f, 525.f); // default values, can be overwritten
+  setDepthIntrinsics (KINFU_DEFAULT_DEPTH_FOCAL_X, KINFU_DEFAULT_DEPTH_FOCAL_Y); // default values, can be overwritten
   
   init_Rcam_ = Eigen::Matrix3f::Identity ();// * AngleAxisf(-30.f/180*3.1415926, Vector3f::UnitX());
   init_tcam_ = volume_size * 0.5f - Vector3f (0, 0, volume_size (2) / 2 * 1.2f);
@@ -111,6 +110,16 @@ pcl::gpu::KinfuTracker::setDepthIntrinsics (float fx, float fy, float cx, float 
   fy_ = fy;
   cx_ = (cx == -1) ? cols_/2-0.5f : cx;
   cy_ = (cy == -1) ? rows_/2-0.5f : cy;  
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void
+pcl::gpu::KinfuTracker::getDepthIntrinsics (float& fx, float& fy, float& cx, float& cy)
+{
+  fx = fx_;
+  fy = fy_;
+  cx = cx_;
+  cy = cy_;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -220,7 +229,8 @@ pcl::gpu::KinfuTracker::allocateBufffers (int rows, int cols)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool
-pcl::gpu::KinfuTracker::operator() (const DepthMap& depth_raw)
+pcl::gpu::KinfuTracker::operator() (const DepthMap& depth_raw, 
+    Eigen::Affine3f *hint)
 {  
   device::Intr intr (fx_, fy_, cx_, cy_);
 
@@ -278,9 +288,18 @@ pcl::gpu::KinfuTracker::operator() (const DepthMap& depth_raw)
       //Mat33&  device_Rprev     = device_cast<Mat33> (Rprev);
       Mat33&  device_Rprev_inv = device_cast<Mat33> (Rprev_inv);
       float3& device_tprev     = device_cast<float3> (tprev);
-
-      Matrix3frm Rcurr = Rprev; // tranform to global coo for ith camera pose
-      Vector3f   tcurr = tprev;
+      Matrix3frm Rcurr;
+      Vector3f tcurr;
+      if(hint)
+      {
+        Rcurr = hint->rotation().matrix();
+        tcurr = hint->translation().matrix();
+      }
+      else
+      {
+        Rcurr = Rprev; // tranform to global coo for ith camera pose
+        tcurr = tprev;
+      }
       {
         //ScopeTime time("icp-all");
         for (int level_index = LEVELS-1; level_index>=0; --level_index)

@@ -177,7 +177,7 @@ pcl::Hough3DGrouping<PointModelT, PointSceneT, PointModelRfT, PointSceneRfT>::ho
     return (false);
   }
 
-  std::vector<Eigen::Vector3d> scene_votes (n_matches);
+  std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > scene_votes (n_matches);
   Eigen::Vector3d d_min, d_max, bin_size;
 
   d_min.setConstant (std::numeric_limits<double>::max ());
@@ -277,10 +277,10 @@ pcl::Hough3DGrouping<PointModelT, PointSceneT, PointModelRfT, PointSceneRfT>::cl
   pcl::copyPointCloud<PointSceneT, PointModelT> (*scene_, *temp_scene_cloud_ptr);
 
   pcl::registration::CorrespondenceRejectorSampleConsensus<PointModelT> corr_rejector;
-  corr_rejector.setMaxIterations (10000);
+  corr_rejector.setMaximumIterations (10000);
   corr_rejector.setInlierThreshold (hough_bin_size_);
-  corr_rejector.setInputCloud (input_);
-  corr_rejector.setTargetCloud (temp_scene_cloud_ptr);
+  corr_rejector.setInputSource (input_);
+  corr_rejector.setInputTarget (temp_scene_cloud_ptr);
 
   for (size_t j = 0; j < max_values.size (); ++j)
   {

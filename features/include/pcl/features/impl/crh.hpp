@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -93,8 +94,11 @@ pcl::CRHEstimation<PointInT, PointNT, PointOutT>::computeFeature (PointCloudOut 
 
   pcl::transformPointCloudWithNormals (grid, grid, transformPC);
 
-  //fill spatial data vector
-  kiss_fft_scalar * spatial_data = new kiss_fft_scalar[nbins];
+  //fill spatial data vector and the zero-initialize or "value-initialize" an array on c++, 
+  // the initialization is made with () after the [nbins]
+  kiss_fft_scalar * spatial_data = new kiss_fft_scalar[nbins]();
+  
+
   float sum_w = 0, w = 0;
   int bin = 0;
   for (size_t i = 0; i < grid.points.size (); ++i)

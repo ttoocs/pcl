@@ -34,7 +34,7 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- *  $Id: octree_base_node.hpp 6927M 2012-08-24 20:42:45Z (local) $
+ *  $Id$
  *
  */
 
@@ -48,9 +48,9 @@
 #include <string>
 #include <exception>
 
-// PCL (Urban Robotics)
+#include <pcl/common/common.h>
+#include <pcl/visualization/common/common.h>
 #include <pcl/outofcore/octree_base_node.h>
-
 #include <pcl/filters/random_sample.h>
 #include <pcl/filters/extract_indices.h>
 
@@ -505,7 +505,7 @@ namespace pcl
 
 
     template<typename ContainerT, typename PointT> boost::uint64_t
-    OutofcoreOctreeBaseNode<ContainerT, PointT>::addPointCloud (const typename sensor_msgs::PointCloud2::Ptr& input_cloud, const bool skip_bb_check)
+    OutofcoreOctreeBaseNode<ContainerT, PointT>::addPointCloud (const typename pcl::PCLPointCloud2::Ptr& input_cloud, const bool skip_bb_check)
     {
       assert (this->root_node_->m_tree_ != NULL);
       
@@ -541,12 +541,12 @@ namespace pcl
           if ( indices[i].empty () )
             continue;
 
-          if ( children_[i] == false )
+          if (children_[i] == 0)
           {
             createChild (i);
           }
 
-          sensor_msgs::PointCloud2::Ptr dst_cloud (new sensor_msgs::PointCloud2 () );
+          pcl::PCLPointCloud2::Ptr dst_cloud (new pcl::PCLPointCloud2 () );
 
               PCL_DEBUG ( "[pcl::outofcore::OutofcoreOctreeBaseNode::%s] Extracting indices to bins\n", __FUNCTION__);
               
@@ -663,7 +663,7 @@ namespace pcl
     }
     ////////////////////////////////////////////////////////////////////////////////
     template<typename ContainerT, typename PointT> boost::uint64_t
-    OutofcoreOctreeBaseNode<ContainerT, PointT>::addDataAtMaxDepth (const sensor_msgs::PointCloud2::Ptr input_cloud, const bool skip_bb_check)
+    OutofcoreOctreeBaseNode<ContainerT, PointT>::addDataAtMaxDepth (const pcl::PCLPointCloud2::Ptr input_cloud, const bool skip_bb_check)
     {
       //this assumes data is already in the correct bin
       if(skip_bb_check == true)
@@ -717,7 +717,7 @@ namespace pcl
 
     ////////////////////////////////////////////////////////////////////////////////
     template<typename ContainerT, typename PointT> boost::uint64_t
-    OutofcoreOctreeBaseNode<ContainerT, PointT>::addPointCloud_and_genLOD (const sensor_msgs::PointCloud2::Ptr input_cloud) //, const bool skip_bb_check = false )
+    OutofcoreOctreeBaseNode<ContainerT, PointT>::addPointCloud_and_genLOD (const pcl::PCLPointCloud2::Ptr input_cloud) //, const bool skip_bb_check = false )
     {
       boost::uint64_t points_added = 0;
       
@@ -746,7 +746,7 @@ namespace pcl
       //   1. Get indices from a random sample
       //   2. Extract those indices with the extract indices class (in order to also get the complement)
       //------------------------------------------------------------
-      pcl::RandomSample<sensor_msgs::PointCloud2> random_sampler;
+      pcl::RandomSample<pcl::PCLPointCloud2> random_sampler;
       random_sampler.setInputCloud (input_cloud);
 
       //set sample size to 1/8 of total points (12.5%)
@@ -754,20 +754,20 @@ namespace pcl
       random_sampler.setSample (static_cast<unsigned int> (sample_size));
       
       //create our destination
-      sensor_msgs::PointCloud2::Ptr downsampled_cloud ( new sensor_msgs::PointCloud2 () );
+      pcl::PCLPointCloud2::Ptr downsampled_cloud ( new pcl::PCLPointCloud2 () );
 
       //create destination for indices
       pcl::IndicesPtr downsampled_cloud_indices ( new std::vector< int > () );
       random_sampler.filter (*downsampled_cloud_indices);
 
       //extract the "random subset", size by setSampleSize
-      pcl::ExtractIndices<sensor_msgs::PointCloud2> extractor;
+      pcl::ExtractIndices<pcl::PCLPointCloud2> extractor;
       extractor.setInputCloud (input_cloud);
       extractor.setIndices (downsampled_cloud_indices);
       extractor.filter (*downsampled_cloud);
 
       //extract the complement of those points (i.e. everything remaining)
-      sensor_msgs::PointCloud2::Ptr remaining_points ( new sensor_msgs::PointCloud2 () );
+      pcl::PCLPointCloud2::Ptr remaining_points ( new pcl::PCLPointCloud2 () );
       extractor.setNegative (true);
       extractor.filter (*remaining_points);
 
@@ -796,14 +796,14 @@ namespace pcl
         if(indices[i].empty ())
           continue;
 
-        if( children_[i] == false )
+        if (children_[i] == 0)
         {
           assert (i < 8);
           createChild (i);
         }
         
         //copy correct indices into a temporary cloud
-        sensor_msgs::PointCloud2::Ptr tmp_local_point_cloud (new sensor_msgs::PointCloud2 ());
+        pcl::PCLPointCloud2::Ptr tmp_local_point_cloud (new pcl::PCLPointCloud2 ());
         pcl::copyPointCloud (*remaining_points, indices[i], *tmp_local_point_cloud);
 
         //recursively add points and keep track of how many were successfully added to the tree
@@ -1008,6 +1008,324 @@ namespace pcl
     }
 
     ////////////////////////////////////////////////////////////////////////////////
+//    Eigen::Vector3d cornerOffsets[] =
+//    {
+//      Eigen::Vector3d(-1.0, -1.0, -1.0),     // - - -
+//      Eigen::Vector3d( 1.0, -1.0, -1.0),     // - - +
+//      Eigen::Vector3d(-1.0,  1.0, -1.0),     // - + -
+//      Eigen::Vector3d( 1.0,  1.0, -1.0),     // - + +
+//      Eigen::Vector3d(-1.0, -1.0,  1.0),     // + - -
+//      Eigen::Vector3d( 1.0, -1.0,  1.0),     // + - +
+//      Eigen::Vector3d(-1.0,  1.0,  1.0),     // + + -
+//      Eigen::Vector3d( 1.0,  1.0,  1.0)      // + + +
+//    };
+//
+//    // Note that the input vector must already be negated when using this code for halfplane tests
+//    int
+//    vectorToIndex(Eigen::Vector3d normal)
+//    {
+//      int index = 0;
+//
+//      if (normal.z () >= 0) index |= 1;
+//      if (normal.y () >= 0) index |= 2;
+//      if (normal.x () >= 0) index |= 4;
+//
+//      return index;
+//    }
+//
+//    void
+//    get_np_vertices(Eigen::Vector3d normal, Eigen::Vector3d &p_vertex, Eigen::Vector3d &n_vertex, Eigen::Vector3d min_bb, Eigen::Vector3d max_bb)
+//    {
+//
+//      p_vertex = min_bb;
+//      n_vertex = max_bb;
+//
+//      if (normal.x () >= 0)
+//      {
+//        n_vertex.x () = min_bb.x ();
+//        p_vertex.x () = max_bb.x ();
+//      }
+//
+//      if (normal.y () >= 0)
+//      {
+//        n_vertex.y () = min_bb.y ();
+//        p_vertex.y () = max_bb.y ();
+//      }
+//
+//      if (normal.z () >= 0)
+//      {
+//        p_vertex.z () = max_bb.z ();
+//        n_vertex.z () = min_bb.z ();
+//      }
+//    }
+
+    template<typename Container, typename PointT> void
+    OutofcoreOctreeBaseNode<Container, PointT>::queryFrustum (const double planes[24], std::list<std::string>& file_names)
+    {
+      queryFrustum(planes, file_names, this->m_tree_->getTreeDepth());
+    }
+
+    template<typename Container, typename PointT> void
+    OutofcoreOctreeBaseNode<Container, PointT>::queryFrustum (const double planes[24], std::list<std::string>& file_names, const boost::uint32_t query_depth, const bool skip_vfc_check)
+    {
+
+      enum {INSIDE, INTERSECT, OUTSIDE};
+
+      int result = INSIDE;
+
+      if (this->depth_ > query_depth)
+      {
+        return;
+      }
+
+//      if (this->depth_ > query_depth)
+//        return;
+
+      if (!skip_vfc_check)
+      {
+        for(int i =0; i < 6; i++){
+          double a = planes[(i*4)];
+          double b = planes[(i*4)+1];
+          double c = planes[(i*4)+2];
+          double d = planes[(i*4)+3];
+
+          //cout << i << ": " << a << "x + " << b << "y + " << c << "z + " << d << endl;
+
+          Eigen::Vector3d normal(a, b, c);
+
+          Eigen::Vector3d min_bb;
+          Eigen::Vector3d max_bb;
+          node_metadata_->getBoundingBox(min_bb, max_bb);
+
+          //  Basic VFC algorithm
+          Eigen::Vector3d center = node_metadata_->getVoxelCenter();
+          Eigen::Vector3d radius (fabs (static_cast<double> (max_bb.x () - center.x ())),
+                                  fabs (static_cast<double> (max_bb.y () - center.y ())),
+                                  fabs (static_cast<double> (max_bb.z () - center.z ())));
+
+          double m = (center.x () * a) + (center.y () * b) + (center.z () * c) + d;
+          double n = (radius.x () * fabs(a)) + (radius.y () * fabs(b)) + (radius.z () * fabs(c));
+
+          if (m + n < 0){
+            result = OUTSIDE;
+            break;
+          }
+
+          if (m - n < 0) result = INTERSECT;
+
+  //        // n-p implementation
+  //        Eigen::Vector3d p_vertex; //pos vertex
+  //        Eigen::Vector3d n_vertex; //neg vertex
+  //        get_np_vertices(normal, p_vertex, n_vertex, min_bb, max_bb);
+  //
+  //        cout << "n_vertex: " << n_vertex.x () << ", " << n_vertex.y () << ", " << n_vertex.z () << endl;
+  //        cout << "p_vertex: " << p_vertex.x () << ", " << p_vertex.y () << ", " << p_vertex.z () << endl;
+
+          // is the positive vertex outside?
+  //        if (pl[i].distance(b.getVertexP(pl[i].normal)) < 0)
+  //        {
+  //          result = OUTSIDE;
+  //        }
+  //        // is the negative vertex outside?
+  //        else if (pl[i].distance(b.getVertexN(pl[i].normal)) < 0)
+  //        {
+  //          result = INTERSECT;
+  //        }
+
+  //
+  //
+  //        // This should be the same as below
+  //        if (normal.dot(n_vertex) + d > 0)
+  //        {
+  //          result = OUTSIDE;
+  //        }
+  //
+  //        if (normal.dot(p_vertex) + d >= 0)
+  //        {
+  //          result = INTERSECT;
+  //        }
+
+          // This should be the same as above
+  //        double m = (a * n_vertex.x ()) + (b * n_vertex.y ()) + (c * n_vertex.z ());
+  //        cout << "m = " << m << endl;
+  //        if (m > -d)
+  //        {
+  //          result = OUTSIDE;
+  //        }
+  //
+  //        double n = (a * p_vertex.x ()) + (b * p_vertex.y ()) + (c * p_vertex.z ());
+  //        cout << "n = " << n << endl;
+  //        if (n > -d)
+  //        {
+  //          result = INTERSECT;
+  //        }
+        }
+      }
+
+      if (result == OUTSIDE)
+      {
+        return;
+      }
+
+//      switch(result){
+//        case OUTSIDE:
+//          //cout << this->depth_ << " [OUTSIDE]: " << node_metadata_->getPCDFilename() << endl;
+//          return;
+//        case INTERSECT:
+//          //cout << this->depth_ << " [INTERSECT]: " << node_metadata_->getPCDFilename() << endl;
+//          break;
+//        case INSIDE:
+//          //cout << this->depth_ << " [INSIDE]: " << node_metadata_->getPCDFilename() << endl;
+//          break;
+//      }
+
+      // Add files breadth first
+      if (this->depth_ == query_depth && payload_->getDataSize () > 0)
+      //if (payload_->getDataSize () > 0)
+      {
+        file_names.push_back (this->node_metadata_->getMetadataFilename ().string ());
+      }
+
+      if (hasUnloadedChildren ())
+      {
+        loadChildren (false);
+      }
+
+      if (this->getNumChildren () > 0)
+      {
+        for (size_t i = 0; i < 8; i++)
+        {
+          if (children_[i])
+            children_[i]->queryFrustum (planes, file_names, query_depth, (result == INSIDE) /*skip_vfc_check*/);
+        }
+      }
+//      else if (hasUnloadedChildren ())
+//      {
+//        loadChildren (false);
+//
+//        for (size_t i = 0; i < 8; i++)
+//        {
+//          if (children_[i])
+//            children_[i]->queryFrustum (planes, file_names, query_depth);
+//        }
+//      }
+      //}
+    }
+
+////////////////////////////////////////////////////////////////////////////////
+
+    template<typename Container, typename PointT> void
+    OutofcoreOctreeBaseNode<Container, PointT>::queryFrustum (const double planes[24], const Eigen::Vector3d &eye, const Eigen::Matrix4d &view_projection_matrix, std::list<std::string>& file_names, const boost::uint32_t query_depth, const bool skip_vfc_check)
+    {
+
+      // If we're above our query depth
+      if (this->depth_ > query_depth)
+      {
+        return;
+      }
+
+      // Bounding Box
+      Eigen::Vector3d min_bb;
+      Eigen::Vector3d max_bb;
+      node_metadata_->getBoundingBox(min_bb, max_bb);
+
+      // Frustum Culling
+      enum {INSIDE, INTERSECT, OUTSIDE};
+
+      int result = INSIDE;
+
+      if (!skip_vfc_check)
+      {
+        for(int i =0; i < 6; i++){
+          double a = planes[(i*4)];
+          double b = planes[(i*4)+1];
+          double c = planes[(i*4)+2];
+          double d = planes[(i*4)+3];
+
+          //cout << i << ": " << a << "x + " << b << "y + " << c << "z + " << d << endl;
+
+          Eigen::Vector3d normal(a, b, c);
+
+          //  Basic VFC algorithm
+          Eigen::Vector3d center = node_metadata_->getVoxelCenter();
+          Eigen::Vector3d radius (fabs (static_cast<double> (max_bb.x () - center.x ())),
+                                  fabs (static_cast<double> (max_bb.y () - center.y ())),
+                                  fabs (static_cast<double> (max_bb.z () - center.z ())));
+
+          double m = (center.x () * a) + (center.y () * b) + (center.z () * c) + d;
+          double n = (radius.x () * fabs(a)) + (radius.y () * fabs(b)) + (radius.z () * fabs(c));
+
+          if (m + n < 0){
+            result = OUTSIDE;
+            break;
+          }
+
+          if (m - n < 0) result = INTERSECT;
+
+        }
+      }
+
+      if (result == OUTSIDE)
+      {
+        return;
+      }
+
+      // Bounding box projection
+      //      3--------2
+      //     /|       /|       Y      0 = xmin, ymin, zmin
+      //    / |      / |       |      6 = xmax, ymax. zmax
+      //   7--------6  |       |
+      //   |  |     |  |       |
+      //   |  0-----|--1       +------X
+      //   | /      | /       /
+      //   |/       |/       /
+      //   4--------5       Z
+
+//      bounding_box[0] = Eigen::Vector4d(min_bb.x (), min_bb.y (), min_bb.z (), 1.0);
+//      bounding_box[1] = Eigen::Vector4d(max_bb.x (), min_bb.y (), min_bb.z (), 1.0);
+//      bounding_box[2] = Eigen::Vector4d(max_bb.x (), max_bb.y (), min_bb.z (), 1.0);
+//      bounding_box[3] = Eigen::Vector4d(min_bb.x (), max_bb.y (), min_bb.z (), 1.0);
+//      bounding_box[4] = Eigen::Vector4d(min_bb.x (), min_bb.y (), max_bb.z (), 1.0);
+//      bounding_box[5] = Eigen::Vector4d(max_bb.x (), min_bb.y (), max_bb.z (), 1.0);
+//      bounding_box[6] = Eigen::Vector4d(max_bb.x (), max_bb.y (), max_bb.z (), 1.0);
+//      bounding_box[7] = Eigen::Vector4d(min_bb.x (), max_bb.y (), max_bb.z (), 1.0);
+
+      int width = 500;
+      int height = 500;
+
+      float coverage = pcl::visualization::viewScreenArea(eye, min_bb, max_bb, view_projection_matrix, width, height);
+      //float coverage = pcl::visualization::viewScreenArea(eye, bounding_box, view_projection_matrix);
+
+//      for (int i=0; i < this->depth_; i++) std::cout << " ";
+//      std::cout << this->depth_ << ": " << coverage << std::endl;
+
+      // Add files breadth first
+      if (this->depth_ <= query_depth && payload_->getDataSize () > 0)
+      //if (payload_->getDataSize () > 0)
+      {
+        file_names.push_back (this->node_metadata_->getMetadataFilename ().string ());
+      }
+
+      //if (coverage <= 0.075)
+      if (coverage <= 10000)
+        return;
+
+      if (hasUnloadedChildren ())
+      {
+        loadChildren (false);
+      }
+
+      if (this->getNumChildren () > 0)
+      {
+        for (size_t i = 0; i < 8; i++)
+        {
+          if (children_[i])
+            children_[i]->queryFrustum (planes, eye, view_projection_matrix, file_names, query_depth, (result == INSIDE) /*skip_vfc_check*/);
+        }
+      }
+    }
+
+////////////////////////////////////////////////////////////////////////////////
     template<typename ContainerT, typename PointT> void
     OutofcoreOctreeBaseNode<ContainerT, PointT>::getOccupiedVoxelCentersRecursive (std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &voxel_centers, const size_t query_depth)
     {
@@ -1072,7 +1390,7 @@ namespace pcl
     ////////////////////////////////////////////////////////////////////////////////
 
     template<typename ContainerT, typename PointT> void
-    OutofcoreOctreeBaseNode<ContainerT, PointT>::queryBBIncludes (const Eigen::Vector3d& min_bb, const Eigen::Vector3d& max_bb, size_t query_depth, const sensor_msgs::PointCloud2::Ptr& dst_blob) 
+    OutofcoreOctreeBaseNode<ContainerT, PointT>::queryBBIncludes (const Eigen::Vector3d& min_bb, const Eigen::Vector3d& max_bb, size_t query_depth, const pcl::PCLPointCloud2::Ptr& dst_blob)
     {
       uint64_t startingSize = dst_blob->width*dst_blob->height;
       PCL_DEBUG ("[pcl::outofcore::OutofcoreOctreeBaseNode::%s] Starting points in destination blob: %ul\n", __FUNCTION__, startingSize );
@@ -1102,9 +1420,9 @@ namespace pcl
         }
         else //otherwise if we are at the max depth
         {
-          //get all the points from the payload and return (easy with PointCloud2)
-          sensor_msgs::PointCloud2::Ptr tmp_blob (new sensor_msgs::PointCloud2 ());
-          sensor_msgs::PointCloud2::Ptr tmp_dst_blob (new sensor_msgs::PointCloud2 ());
+          //get all the points from the payload and return (easy with PCLPointCloud2)
+          pcl::PCLPointCloud2::Ptr tmp_blob (new pcl::PCLPointCloud2 ());
+          pcl::PCLPointCloud2::Ptr tmp_dst_blob (new pcl::PCLPointCloud2 ());
           //load all the data in this node from disk
           payload_->readRange (0, payload_->size (), tmp_blob);
 
@@ -1149,7 +1467,7 @@ namespace pcl
             
             //put the ros message into a pointxyz point cloud (just to get the indices by using getPointsInBox)
             typename pcl::PointCloud<PointT>::Ptr tmp_cloud ( new pcl::PointCloud<PointT> () );
-            pcl::fromROSMsg ( *tmp_blob, *tmp_cloud );
+            pcl::fromPCLPointCloud2 ( *tmp_blob, *tmp_cloud );
             assert (tmp_blob->width*tmp_blob->height == tmp_cloud->width*tmp_cloud->height );
 
             Eigen::Vector4f min_pt ( static_cast<float> ( min_bb[0] ), static_cast<float> ( min_bb[1] ), static_cast<float> ( min_bb[2] ), 1.0f);
@@ -1166,7 +1484,7 @@ namespace pcl
               if( dst_blob->width*dst_blob->height > 0 )
               {
                 //need a new tmp destination with extracted points within BB
-                sensor_msgs::PointCloud2::Ptr tmp_blob_within_bb (new sensor_msgs::PointCloud2 ());
+                pcl::PCLPointCloud2::Ptr tmp_blob_within_bb (new pcl::PCLPointCloud2 ());
                 
                 //copy just the points marked in indices
                 pcl::copyPointCloud ( *tmp_blob, indices, *tmp_blob_within_bb );
@@ -1270,7 +1588,7 @@ namespace pcl
     
     ////////////////////////////////////////////////////////////////////////////////
     template<typename ContainerT, typename PointT> void
-    OutofcoreOctreeBaseNode<ContainerT, PointT>::queryBBIncludes_subsample (const Eigen::Vector3d& min_bb, const Eigen::Vector3d& max_bb, boost::uint64_t query_depth, const sensor_msgs::PointCloud2::Ptr& dst_blob, double percent)
+    OutofcoreOctreeBaseNode<ContainerT, PointT>::queryBBIncludes_subsample (const Eigen::Vector3d& min_bb, const Eigen::Vector3d& max_bb, boost::uint64_t query_depth, const pcl::PCLPointCloud2::Ptr& dst_blob, double percent)
     {
       if (intersectsWithBoundingBox (min_bb, max_bb))
         {
@@ -1296,7 +1614,7 @@ namespace pcl
             
             if (inBoundingBox (min_bb, max_bb))
             {
-              sensor_msgs::PointCloud2::Ptr tmp_blob;
+              pcl::PCLPointCloud2::Ptr tmp_blob;
               this->payload_->read (tmp_blob);
               uint64_t num_pts = tmp_blob->width*tmp_blob->height;
                 
@@ -1312,15 +1630,15 @@ namespace pcl
               }
               
               
-              pcl::RandomSample<sensor_msgs::PointCloud2> random_sampler;
+              pcl::RandomSample<pcl::PCLPointCloud2> random_sampler;
               random_sampler.setInputCloud (tmp_blob);
               
-              sensor_msgs::PointCloud2::Ptr downsampled_points (new sensor_msgs::PointCloud2 ());
+              pcl::PCLPointCloud2::Ptr downsampled_points (new pcl::PCLPointCloud2 ());
               
               //set sample size as percent * number of points read
               random_sampler.setSample (static_cast<unsigned int> (sample_points));
 
-              pcl::ExtractIndices<sensor_msgs::PointCloud2> extractor;
+              pcl::ExtractIndices<pcl::PCLPointCloud2> extractor;
               
               pcl::IndicesPtr downsampled_cloud_indices (new std::vector<int> ());
               random_sampler.filter (*downsampled_cloud_indices);
@@ -1595,7 +1913,7 @@ namespace pcl
     ////////////////////////////////////////////////////////////////////////////////
 
     template<typename ContainerT, typename PointT> int
-    OutofcoreOctreeBaseNode<ContainerT, PointT>::read (sensor_msgs::PointCloud2::Ptr &output_cloud)
+    OutofcoreOctreeBaseNode<ContainerT, PointT>::read (pcl::PCLPointCloud2::Ptr &output_cloud)
     {
       return (this->payload_->read (output_cloud));
     }
@@ -1686,7 +2004,7 @@ namespace pcl
     ////////////////////////////////////////////////////////////////////////////////
 
     template<typename ContainerT, typename PointT> void
-    OutofcoreOctreeBaseNode<ContainerT, PointT>::sortOctantIndices (const sensor_msgs::PointCloud2::Ptr &input_cloud, std::vector< std::vector<int> > &indices, const Eigen::Vector3d &mid_xyz)
+    OutofcoreOctreeBaseNode<ContainerT, PointT>::sortOctantIndices (const pcl::PCLPointCloud2::Ptr &input_cloud, std::vector< std::vector<int> > &indices, const Eigen::Vector3d &mid_xyz)
     {
       if (indices.size () < 8)
         indices.resize (8);

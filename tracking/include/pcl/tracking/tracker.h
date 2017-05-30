@@ -41,6 +41,7 @@
 #define PCL_TRACKING_TRACKER_H_
 
 #include <pcl/tracking/tracking.h>
+#include <pcl/pcl_base.h>
 #include <pcl/search/search.h>
 
 namespace pcl
@@ -106,7 +107,7 @@ namespace pcl
        * is optional, if this is not set, it will only use the data in the
        * input cloud to estimate the features.  This is useful when you only
        * need to compute the features for a downsampled cloud.  
-       * \param cloud a pointer to a PointCloud message
+       * \param search a pointer to a PointCloud message
        */
       inline void 
       setSearchMethod (const SearchPtr &search) { search_ = search; }

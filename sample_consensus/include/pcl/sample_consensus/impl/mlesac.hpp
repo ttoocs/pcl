@@ -42,6 +42,7 @@
 #define PCL_SAMPLE_CONSENSUS_IMPL_MLESAC_H_
 
 #include <pcl/sample_consensus/mlesac.h>
+#include <pcl/point_types.h>
 
 //////////////////////////////////////////////////////////////////////////
 template <typename PointT> bool
@@ -99,6 +100,13 @@ pcl::MaximumLikelihoodSampleConsensus<PointT>::computeModel (int debug_verbosity
     // Iterate through the 3d points and calculate the distances from them to the model
     sac_model_->getDistancesToModel (model_coefficients, distances);
 
+    if (distances.empty ())
+    {
+      //iterations_++;
+      ++skipped_count;
+      continue;
+    }
+    
     // Use Expectiation-Maximization to find out the right value for d_cur_penalty
     // ---[ Initial estimate for the gamma mixing parameter = 1/2
     double gamma = 0.5;
@@ -174,7 +182,7 @@ pcl::MaximumLikelihoodSampleConsensus<PointT>::computeModel (int debug_verbosity
   std::vector<int> &indices = *sac_model_->getIndices ();
   if (distances.size () != indices.size ())
   {
-    PCL_ERROR ("[pcl::MaximumLikelihoodSampleConsensus::computeModel] Estimated distances (%zu) differs than the normal of indices (%zu).\n", distances.size (), indices.size ());
+    PCL_ERROR ("[pcl::MaximumLikelihoodSampleConsensus::computeModel] Estimated distances (%lu) differs than the normal of indices (%lu).\n", distances.size (), indices.size ());
     return (false);
   }
 
@@ -189,7 +197,7 @@ pcl::MaximumLikelihoodSampleConsensus<PointT>::computeModel (int debug_verbosity
   inliers_.resize (n_inliers_count);
 
   if (debug_verbosity_level > 0)
-    PCL_DEBUG ("[pcl::MaximumLikelihoodSampleConsensus::computeModel] Model: %zu size, %d inliers.\n", model_.size (), n_inliers_count);
+    PCL_DEBUG ("[pcl::MaximumLikelihoodSampleConsensus::computeModel] Model: %lu size, %d inliers.\n", model_.size (), n_inliers_count);
 
   return (true);
 }

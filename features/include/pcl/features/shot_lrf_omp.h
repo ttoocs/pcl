@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2012, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -73,6 +74,9 @@ namespace pcl
       {
         feature_name_ = "SHOTLocalReferenceFrameEstimationOMP";
       }
+      
+    /** \brief Empty destructor */
+    virtual ~SHOTLocalReferenceFrameEstimationOMP () {}
 
     /** \brief Initialize the scheduler and set the number of threads to use.
      * \param nr_threads the number of hardware threads to use (0 sets the value back to automatic)
@@ -98,12 +102,6 @@ namespace pcl
         */
       virtual void
       computeFeature (PointCloudOut &output);
-
-      /** \brief Feature estimation method.
-        * \param[out] output the resultant features
-        */
-      virtual void
-      computeFeatureEigen (pcl::PointCloud<Eigen::MatrixXf> &output);
 
       /** \brief The number of threads the scheduler should use. */
       unsigned int threads_;

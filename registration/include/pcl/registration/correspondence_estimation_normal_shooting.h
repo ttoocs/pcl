@@ -62,7 +62,6 @@ namespace pcl
       * est.setSourceNormals (source);
       *
       * est.setInputTarget (target);
-      * est.setTargetNormals (target);
       *
       * // Test the first 10 correspondences for each point in source, and return the best
       * est.setKSearch (10);
@@ -83,6 +82,7 @@ namespace pcl
         typedef boost::shared_ptr<const CorrespondenceEstimationNormalShooting<PointSource, PointTarget, NormalT, Scalar> > ConstPtr;
 
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::initCompute;
+        using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::initComputeReciprocal;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::input_transformed_;
         using PCLBase<PointSource>::deinitCompute;
         using PCLBase<PointSource>::input_;
@@ -91,8 +91,8 @@ namespace pcl
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::point_representation_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::target_indices_;
 
-        typedef typename pcl::KdTree<PointTarget> KdTree;
-        typedef typename pcl::KdTree<PointTarget>::Ptr KdTreePtr;
+        typedef typename pcl::search::KdTree<PointTarget> KdTree;
+        typedef typename pcl::search::KdTree<PointTarget>::Ptr KdTreePtr;
 
         typedef pcl::PointCloud<PointSource> PointCloudSource;
         typedef typename PointCloudSource::Ptr PointCloudSourcePtr;
@@ -119,6 +119,9 @@ namespace pcl
           corr_name_ = "CorrespondenceEstimationNormalShooting";
         }
 
+        /** \brief Empty destructor */
+        virtual ~CorrespondenceEstimationNormalShooting () {}
+
         /** \brief Set the normals computed on the source point cloud
           * \param[in] normals the normals computed for the source cloud
           */
@@ -129,6 +132,21 @@ namespace pcl
           */
         inline NormalsConstPtr
         getSourceNormals () const { return (source_normals_); }
+
+
+        /** \brief See if this rejector requires source normals */
+        bool
+        requiresSourceNormals () const
+        { return (true); }
+
+        /** \brief Blob method for setting the source normals */
+        void
+        setSourceNormals (pcl::PCLPointCloud2::ConstPtr cloud2)
+        { 
+          NormalsPtr cloud (new PointCloudNormals);
+          fromPCLPointCloud2 (*cloud2, *cloud);
+          setSourceNormals (cloud);
+        }
 
         /** \brief Determine the correspondences between input and target cloud.
           * \param[out] correspondences the found correspondences (index of query point, index of target point, distance)
@@ -162,55 +180,28 @@ namespace pcl
           * cloud for computing correspondences. By default we use k = 10 nearest 
           * neighbors.
           */
-        inline void
+        inline unsigned int
         getKSearch () const { return (k_); }
 
-        /** \brief Provide a simple mechanism to update the internal source cloud
-          * using a given transformation. Used in registration loops.
-          * \param[in] transform the transform to apply over the source cloud
-          */
-        virtual bool
-        updateSource (const Eigen::Matrix<Scalar, 4, 4> &transform)
+        /** \brief Clone and cast to CorrespondenceEstimationBase */
+        virtual boost::shared_ptr< CorrespondenceEstimationBase<PointSource, PointTarget, Scalar> > 
+        clone () const
         {
-          if (!input_)
-          {
-            PCL_ERROR ("[pcl::registration::%s::updateSource] No input XYZ dataset given. Please specify the input source cloud using setInputSource.\n", getClassName ().c_str ());
-            return (false);
-          }
-          if (!source_normals_)
-          {
-            PCL_ERROR ("[pcl::registration::%s::updateSource] No input normals dataset given. Please specify the input normal cloud using setSourceNormals.\n");
-            return (false);
-          }
-          input_transformed_.reset (new PointCloudSource);
-          pcl::transformPointCloud<PointSource, Scalar> (*input_, *input_transformed_, transform);
-          input_ = input_transformed_;
-          
-          source_normals_transformed_.reset (new PointCloudNormals);
-          rotatePointCloudNormals (*source_normals_, *source_normals_transformed_, transform);
-          source_normals_ = source_normals_transformed_;
-          return (true);
+          Ptr copy (new CorrespondenceEstimationNormalShooting<PointSource, PointTarget, NormalT, Scalar> (*this));
+          return (copy);
         }
 
       protected:
 
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::corr_name_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::tree_;
+        using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::tree_reciprocal_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::target_;
 
         /** \brief Internal computation initalization. */
         bool
         initCompute ();
 
-        /** \brief Rotate the normals in a point cloud.
-          * \param[in] cloud_in the input point cloud
-          * \param[out] cloud_out the resultant output cloud containing rotated normals
-          * \param[in] transform the 4x4 rigid transformation holding the rotation
-          */
-        void
-        rotatePointCloudNormals (const pcl::PointCloud<NormalT> &cloud_in, 
-                                 pcl::PointCloud<NormalT> &cloud_out,
-                                 const Eigen::Matrix<Scalar, 4, 4> &transform);
        private:
 
         /** \brief The normals computed at each point in the source cloud */

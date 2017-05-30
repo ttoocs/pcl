@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -183,7 +183,7 @@ pcl::BoxClipper3D<PointT>::clipLineSegment3D (PointT& point1, PointT& point2) co
  * @attention untested code
  */
 template<typename PointT> void
-pcl::BoxClipper3D<PointT>::clipPlanarPolygon3D (const std::vector<PointT>& polygon, std::vector<PointT>& clipped_polygon) const
+pcl::BoxClipper3D<PointT>::clipPlanarPolygon3D (const std::vector<PointT, Eigen::aligned_allocator<PointT> >& polygon, std::vector<PointT, Eigen::aligned_allocator<PointT> >& clipped_polygon) const
 {
   // not implemented -> clip everything
   clipped_polygon.clear ();
@@ -194,7 +194,7 @@ pcl::BoxClipper3D<PointT>::clipPlanarPolygon3D (const std::vector<PointT>& polyg
  * @attention untested code
  */
 template<typename PointT> void
-pcl::BoxClipper3D<PointT>::clipPlanarPolygon3D (std::vector<PointT>& polygon) const
+pcl::BoxClipper3D<PointT>::clipPlanarPolygon3D (std::vector<PointT, Eigen::aligned_allocator<PointT> >& polygon) const
 {
   // not implemented -> clip everything
   polygon.clear ();

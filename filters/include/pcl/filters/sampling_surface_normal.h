@@ -16,7 +16,7 @@
  *    copyright notice, this list of conditions and the following
  *    disclaimer in the documentation and/or other materials provided
  *    with the distribution.
- *  * Neither the name of Willow Garage, Inc. nor the names of its
+ *  * Neither the name of the copyright holder(s) nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  * 
@@ -38,7 +38,7 @@
 #ifndef PCL_FILTERS_SAMPLING_SURFACE_NORMAL_H_
 #define PCL_FILTERS_SAMPLING_SURFACE_NORMAL_H_
 
-#include <pcl/filters/filter_indices.h>
+#include <pcl/filters/filter.h>
 #include <time.h>
 #include <limits.h>
 
@@ -52,20 +52,24 @@ namespace pcl
     * \ingroup filters
     */
   template<typename PointT>
-  class SamplingSurfaceNormal: public FilterIndices<PointT>
+  class SamplingSurfaceNormal: public Filter<PointT>
   {
-    using FilterIndices<PointT>::filter_name_;
-    using FilterIndices<PointT>::getClassName;
-    using FilterIndices<PointT>::indices_;
-    using FilterIndices<PointT>::input_;
+    using Filter<PointT>::filter_name_;
+    using Filter<PointT>::getClassName;
+    using Filter<PointT>::indices_;
+    using Filter<PointT>::input_;
 
-    typedef typename FilterIndices<PointT>::PointCloud PointCloud;
+    typedef typename Filter<PointT>::PointCloud PointCloud;
     typedef typename PointCloud::Ptr PointCloudPtr;
     typedef typename PointCloud::ConstPtr PointCloudConstPtr;
 
     typedef typename Eigen::Matrix<float, Eigen::Dynamic, 1> Vector;
 
     public:
+
+      typedef boost::shared_ptr< SamplingSurfaceNormal<PointT> > Ptr;
+      typedef boost::shared_ptr< const SamplingSurfaceNormal<PointT> > ConstPtr;
+
       /** \brief Empty constructor. */
       SamplingSurfaceNormal () : 
         sample_ (10), seed_ (static_cast<unsigned int> (time (NULL))), ratio_ ()
@@ -137,14 +141,6 @@ namespace pcl
         */
       void
       applyFilter (PointCloud &output);
-
-      /** \brief Sample of point indices
-        * \param indices the resultant point cloud indices
-        */
-      void
-      applyFilter (std::vector<int>&)
-      {
-      }
 
     private:
 

@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -118,6 +118,11 @@ namespace pcl
       };
 
     public:
+
+      typedef boost::shared_ptr< ApproximateVoxelGrid<PointT> > Ptr;
+      typedef boost::shared_ptr< const ApproximateVoxelGrid<PointT> > ConstPtr;
+
+
       /** \brief Empty constructor. */
       ApproximateVoxelGrid () : 
         pcl::Filter<PointT> (),
@@ -144,6 +149,15 @@ namespace pcl
         for (size_t i = 0; i < histsize_; i++)
           history_[i] = src.history_[i];
       }
+
+
+      /** \brief Destructor.
+        */
+      ~ApproximateVoxelGrid ()
+      {
+        delete [] history_;
+      }
+
 
       /** \brief Copy operator. 
         * \param[in] src the approximate voxel grid to copy into this. 

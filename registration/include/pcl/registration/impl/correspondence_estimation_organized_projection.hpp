@@ -38,16 +38,16 @@
  *
  */
 
-#ifndef PCL_REGISTRATION_CORRESPONDENCE_ESTIMATION_BACK_PROJECTION_IMPL_HPP_
-#define PCL_REGISTRATION_CORRESPONDENCE_ESTIMATION_BACK_PROJECTION_IMPL_HPP_
-
-#include <pcl/registration/correspondence_estimation_organized_projection.h>
+#ifndef PCL_REGISTRATION_CORRESPONDENCE_ESTIMATION_ORGANIZED_PROJECTION_IMPL_HPP_
+#define PCL_REGISTRATION_CORRESPONDENCE_ESTIMATION_ORGANIZED_PROJECTION_IMPL_HPP_
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointSource, typename PointTarget, typename Scalar> bool
 pcl::registration::CorrespondenceEstimationOrganizedProjection<PointSource, PointTarget, Scalar>::initCompute ()
 {
-  if (!CorrespondenceEstimationBase<PointSource, PointTarget>::initCompute ())
+  // Set the target_cloud_updated_ variable to true, so that the kd-tree is not built - it is not needed for this class
+  target_cloud_updated_ = false;
+  if (!CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::initCompute ())
     return (false);
 
   /// Check if the target cloud is organized
@@ -75,7 +75,7 @@ pcl::registration::CorrespondenceEstimationOrganizedProjection<PointSource, Poin
   if (!initCompute ())
     return;
 
-  correspondences.resize (input_->size ());
+  correspondences.resize (indices_->size ());
   size_t c_index = 0;
 
   for (std::vector<int>::const_iterator src_it = indices_->begin (); src_it != indices_->end (); ++src_it)
@@ -87,23 +87,25 @@ pcl::registration::CorrespondenceEstimationOrganizedProjection<PointSource, Poin
       Eigen::Vector3f uv (projection_matrix_ * p_src3);
 
       /// Check if the point was behind the camera
-      if (uv[2] < 0)
+      if (uv[2] <= 0)
         continue;
 
       int u = static_cast<int> (uv[0] / uv[2]);
       int v = static_cast<int> (uv[1] / uv[2]);
 
-      if (u >= 0 && u < int (target_->width) &&
-          v >= 0 && v < int (target_->height) &&
-          isFinite ((*target_) (u, v)))
+      if (u >= 0 && u < static_cast<int> (target_->width) &&
+          v >= 0 && v < static_cast<int> (target_->height))
       {
+        const PointTarget &pt_tgt = target_->at (u, v);
+        if (!isFinite (pt_tgt))
+          continue;
         /// Check if the depth difference is larger than the threshold
-        if (fabs (uv[2] - (*target_) (u, v).z) > depth_threshold_)
+        if (fabs (uv[2] - pt_tgt.z) > depth_threshold_)
           continue;
 
-        double dist = (p_src3 - (*target_) (u, v).getVector3fMap ()).norm ();
+        double dist = (p_src3 - pt_tgt.getVector3fMap ()).norm ();
         if (dist < max_distance)
-          correspondences[c_index ++] =  pcl::Correspondence (*src_it, v * target_->width + u, static_cast<float> (dist));
+          correspondences[c_index++] =  pcl::Correspondence (*src_it, v * target_->width + u, static_cast<float> (dist));
       }
     }
   }
@@ -117,9 +119,9 @@ pcl::registration::CorrespondenceEstimationOrganizedProjection<PointSource, Poin
     pcl::Correspondences &correspondences,
     double max_distance)
 {
-  /// Call the normal determineCorrespondences (...), as doing it both ways will not improve the results
+  // Call the normal determineCorrespondences (...), as doing it both ways will not improve the results
   determineCorrespondences (correspondences, max_distance);
 }
 
-#endif    // PCL_REGISTRATION_CORRESPONDENCE_ESTIMATION_BACK_PROJECTION_IMPL_HPP_
+#endif    // PCL_REGISTRATION_CORRESPONDENCE_ESTIMATION_ORGANIZED_PROJECTION_IMPL_HPP_
 

@@ -44,6 +44,7 @@
 #include <pcl/sample_consensus/sac_model_registration.h>
 #include <pcl/common/point_operators.h>
 #include <pcl/common/eigen.h>
+#include <pcl/point_types.h>
 
 //////////////////////////////////////////////////////////////////////////
 template <typename PointT> bool
@@ -88,7 +89,7 @@ pcl::SampleConsensusModelRegistration<PointT>::getDistancesToModel (const Eigen:
 {
   if (indices_->size () != indices_tgt_->size ())
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelRegistration::getDistancesToModel] Number of source indices (%zu) differs than number of target indices (%zu)!\n", indices_->size (), indices_tgt_->size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelRegistration::getDistancesToModel] Number of source indices (%lu) differs than number of target indices (%lu)!\n", indices_->size (), indices_tgt_->size ());
     distances.clear ();
     return;
   }
@@ -134,7 +135,7 @@ pcl::SampleConsensusModelRegistration<PointT>::selectWithinDistance (const Eigen
 {
   if (indices_->size () != indices_tgt_->size ())
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelRegistration::selectWithinDistance] Number of source indices (%zu) differs than number of target indices (%zu)!\n", indices_->size (), indices_tgt_->size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelRegistration::selectWithinDistance] Number of source indices (%lu) differs than number of target indices (%lu)!\n", indices_->size (), indices_tgt_->size ());
     inliers.clear ();
     return;
   }
@@ -194,7 +195,7 @@ pcl::SampleConsensusModelRegistration<PointT>::countWithinDistance (
 {
   if (indices_->size () != indices_tgt_->size ())
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelRegistration::countWithinDistance] Number of source indices (%zu) differs than number of target indices (%zu)!\n", indices_->size (), indices_tgt_->size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelRegistration::countWithinDistance] Number of source indices (%lu) differs than number of target indices (%lu)!\n", indices_->size (), indices_tgt_->size ());
     return (0);
   }
   if (!target_)
@@ -239,7 +240,7 @@ pcl::SampleConsensusModelRegistration<PointT>::optimizeModelCoefficients (const 
 {
   if (indices_->size () != indices_tgt_->size ())
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelRegistration::optimizeModelCoefficients] Number of source indices (%zu) differs than number of target indices (%zu)!\n", indices_->size (), indices_tgt_->size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelRegistration::optimizeModelCoefficients] Number of source indices (%lu) differs than number of target indices (%lu)!\n", indices_->size (), indices_tgt_->size ());
     optimized_coefficients = model_coefficients;
     return;
   }
@@ -288,7 +289,7 @@ pcl::SampleConsensusModelRegistration<PointT>::estimateRigidTransformationSVD (
   }
 
   // Call Umeyama directly from Eigen
-  Eigen::Matrix4d transformation_matrix = pcl::umeyama (src, tgt, false);
+  Eigen::Matrix4d transformation_matrix = Eigen::umeyama (src, tgt, false);
 
   // Return the correct transformation
   transform.segment<4> (0).matrix () = transformation_matrix.cast<float> ().row (0); 

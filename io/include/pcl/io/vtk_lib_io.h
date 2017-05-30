@@ -41,12 +41,12 @@
 #ifndef PCL_IO_VTK_LIB_IO_H_
 #define PCL_IO_VTK_LIB_IO_H_
 
-#include <pcl/io/boost.h>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/PolygonMesh.h>
+#include <pcl/TextureMesh.h>
 #include <pcl/pcl_macros.h>
-#include <pcl/ros/conversions.h>
+#include <pcl/conversions.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/range_image/range_image_planar.h>
 
@@ -54,6 +54,7 @@
 #ifdef __GNUC__
 #pragma GCC system_header 
 #endif
+#include <vtkVersion.h>
 #include <vtkSmartPointer.h>
 #include <vtkStructuredGrid.h>
 #include <vtkPoints.h>
@@ -85,6 +86,18 @@ namespace pcl
     vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data, 
               pcl::PolygonMesh& mesh);
 
+    /** \brief Convert vtkPolyData object to a PCL TextureMesh
+      * \note In addition to the vtk2mesh (const vtkSmartPointer<vtkPolyData>&, pcl::PolygonMesh&)
+      * method, it fills the mesh with the uv-coordinates.
+      * \param[in] poly_data Pointer (vtkSmartPointer) to a vtkPolyData object
+      * \param[out] mesh PCL TextureMesh to fill
+      * \return Number of points in the point cloud of mesh.
+      */
+    PCL_EXPORTS int
+    vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data,
+              pcl::TextureMesh& mesh);
+
+
     /** \brief Convert a PCL PolygonMesh to a vtkPolyData object
       * \param[in] mesh Reference to PCL Polygon Mesh
       * \param[out] poly_data Pointer (vtkSmartPointer) to a vtkPolyData object
@@ -106,11 +119,14 @@ namespace pcl
     /** \brief Save a \ref PolygonMesh object given an input file name, based on the file extension
       * \param[in] file_name the name of the file to save the data to
       * \param[in] mesh the object that contains the data
+      * \param[in] binary_format if true, exported file is in binary format
+      * \return True if successful, false otherwise
       * \ingroup io
       */
-    PCL_EXPORTS int
+    PCL_EXPORTS bool
     savePolygonFile (const std::string &file_name, 
-                     const pcl::PolygonMesh& mesh);
+                     const pcl::PolygonMesh& mesh,
+                     const bool binary_format = true);
 
     /** \brief Load a VTK file into a \ref PolygonMesh object
       * \param[in] file_name the name of the file that contains the data
@@ -139,6 +155,19 @@ namespace pcl
     loadPolygonFileOBJ (const std::string &file_name, 
                         pcl::PolygonMesh& mesh);
 
+    /** \brief Load an OBJ file into a \ref TextureMesh object.
+      * \note In addition to the loadPolygonFileOBJ (const std::string, pcl::PolygonMesh&)
+      * method, this method also loads the uv-coordinates from the file. It does not
+      * load the material information.
+      * \param[in] file_name the name of the file that contains the data
+      * \param[out] mesh the object that we want to load the data in
+      * \ingroup io
+      */
+    PCL_EXPORTS int
+    loadPolygonFileOBJ (const std::string &file_name,
+                        pcl::TextureMesh& mesh);
+
+
     /** \brief Load an STL file into a \ref PolygonMesh object
       * \param[in] file_name the name of the file that contains the data
       * \param[out] mesh the object that we want to load the data in 
@@ -151,29 +180,38 @@ namespace pcl
     /** \brief Save a \ref PolygonMesh object into a VTK file
       * \param[in] file_name the name of the file to save the data to
       * \param[in] mesh the object that contains the data
+      * \param[in] binary_format if true, exported file is in binary format
+      * \return True if successful, false otherwise
       * \ingroup io
       */
-    PCL_EXPORTS int
+    PCL_EXPORTS bool
     savePolygonFileVTK (const std::string &file_name, 
-                        const pcl::PolygonMesh& mesh);
+                        const pcl::PolygonMesh& mesh,
+                        const bool binary_format = true);
 
     /** \brief Save a \ref PolygonMesh object into a PLY file
       * \param[in] file_name the name of the file to save the data to
       * \param[in] mesh the object that contains the data
+      * \param[in] binary_format if true, exported file is in binary format
+      * \return True if successful, false otherwise
       * \ingroup io
       */
-    PCL_EXPORTS int
+    PCL_EXPORTS bool
     savePolygonFilePLY (const std::string &file_name, 
-                        const pcl::PolygonMesh& mesh);
+                        const pcl::PolygonMesh& mesh,
+                        const bool binary_format = true);
 
     /** \brief Save a \ref PolygonMesh object into an STL file
       * \param[in] file_name the name of the file to save the data to
       * \param[in] mesh the object that contains the data
+      * \param[in] binary_format if true, exported file is in binary format
+      * \return True if successful, false otherwise
       * \ingroup io
       */
-    PCL_EXPORTS int
+    PCL_EXPORTS bool
     savePolygonFileSTL (const std::string &file_name, 
-                        const pcl::PolygonMesh& mesh);
+                        const pcl::PolygonMesh& mesh,
+                        const bool binary_format = true);
 
     /** \brief Write a \ref RangeImagePlanar object to a PNG file
       * \param[in] file_name the name of the file to save the data to
@@ -193,13 +231,13 @@ namespace pcl
     pointCloudTovtkPolyData (const pcl::PointCloud<PointT>& cloud, 
                              vtkPolyData* const polydata);
 
-    /** \brief Convert a PointCloud2 object to a VTK PolyData object.
-      * \param[in] cloud the input PointCloud2Ptr object
+    /** \brief Convert a PCLPointCloud2 object to a VTK PolyData object.
+      * \param[in] cloud the input PCLPointCloud2Ptr object
       * \param[out] poly_data the resultant VTK PolyData object
       * \ingroup io
       */
     PCL_EXPORTS void
-    pointCloudTovtkPolyData(const sensor_msgs::PointCloud2Ptr& cloud, vtkSmartPointer<vtkPolyData>& poly_data);
+    pointCloudTovtkPolyData(const pcl::PCLPointCloud2Ptr& cloud, vtkSmartPointer<vtkPolyData>& poly_data);
 
     /** \brief Convert a pcl::PointCloud object to a VTK StructuredGrid one.
       * \param[in] cloud the input pcl::PointCloud object

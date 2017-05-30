@@ -68,6 +68,7 @@ namespace pcl
         using PCLBase<PointSource>::indices_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::getClassName;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::point_representation_;
+        using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::target_cloud_updated_;
 
         typedef pcl::PointCloud<PointSource> PointCloudSource;
         typedef typename PointCloudSource::Ptr PointCloudSourcePtr;
@@ -77,13 +78,17 @@ namespace pcl
         typedef typename PointCloudTarget::Ptr PointCloudTargetPtr;
         typedef typename PointCloudTarget::ConstPtr PointCloudTargetConstPtr;
 
+        typedef boost::shared_ptr< CorrespondenceEstimationOrganizedProjection<PointSource, PointTarget, Scalar> > Ptr;
+        typedef boost::shared_ptr< const CorrespondenceEstimationOrganizedProjection<PointSource, PointTarget, Scalar> > ConstPtr;
+
+
 
         /** \brief Empty constructor that sets all the intrinsic calibration to the default Kinect values. */
         CorrespondenceEstimationOrganizedProjection ()
           : fx_ (525.f)
           , fy_ (525.f)
-          , cx_ (320.f)
-          , cy_ (240.f)
+          , cx_ (319.5f)
+          , cy_ (239.5f)
           , src_to_tgt_transformation_ (Eigen::Matrix4f::Identity ())
           , depth_threshold_ (std::numeric_limits<float>::max ())
           , projection_matrix_ (Eigen::Matrix3f::Identity ())
@@ -135,7 +140,7 @@ namespace pcl
         /** \brief Reads back the transformation from the source point cloud to the target point cloud.
           * \note The target point cloud must be in its local camera coordinates, so use this transformation to correct
           * for that.
-          * \param[out] src_to_tgt_transformation the transformation
+          * \return the transformation
           */
         inline Eigen::Matrix4f
         getSourceTransformation () const
@@ -153,45 +158,36 @@ namespace pcl
         /** \brief Reads back the depth threshold; after projecting the source points in the image space of the target
           * camera, this threshold is applied on the depths of corresponding dexels to eliminate the ones that are too
           * far from each other.
-          * \param[out] depth_threshold the depth threshold
+          * \return the depth threshold
           */
         inline float
         getDepthThreshold () const
         { return (depth_threshold_); }
 
         /** \brief Computes the correspondences, applying a maximum Euclidean distance threshold.
+          * \param correspondences
           * \param[in] max_distance Euclidean distance threshold above which correspondences will be rejected
           */
         void
         determineCorrespondences (Correspondences &correspondences, double max_distance);
 
         /** \brief Computes the correspondences, applying a maximum Euclidean distance threshold.
+          * \param correspondences
           * \param[in] max_distance Euclidean distance threshold above which correspondences will be rejected
           */
         void
         determineReciprocalCorrespondences (Correspondences &correspondences, double max_distance);
-
-
-        /** \brief Provide a simple mechanism to update the internal source cloud
-          * using a given transformation. Used in registration loops.
-          * \param[in] transform the transform to apply over the source cloud
-          */
-        virtual bool
-        updateSource (const Eigen::Matrix<Scalar, 4, 4> &transform)
+        
+        /** \brief Clone and cast to CorrespondenceEstimationBase */
+        virtual boost::shared_ptr< CorrespondenceEstimationBase<PointSource, PointTarget, Scalar> > 
+        clone () const
         {
-          if (!input_)
-          {
-            PCL_ERROR ("[pcl::registration::%s::updateSource] No input XYZ dataset given. Please specify the input source cloud using setInputSource.\n", getClassName ().c_str ());
-            return (false);
-          }
-          input_transformed_.reset (new PointCloudSource);
-          pcl::transformPointCloud<PointSource, Scalar> (*input_, *input_transformed_, transform);
-          input_ = input_transformed_;
-          return (true);
+          Ptr copy (new CorrespondenceEstimationOrganizedProjection<PointSource, PointTarget, Scalar> (*this));
+          return (copy);
         }
 
       protected:
-        using CorrespondenceEstimationBase<PointSource, PointTarget>::target_;
+        using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::target_;
 
         bool
         initCompute ();

@@ -126,6 +126,10 @@ namespace pcl
         void 
         insertNewCloudFromFile ();
         
+        /** \brief Loads from rgb and depth file and inserts a new pointcloud into the model   */
+        void 
+        insertNewCloudFromRGBandDepth ();
+        
         /** \brief Opens a file dialog and saves selected cloud to file   */
         void 
         saveSelectedCloudToFile ();
@@ -144,7 +148,7 @@ namespace pcl
         
         /** \brief Slot Called whenever the item selection_model_ changes */
         void
-        itemSelectionChanged ( const QItemSelection & selected, const QItemSelection & deselected );
+        itemSelectionChanged ( const QItemSelection &, const QItemSelection &);
         
         /** \brief Creates a new cloud from the selected items and points */
         void 

@@ -41,6 +41,7 @@
 
 #include <pcl/sample_consensus/sac_model.h>
 #include <pcl/sample_consensus/model_types.h>
+#include <pcl/pcl_macros.h>
 #include <pcl/common/common.h>
 #include <pcl/common/distances.h>
 #include <limits.h>
@@ -65,6 +66,7 @@ namespace pcl
   class SampleConsensusModelCone : public SampleConsensusModel<PointT>, public SampleConsensusModelFromNormals<PointT, PointNT>
   {
     public:
+      using SampleConsensusModel<PointT>::model_name_;
       using SampleConsensusModel<PointT>::input_;
       using SampleConsensusModel<PointT>::indices_;
       using SampleConsensusModel<PointT>::radius_min_;
@@ -81,25 +83,41 @@ namespace pcl
 
       /** \brief Constructor for base SampleConsensusModelCone.
         * \param[in] cloud the input point cloud dataset
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelCone (const PointCloudConstPtr &cloud) : 
-        SampleConsensusModel<PointT> (cloud), 
-        SampleConsensusModelFromNormals<PointT, PointNT> (), 
-        axis_ (Eigen::Vector3f::Zero ()), eps_angle_ (0), min_angle_ (-std::numeric_limits<double>::max()), max_angle_ (std::numeric_limits<double>::max()),
-        tmp_inliers_ ()
+      SampleConsensusModelCone (const PointCloudConstPtr &cloud, bool random = false) 
+        : SampleConsensusModel<PointT> (cloud, random)
+        , SampleConsensusModelFromNormals<PointT, PointNT> ()
+        , axis_ (Eigen::Vector3f::Zero ())
+        , eps_angle_ (0)
+        , min_angle_ (-std::numeric_limits<double>::max ())
+        , max_angle_ (std::numeric_limits<double>::max ())
+        , tmp_inliers_ ()
       {
+        model_name_ = "SampleConsensusModelCone";
+        sample_size_ = 3;
+        model_size_ = 7;
       }
 
       /** \brief Constructor for base SampleConsensusModelCone.
         * \param[in] cloud the input point cloud dataset
         * \param[in] indices a vector of point indices to be used from \a cloud
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelCone (const PointCloudConstPtr &cloud, const std::vector<int> &indices) : 
-        SampleConsensusModel<PointT> (cloud, indices),
-        SampleConsensusModelFromNormals<PointT, PointNT> (),
-        axis_ (Eigen::Vector3f::Zero ()), eps_angle_ (0), min_angle_ (-std::numeric_limits<double>::max()), max_angle_ (std::numeric_limits<double>::max()),
-        tmp_inliers_ ()
+      SampleConsensusModelCone (const PointCloudConstPtr &cloud, 
+                                const std::vector<int> &indices,
+                                bool random = false) 
+        : SampleConsensusModel<PointT> (cloud, indices, random)
+        , SampleConsensusModelFromNormals<PointT, PointNT> ()
+        , axis_ (Eigen::Vector3f::Zero ())
+        , eps_angle_ (0)
+        , min_angle_ (-std::numeric_limits<double>::max ())
+        , max_angle_ (std::numeric_limits<double>::max ())
+        , tmp_inliers_ ()
       {
+        model_name_ = "SampleConsensusModelCone";
+        sample_size_ = 3;
+        model_size_ = 7;
       }
 
       /** \brief Copy constructor.
@@ -111,7 +129,11 @@ namespace pcl
         axis_ (), eps_angle_ (), min_angle_ (), max_angle_ (), tmp_inliers_ ()
       {
         *this = source;
+        model_name_ = "SampleConsensusModelCone";
       }
+      
+      /** \brief Empty destructor */
+      virtual ~SampleConsensusModelCone () {}
 
       /** \brief Copy constructor.
         * \param[in] source the model to copy into this
@@ -120,6 +142,7 @@ namespace pcl
       operator = (const SampleConsensusModelCone &source)
       {
         SampleConsensusModel<PointT>::operator=(source);
+        SampleConsensusModelFromNormals<PointT, PointNT>::operator=(source);
         axis_ = source.axis_;
         eps_angle_ = source.eps_angle_;
         min_angle_ = source.min_angle_;
@@ -150,8 +173,8 @@ namespace pcl
 
       /** \brief Set the minimum and maximum allowable opening angle for a cone model
         * given from a user.
-        * \param[in] min_angle the minimum allwoable opening angle of a cone model
-        * \param[in] max_angle the maximum allwoable opening angle of a cone model
+        * \param[in] min_angle the minimum allowable opening angle of a cone model
+        * \param[in] max_angle the maximum allowable opening angle of a cone model
         */
       inline void
       setMinMaxOpeningAngle (const double &min_angle, const double &max_angle)
@@ -160,9 +183,9 @@ namespace pcl
         max_angle_ = max_angle;
       }
 
-      /** \brief Get the opening angle which we need minumum to validate a cone model.
-        * \param[out] min_angle the minimum allwoable opening angle of a cone model
-        * \param[out] max_angle the maximum allwoable opening angle of a cone model
+      /** \brief Get the opening angle which we need minimum to validate a cone model.
+        * \param[out] min_angle the minimum allowable opening angle of a cone model
+        * \param[out] max_angle the maximum allowable opening angle of a cone model
         */
       inline void
       getMinMaxOpeningAngle (double &min_angle, double &max_angle) const
@@ -211,7 +234,7 @@ namespace pcl
 
 
       /** \brief Recompute the cone coefficients using the given inlier set and return them to the user.
-        * @note: these are the coefficients of the cone model after refinement (eg. after SVD)
+        * @note: these are the coefficients of the cone model after refinement (e.g. after SVD)
         * \param[in] inliers the data inliers found as supporting the model
         * \param[in] model_coefficients the initial guess for the optimization
         * \param[out] optimized_coefficients the resultant recomputed coefficients after non-linear optimization
@@ -249,6 +272,9 @@ namespace pcl
       getModelType () const { return (SACMODEL_CONE); }
 
     protected:
+      using SampleConsensusModel<PointT>::sample_size_;
+      using SampleConsensusModel<PointT>::model_size_;
+
       /** \brief Get the distance from a point to a line (represented by a point and a direction)
         * \param[in] pt a point
         * \param[in] model_coefficients the line coefficients (a point on the line, line direction)
@@ -257,14 +283,15 @@ namespace pcl
       pointToAxisDistance (const Eigen::Vector4f &pt, const Eigen::VectorXf &model_coefficients);
 
       /** \brief Get a string representation of the name of this class. */
-      std::string 
-      getName () const { return ("SampleConsensusModelCone"); }
+      PCL_DEPRECATED ("[pcl::SampleConsensusModelCone::getName] getName is deprecated. Please use getClassName instead.")
+      std::string
+      getName () const { return (model_name_); }
 
     protected:
       /** \brief Check whether a model is valid given the user constraints.
         * \param[in] model_coefficients the set of model coefficients
         */
-      bool 
+      virtual bool
       isModelValid (const Eigen::VectorXf &model_coefficients);
 
       /** \brief Check if a sample of indices results in a good sample of points

@@ -66,6 +66,8 @@ namespace pcl
   class SampleConsensusModelParallelPlane : public SampleConsensusModelPlane<PointT>
   {
     public:
+      using SampleConsensusModel<PointT>::model_name_;
+
       typedef typename SampleConsensusModelPlane<PointT>::PointCloud PointCloud;
       typedef typename SampleConsensusModelPlane<PointT>::PointCloudPtr PointCloudPtr;
       typedef typename SampleConsensusModelPlane<PointT>::PointCloudConstPtr PointCloudConstPtr;
@@ -74,24 +76,40 @@ namespace pcl
 
       /** \brief Constructor for base SampleConsensusModelParallelPlane.
         * \param[in] cloud the input point cloud dataset
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelParallelPlane (const PointCloudConstPtr &cloud) : 
-        SampleConsensusModelPlane<PointT> (cloud),
-        axis_ (Eigen::Vector3f::Zero ()),
-        eps_angle_ (0.0), sin_angle_ (-1.0)
+      SampleConsensusModelParallelPlane (const PointCloudConstPtr &cloud,
+                                         bool random = false) 
+        : SampleConsensusModelPlane<PointT> (cloud, random)
+        , axis_ (Eigen::Vector3f::Zero ())
+        , eps_angle_ (0.0)
+        , sin_angle_ (-1.0)
       {
+        model_name_ = "SampleConsensusModelParallelPlane";
+        sample_size_ = 3;
+        model_size_ = 4;
       }
 
       /** \brief Constructor for base SampleConsensusModelParallelPlane.
         * \param[in] cloud the input point cloud dataset
         * \param[in] indices a vector of point indices to be used from \a cloud
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelParallelPlane (const PointCloudConstPtr &cloud, const std::vector<int> &indices) : 
-        SampleConsensusModelPlane<PointT> (cloud, indices),
-        axis_ (Eigen::Vector3f::Zero ()),
-        eps_angle_ (0.0), sin_angle_ (-1.0)
+      SampleConsensusModelParallelPlane (const PointCloudConstPtr &cloud, 
+                                         const std::vector<int> &indices,
+                                         bool random = false) 
+        : SampleConsensusModelPlane<PointT> (cloud, indices, random)
+        , axis_ (Eigen::Vector3f::Zero ())
+        , eps_angle_ (0.0)
+        , sin_angle_ (-1.0)
       {
+        model_name_ = "SampleConsensusModelParallelPlane";
+        sample_size_ = 3;
+        model_size_ = 4;
       }
+      
+      /** \brief Empty destructor */
+      virtual ~SampleConsensusModelParallelPlane () {}
 
       /** \brief Set the axis along which we need to search for a plane perpendicular to.
         * \param[in] ax the axis along which we need to search for a plane perpendicular to
@@ -147,10 +165,13 @@ namespace pcl
       getModelType () const { return (SACMODEL_PARALLEL_PLANE); }
 
     protected:
+      using SampleConsensusModel<PointT>::sample_size_;
+      using SampleConsensusModel<PointT>::model_size_;
+
       /** \brief Check whether a model is valid given the user constraints.
         * \param[in] model_coefficients the set of model coefficients
         */
-      bool
+      virtual bool
       isModelValid (const Eigen::VectorXf &model_coefficients);
 
       /** \brief The axis along which we need to search for a plane perpendicular to. */

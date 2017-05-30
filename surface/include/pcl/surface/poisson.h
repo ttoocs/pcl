@@ -45,7 +45,7 @@ namespace pcl
   namespace poisson
   {
     class CoredVectorMeshData;
-    template <class Real> class Point3D;
+    template <class Real> struct Point3D;
   }
 
   /** \brief The Poisson surface reconstruction algorithm.
@@ -60,6 +60,9 @@ namespace pcl
   class Poisson : public SurfaceReconstruction<PointNT>
   {
     public:
+      typedef boost::shared_ptr<Poisson<PointNT> > Ptr;
+      typedef boost::shared_ptr<const Poisson<PointNT> > ConstPtr;
+
       using SurfaceReconstruction<PointNT>::input_;
       using SurfaceReconstruction<PointNT>::tree_;
 
@@ -249,5 +252,9 @@ namespace pcl
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 }
+
+#ifdef PCL_NO_PRECOMPILE
+#include <pcl/surface/impl/poisson.hpp>
+#endif
 
 #endif  // PCL_SURFACE_POISSON_H_

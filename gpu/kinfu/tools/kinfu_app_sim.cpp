@@ -49,10 +49,20 @@
 
 // need to include GLEW net the top to avoid linking errors FOR PCL::SIMULATION:
 #include <GL/glew.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/glut.h>
-//
+
+#include <pcl/pcl_config.h>
+#ifdef OPENGL_IS_A_FRAMEWORK
+# include <OpenGL/gl.h>
+# include <OpenGL/glu.h>
+#else
+# include <GL/gl.h>
+# include <GL/glu.h>
+#endif
+#ifdef GLUT_IS_A_FRAMEWORK
+# include <GLUT/glut.h>
+#else
+# include <GL/glut.h>
+#endif
 
 #include <pcl/console/parse.h>
 #include <pcl/gpu/kinfu/kinfu.h>
@@ -81,12 +91,9 @@
 #ifdef HAVE_OPENCV  
   #include <opencv2/highgui/highgui.hpp>
   #include <opencv2/imgproc/imgproc.hpp>
-  #include <pcl/gpu/utils/timers_opencv.hpp>
 //#include "video_recorder.h"
-typedef pcl::gpu::ScopeTimerCV ScopeTimeT;
-#else
-  typedef pcl::ScopeTime ScopeTimeT;
 #endif
+typedef pcl::ScopeTime ScopeTimeT;
 
 #include "../src/internal.h"
   
@@ -174,16 +181,9 @@ setViewerPose (visualization::PCLVisualizer& viewer, const Eigen::Affine3f& view
   Eigen::Vector3f pos_vector = viewer_pose * Eigen::Vector3f (0, 0, 0);
   Eigen::Vector3f look_at_vector = viewer_pose.rotation () * Eigen::Vector3f (0, 0, 1) + pos_vector;
   Eigen::Vector3f up_vector = viewer_pose.rotation () * Eigen::Vector3f (0, -1, 0);
-  viewer.camera_.pos[0] = pos_vector[0];
-  viewer.camera_.pos[1] = pos_vector[1];
-  viewer.camera_.pos[2] = pos_vector[2];
-  viewer.camera_.focal[0] = look_at_vector[0];
-  viewer.camera_.focal[1] = look_at_vector[1];
-  viewer.camera_.focal[2] = look_at_vector[2];
-  viewer.camera_.view[0] = up_vector[0];
-  viewer.camera_.view[1] = up_vector[1];
-  viewer.camera_.view[2] = up_vector[2];
-  viewer.updateCamera ();
+  viewer.setCameraPosition (pos_vector[0], pos_vector[1], pos_vector[2],
+                            look_at_vector[0], look_at_vector[1], look_at_vector[2],
+                            up_vector[0], up_vector[1], up_vector[2]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -522,7 +522,7 @@ writeCloudFile (int format, const CloudT& cloud);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void 
-writePoligonMeshFile (int format, const pcl::PolygonMesh& mesh);
+writePolygonMeshFile (int format, const pcl::PolygonMesh& mesh);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -555,7 +555,7 @@ boost::shared_ptr<pcl::PolygonMesh> convertToMesh(const DeviceArray<PointXYZ>& t
   triangles.download(cloud.points);
   
   boost::shared_ptr<pcl::PolygonMesh> mesh_ptr( new pcl::PolygonMesh() ); 
-  pcl::toROSMsg(cloud, mesh_ptr->cloud);  
+  pcl::toPCLPointCloud2(cloud, mesh_ptr->cloud);
       
   mesh_ptr->polygons.resize (triangles.size() / 3);
   for (size_t i = 0; i < mesh_ptr->polygons.size (); ++i)
@@ -585,8 +585,7 @@ struct CurrentFrameCloudView
     cloud_viewer_.initCameraParameters ();
     cloud_viewer_.setPosition (0, 500);
     cloud_viewer_.setSize (640, 480);
-    cloud_viewer_.camera_.clip[0] = 0.01;
-    cloud_viewer_.camera_.clip[1] = 10.01;
+    cloud_viewer_.setCameraClipDistances (0.01, 10.01);
   }
 
   void
@@ -726,8 +725,7 @@ struct SceneCloudView
     cloud_viewer_.initCameraParameters ();
     cloud_viewer_.setPosition (0, 500);
     cloud_viewer_.setSize (640, 480);
-    cloud_viewer_.camera_.clip[0] = 0.01;
-    cloud_viewer_.camera_.clip[1] = 10.01;
+    cloud_viewer_.setCameraClipDistances (0.01, 10.01);
 
     cloud_viewer_.addText ("H: print help", 2, 15, 20, 34, 135, 246);         
   }
@@ -806,7 +804,7 @@ struct SceneCloudView
   }
 
   void
-  toggleExctractionMode ()
+  toggleExtractionMode ()
   {
     extraction_mode_ = (extraction_mode_ + 1) % 3;
 
@@ -922,7 +920,7 @@ struct KinFuApp
     image_view_.viewerDepth_.registerKeyboardCallback (keyboard_callback, (void*)this);
 
     float diag = sqrt ((float)kinfu_.cols () * kinfu_.cols () + kinfu_.rows () * kinfu_.rows ());
-    scene_cloud_view_.cloud_viewer_.camera_.fovy = 2 * atan (diag / (2 * f)) * 1.5;
+    scene_cloud_view_.cloud_viewer_.setCameraFieldOfView (2 * atan (diag / (2 * f)) * 1.5);
     
     scene_cloud_view_.toggleCube(volume_size);    
   }
@@ -1211,19 +1209,22 @@ struct KinFuApp
   {      
     const SceneCloudView& view = scene_cloud_view_;
 
-    if(view.point_colors_ptr_->points.empty()) // no colors
+    if (!view.cloud_ptr_->points.empty ())
     {
-      if (view.valid_combined_)
-        writeCloudFile (format, view.combined_ptr_);
+      if(view.point_colors_ptr_->points.empty()) // no colors
+      {
+        if (view.valid_combined_)
+          writeCloudFile (format, view.combined_ptr_);
+        else
+          writeCloudFile (format, view.cloud_ptr_);
+      }
       else
-        writeCloudFile (format, view.cloud_ptr_);
-    }
-    else
-    {        
-      if (view.valid_combined_)
-        writeCloudFile (format, merge<PointXYZRGBNormal>(*view.combined_ptr_, *view.point_colors_ptr_));
-      else
-        writeCloudFile (format, merge<PointXYZRGB>(*view.cloud_ptr_, *view.point_colors_ptr_));
+      {        
+        if (view.valid_combined_)
+          writeCloudFile (format, merge<PointXYZRGBNormal>(*view.combined_ptr_, *view.point_colors_ptr_));
+        else
+          writeCloudFile (format, merge<PointXYZRGB>(*view.cloud_ptr_, *view.point_colors_ptr_));
+      }
     }
   }
 
@@ -1231,7 +1232,7 @@ struct KinFuApp
   writeMesh(int format) const
   {
     if (scene_cloud_view_.mesh_ptr_) {
-      writePoligonMeshFile(format, *scene_cloud_view_.mesh_ptr_);
+      writePolygonMeshFile(format, *scene_cloud_view_.mesh_ptr_);
     }
   }
 
@@ -1295,7 +1296,7 @@ struct KinFuApp
       case (int)'t': case (int)'T': app->scan_ = true; break;
       case (int)'a': case (int)'A': app->scan_mesh_ = true; break;
       case (int)'h': case (int)'H': app->printHelp (); break;
-      case (int)'m': case (int)'M': app->scene_cloud_view_.toggleExctractionMode (); break;
+      case (int)'m': case (int)'M': app->scene_cloud_view_.toggleExtractionMode (); break;
       case (int)'n': case (int)'N': app->scene_cloud_view_.toggleNormals (); break;      
       case (int)'c': case (int)'C': app->scene_cloud_view_.clearClouds (true); break;
       case (int)'i': case (int)'I': app->toggleIndependentCamera (); break;
@@ -1351,9 +1352,9 @@ writeCloudFile (int format, const CloudPtr& cloud_prt)
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void
-writePoligonMeshFile (int format, const pcl::PolygonMesh& mesh)
+writePolygonMeshFile (int format, const pcl::PolygonMesh& mesh)
 {
-    cout << "writePoligonMeshFile mf" << endl;
+    cout << "writePolygonMeshFile mf" << endl;
 
   if (format == KinFuApp::MESH_PLY)
   {

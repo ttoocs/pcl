@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2012, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -33,22 +34,30 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
- *
  */
 
 #ifndef PCL_POINT_TRAITS_H_
 #define PCL_POINT_TRAITS_H_
 
 #ifdef __GNUC__
-#pragma GCC system_header 
+#pragma GCC system_header
 #endif
 
-#include <sensor_msgs/PointField.h>
+#include "pcl/pcl_macros.h"
+
+#include <pcl/PCLPointField.h>
 #include <boost/type_traits/remove_all_extents.hpp>
 #include <boost/type_traits/is_same.hpp>
 #include <boost/mpl/assert.hpp>
+#if PCL_LINEAR_VERSION(__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__) == PCL_LINEAR_VERSION(4,4,3)
 #include <boost/mpl/bool.hpp>
+#endif
+
+// This is required for the workaround at line 109
+#ifdef _MSC_VER
+#include <Eigen/Core>
+#include <Eigen/src/StlSupport/details.h>
+#endif
 
 namespace pcl
 {
@@ -62,25 +71,25 @@ namespace pcl
   {
     // Metafunction to return enum value representing a type
     template<typename T> struct asEnum {};
-    template<> struct asEnum<int8_t>   { static const uint8_t value = sensor_msgs::PointField::INT8;    };
-    template<> struct asEnum<uint8_t>  { static const uint8_t value = sensor_msgs::PointField::UINT8;   };
-    template<> struct asEnum<int16_t>  { static const uint8_t value = sensor_msgs::PointField::INT16;   };
-    template<> struct asEnum<uint16_t> { static const uint8_t value = sensor_msgs::PointField::UINT16;  };
-    template<> struct asEnum<int32_t>  { static const uint8_t value = sensor_msgs::PointField::INT32;   };
-    template<> struct asEnum<uint32_t> { static const uint8_t value = sensor_msgs::PointField::UINT32;  };
-    template<> struct asEnum<float>    { static const uint8_t value = sensor_msgs::PointField::FLOAT32; };
-    template<> struct asEnum<double>   { static const uint8_t value = sensor_msgs::PointField::FLOAT64; };
+    template<> struct asEnum<int8_t>   { static const uint8_t value = pcl::PCLPointField::INT8;    };
+    template<> struct asEnum<uint8_t>  { static const uint8_t value = pcl::PCLPointField::UINT8;   };
+    template<> struct asEnum<int16_t>  { static const uint8_t value = pcl::PCLPointField::INT16;   };
+    template<> struct asEnum<uint16_t> { static const uint8_t value = pcl::PCLPointField::UINT16;  };
+    template<> struct asEnum<int32_t>  { static const uint8_t value = pcl::PCLPointField::INT32;   };
+    template<> struct asEnum<uint32_t> { static const uint8_t value = pcl::PCLPointField::UINT32;  };
+    template<> struct asEnum<float>    { static const uint8_t value = pcl::PCLPointField::FLOAT32; };
+    template<> struct asEnum<double>   { static const uint8_t value = pcl::PCLPointField::FLOAT64; };
 
     // Metafunction to return type of enum value
     template<int> struct asType {};
-    template<> struct asType<sensor_msgs::PointField::INT8>    { typedef int8_t   type; };
-    template<> struct asType<sensor_msgs::PointField::UINT8>   { typedef uint8_t  type; };
-    template<> struct asType<sensor_msgs::PointField::INT16>   { typedef int16_t  type; };
-    template<> struct asType<sensor_msgs::PointField::UINT16>  { typedef uint16_t type; };
-    template<> struct asType<sensor_msgs::PointField::INT32>   { typedef int32_t  type; };
-    template<> struct asType<sensor_msgs::PointField::UINT32>  { typedef uint32_t type; };
-    template<> struct asType<sensor_msgs::PointField::FLOAT32> { typedef float    type; };
-    template<> struct asType<sensor_msgs::PointField::FLOAT64> { typedef double   type; };
+    template<> struct asType<pcl::PCLPointField::INT8>    { typedef int8_t   type; };
+    template<> struct asType<pcl::PCLPointField::UINT8>   { typedef uint8_t  type; };
+    template<> struct asType<pcl::PCLPointField::INT16>   { typedef int16_t  type; };
+    template<> struct asType<pcl::PCLPointField::UINT16>  { typedef uint16_t type; };
+    template<> struct asType<pcl::PCLPointField::INT32>   { typedef int32_t  type; };
+    template<> struct asType<pcl::PCLPointField::UINT32>  { typedef uint32_t type; };
+    template<> struct asType<pcl::PCLPointField::FLOAT32> { typedef float    type; };
+    template<> struct asType<pcl::PCLPointField::FLOAT64> { typedef double   type; };
 
     // Metafunction to decompose a type (possibly of array of any number of dimensions) into
     // its scalar type and total number of elements.
@@ -96,6 +105,24 @@ namespace pcl
     {
       typedef PointT type;
     };
+
+#ifdef _MSC_VER
+
+    /* Sometimes when calling functions like `copyPoint()` or `copyPointCloud`
+     * without explicitly specifying point types, MSVC deduces them to be e.g.
+     * `Eigen::internal::workaround_msvc_stl_support<pcl::PointXYZ>` instead of
+     * plain `pcl::PointXYZ`. Subsequently these types are passed to meta-
+     * functions like `has_field` or `fieldList` and make them choke. This hack
+     * makes use of the fact that internally `fieldList` always applies `POD` to
+     * its argument type. This specialization therefore allows to unwrap the
+     * contained point type. */
+    template<typename PointT>
+    struct POD<Eigen::internal::workaround_msvc_stl_support<PointT> >
+    {
+      typedef PointT type;
+    };
+
+#endif
 
     // name
     /* This really only depends on Tag, but we go through some gymnastics to avoid ODR violations.
@@ -155,7 +182,7 @@ namespace pcl
       BOOST_MPL_ASSERT_MSG((!boost::is_same<PointT, typename POD<PointT>::type>::value),
                            POINT_TYPE_NOT_PROPERLY_REGISTERED, (PointT&));
     };
-
+#if PCL_LINEAR_VERSION(__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__) == PCL_LINEAR_VERSION(4,4,3)
     /*
       At least on GCC 4.4.3, but not later versions, some valid usages of the above traits for
       non-POD (but registered) point types fail with:
@@ -165,14 +192,15 @@ namespace pcl
      */
     //BOOST_MPL_ASSERT_MSG((!bool (mpl_::bool_<false>::value)), WTF_GCC443, (bool));
     BOOST_MPL_ASSERT_MSG((!bool (boost::mpl::bool_<false>::value)), WTF_GCC443, (bool));
+#endif
   } //namespace traits
 
-  // Return true if the PointField matches the expected name and data type.
+  // Return true if the PCLPointField matches the expected name and data type.
   // Written as a struct to allow partially specializing on Tag.
   template<typename PointT, typename Tag>
   struct FieldMatches
   {
-    bool operator() (const sensor_msgs::PointField& field)
+    bool operator() (const pcl::PCLPointField& field)
     {
       return (field.name == traits::name<PointT, Tag>::value &&
               field.datatype == traits::datatype<PointT, Tag>::value &&
@@ -181,7 +209,19 @@ namespace pcl
     }
   };
 
-  /** \brief A helper functor that can copy a specific value if the given field exists. */
+  /** \brief A helper functor that can copy a specific value if the given field exists.
+    *
+    * \note In order to actually copy the value an instance of this functor should be passed
+    * to a pcl::for_each_type loop. See the example below.
+    *
+    * \code
+    * PointInT p;
+    * bool exists;
+    * float value;
+    * typedef typename pcl::traits::fieldList<PointInT>::type FieldList;
+    * pcl::for_each_type<FieldList> (pcl::CopyIfFieldExists<PointT, float> (p, "intensity", exists, value));
+    * \endcode
+    */
   template <typename PointInT, typename OutT>
   struct CopyIfFieldExists
   {
@@ -236,7 +276,17 @@ namespace pcl
       OutT &value_;
   };
 
-  /** \brief A helper functor that can set a specific value in a field if the field exists. */
+  /** \brief A helper functor that can set a specific value in a field if the field exists.
+    *
+    * \note In order to actually set the value an instance of this functor should be passed
+    * to a pcl::for_each_type loop. See the example below.
+    *
+    * \code
+    * PointT p;
+    * typedef typename pcl::traits::fieldList<PointT>::type FieldList;
+    * pcl::for_each_type<FieldList> (pcl::SetIfFieldExists<PointT, float> (p, "intensity", 42.0f));
+    * \endcode
+    */
   template <typename PointOutT, typename InT>
   struct SetIfFieldExists
   {
@@ -271,6 +321,30 @@ namespace pcl
       const std::string &name_;
       const InT &value_;
   };
+
+  /** \brief Set the value at a specified field in a point
+    * \param[out] pt the point to set the value to
+    * \param[in] field_offset the offset of the field
+    * \param[in] value the value to set
+    */
+  template <typename PointT, typename ValT> inline void
+  setFieldValue (PointT &pt, size_t field_offset, const ValT &value)
+  {
+    uint8_t* data_ptr = reinterpret_cast<uint8_t*>(&pt) + field_offset;
+    *reinterpret_cast<ValT*>(data_ptr) = value;
+  }
+
+  /** \brief Get the value at a specified field in a point
+    * \param[in] pt the point to get the value from
+    * \param[in] field_offset the offset of the field
+    * \param[out] value the value to retreive
+    */
+  template <typename PointT, typename ValT> inline void
+  getFieldValue (const PointT &pt, size_t field_offset, ValT &value)
+  {
+    const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(&pt) + field_offset;
+    value = *reinterpret_cast<const ValT*>(data_ptr);
+  }
 }
 
 #endif  //#ifndef PCL_POINT_TRAITS_H_

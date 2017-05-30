@@ -38,6 +38,7 @@
 
 #include <iostream>
 #include <gtest/gtest.h>
+#include <pcl/common/distances.h>
 #include <pcl/common/time.h>
 #include <pcl/search/pcl_search.h>
 #include <pcl/search/flann_search.h>
@@ -356,9 +357,8 @@ TEST (PCL, FlannSearch_compareToKdTreeFlann)
     ASSERT_EQ (indices_tree[i].size (), no_of_neighbors);
     ASSERT_EQ (dists_flann[i].size (), no_of_neighbors);
     ASSERT_EQ (dists_tree[i].size (), no_of_neighbors);
-    for (size_t j = 0; j<no_of_neighbors; j++ )
+    for (int j = 0; j < no_of_neighbors; j++ )
     {
-
       ASSERT_TRUE( indices_flann[i][j] == indices_tree[i][j] || dists_flann[i][j]==dists_tree[i][j]);
     }
   }

@@ -47,7 +47,7 @@ pcl::registration::TransformationEstimation2D<PointSource, PointTarget, Scalar>:
   size_t nr_points = cloud_src.points.size ();
   if (cloud_tgt.points.size () != nr_points)
   {
-    PCL_ERROR ("[pcl::TransformationEstimation2D::estimateRigidTransformation] Number or points in source (%zu) differs than target (%zu)!\n", nr_points, cloud_tgt.points.size ());
+    PCL_ERROR ("[pcl::TransformationEstimation2D::estimateRigidTransformation] Number or points in source (%lu) differs than target (%lu)!\n", nr_points, cloud_tgt.points.size ());
     return;
   }
 
@@ -66,7 +66,7 @@ pcl::registration::TransformationEstimation2D<PointSource, PointTarget, Scalar>:
 {
   if (indices_src.size () != cloud_tgt.points.size ())
   {
-    PCL_ERROR ("[pcl::Transformation2D::estimateRigidTransformation] Number or points in source (%zu) differs than target (%zu)!\n", indices_src.size (), cloud_tgt.points.size ());
+    PCL_ERROR ("[pcl::Transformation2D::estimateRigidTransformation] Number or points in source (%lu) differs than target (%lu)!\n", indices_src.size (), cloud_tgt.points.size ());
     return;
   }
 
@@ -87,7 +87,7 @@ pcl::registration::TransformationEstimation2D<PointSource, PointTarget, Scalar>:
 {
   if (indices_src.size () != indices_tgt.size ())
   {
-    PCL_ERROR ("[pcl::TransformationEstimation2D::estimateRigidTransformation] Number or points in source (%zu) differs than target (%zu)!\n", indices_src.size (), indices_tgt.size ());
+    PCL_ERROR ("[pcl::TransformationEstimation2D::estimateRigidTransformation] Number or points in source (%lu) differs than target (%lu)!\n", indices_src.size (), indices_tgt.size ());
     return;
   }
 
@@ -149,7 +149,7 @@ pcl::registration::TransformationEstimation2D<PointSource, PointTarget, Scalar>:
   // Assemble the correlation matrix H = source * target'
   Eigen::Matrix<Scalar, 3, 3> H = (cloud_src_demean * cloud_tgt_demean.transpose ()).topLeftCorner (3, 3);
   
-  float angle = atan2 ( - (H(0, 0) + H (1, 1)), H (0, 1) + H (1, 0));
+  float angle = atan2 ((H (0, 1) - H (1, 0)), (H(0, 0) + H (1, 1)));
   
   Eigen::Matrix<Scalar, 3, 3> R (Eigen::Matrix<Scalar, 3, 3>::Identity ());
   R (0, 0) = R (1, 1) = cos (angle);

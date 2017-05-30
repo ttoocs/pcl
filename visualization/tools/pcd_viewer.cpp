@@ -42,11 +42,12 @@
 #include <pcl/io/pcd_io.h>
 #include <cfloat>
 #include <pcl/visualization/eigen.h>
-#include <pcl/visualization/vtk.h>
+//#include <pcl/visualization/vtk.h>
 #include <pcl/visualization/point_cloud_handlers.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/image_viewer.h>
 #include <pcl/visualization/histogram_visualizer.h>
-#if VTK_MAJOR_VERSION==6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
 #include <pcl/visualization/pcl_plotter.h>
 #endif
 #include <pcl/visualization/point_picking_event.h>
@@ -54,14 +55,15 @@
 #include <pcl/console/parse.h>
 #include <pcl/console/time.h>
 #include <pcl/search/kdtree.h>
+#include <vtkPolyDataReader.h>
 
 using namespace pcl::console;
 
-typedef pcl::visualization::PointCloudColorHandler<sensor_msgs::PointCloud2> ColorHandler;
+typedef pcl::visualization::PointCloudColorHandler<pcl::PCLPointCloud2> ColorHandler;
 typedef ColorHandler::Ptr ColorHandlerPtr;
 typedef ColorHandler::ConstPtr ColorHandlerConstPtr;
 
-typedef pcl::visualization::PointCloudGeometryHandler<sensor_msgs::PointCloud2> GeometryHandler;
+typedef pcl::visualization::PointCloudGeometryHandler<pcl::PCLPointCloud2> GeometryHandler;
 typedef GeometryHandler::Ptr GeometryHandlerPtr;
 typedef GeometryHandler::ConstPtr GeometryHandlerConstPtr;
 
@@ -80,13 +82,21 @@ isValidFieldName (const std::string &field)
 }
 
 bool
-isMultiDimensionalFeatureField (const sensor_msgs::PointField &field)
+isMultiDimensionalFeatureField (const pcl::PCLPointField &field)
 {
   if (field.count > 1)
     return (true);
   return (false);
 }
 
+bool
+isOnly2DImage (const pcl::PCLPointField &field)
+{
+  if (field.name == "rgba" || field.name == "rgb")
+    return (true);
+  return (false);
+}
+  
 void
 printHelp (int, char **argv)
 {
@@ -96,6 +106,9 @@ printHelp (int, char **argv)
   print_info ("                     -fc r,g,b                = foreground color\n");
   print_info ("                     -ps X                    = point size ("); print_value ("1..64"); print_info (") \n");
   print_info ("                     -opaque X                = rendered point cloud opacity ("); print_value ("0..1"); print_info (")\n");
+  print_info ("                     -shading X               = rendered surface shading ("); print_value ("'flat' (default), 'gouraud', 'phong'"); print_info (")\n");
+  print_info ("                     -position x,y,z          = absolute point cloud position in metres\n");
+  print_info ("                     -orientation r,p,y       = absolute point cloud orientation (roll, pitch, yaw) in radians\n");
 
   print_info ("                     -ax "); print_value ("n"); print_info ("                    = enable on-screen display of ");
   print_color (stdout, TT_BRIGHT, TT_RED, "X"); print_color (stdout, TT_BRIGHT, TT_GREEN, "Y"); print_color (stdout, TT_BRIGHT, TT_BLUE, "Z");
@@ -116,19 +129,30 @@ printHelp (int, char **argv)
   print_info ("\n");
   print_info ("                     -pc 0/X                  = disable/enable the display of every Xth point's principal curvatures as lines (default "); print_value ("disabled"); print_info (")\n");
   print_info ("                     -pc_scale X              = resize the principal curvatures vectors size to X (default "); print_value ("0.02"); print_info (")\n");
-  print_info ("                     -use_vbos                = use OpenGL vertex buffer objects\n");
+  print_info ("\n");
+  print_info ("                     -immediate_rendering 0/1 = use immediate mode rendering to draw the data (default: "); print_value ("disabled"); print_info (")\n");
+  print_info ("                                                Note: the use of immediate rendering will enable the visualization of larger datasets at the expense of extra RAM.\n");
+  print_info ("                                                See http://en.wikipedia.org/wiki/Immediate_mode for more information.\n");
+  print_info ("                     -vbo_rendering 0/1       = use OpenGL 1.4+ Vertex Buffer Objects for rendering (default: "); print_value ("disabled"); print_info (")\n");
+  print_info ("                                                Note: the use of VBOs will enable the visualization of larger datasets at the expense of extra RAM.\n");
+  print_info ("                                                See http://en.wikipedia.org/wiki/Vertex_Buffer_Object for more information.\n");
+  print_info ("\n");
+  print_info ("                     -use_point_picking       = enable the usage of picking points on screen (default "); print_value ("disabled"); print_info (")\n");
+  print_info ("\n");
+  print_info ("                     -optimal_label_colors    = maps existing labels to the optimal sequential glasbey colors, label_ids will not be mapped to fixed colors (default "); print_value ("disabled"); print_info (")\n");
   print_info ("\n");
 
-  print_info ("\n(Note: for multiple .pcd files, provide multiple -{fc,ps,opaque} parameters; they will be automatically assigned to the right file)\n");
+  print_info ("\n(Note: for multiple .pcd files, provide multiple -{fc,ps,opaque,position,orientation} parameters; they will be automatically assigned to the right file)\n");
 }
 
 // Global visualizer object
-#if VTK_MAJOR_VERSION==6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
 pcl::visualization::PCLPlotter ph_global;
 #endif
 boost::shared_ptr<pcl::visualization::PCLVisualizer> p;
+std::vector<boost::shared_ptr<pcl::visualization::ImageViewer> > imgs;
 pcl::search::KdTree<pcl::PointXYZ> search;
-sensor_msgs::PointCloud2::Ptr cloud;
+pcl::PCLPointCloud2::Ptr cloud;
 pcl::PointCloud<pcl::PointXYZ>::Ptr xyzcloud;
 
 void
@@ -140,9 +164,9 @@ pp_callback (const pcl::visualization::PointPickingEvent& event, void* cookie)
 
   if (!cloud)
   {
-    cloud = *reinterpret_cast<sensor_msgs::PointCloud2::Ptr*> (cookie);
+    cloud = *reinterpret_cast<pcl::PCLPointCloud2::Ptr*> (cookie);
     xyzcloud.reset (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromROSMsg (*cloud, *xyzcloud);
+    pcl::fromPCLPointCloud2 (*cloud, *xyzcloud);
     search.setInputCloud (xyzcloud);
   }
   // Return the correct index in the cloud instead of the index on the screen
@@ -176,7 +200,7 @@ pp_callback (const pcl::visualization::PointPickingEvent& event, void* cookie)
     if (!isMultiDimensionalFeatureField (cloud->fields[i]))
       continue;
     PCL_INFO ("Multidimensional field found: %s\n", cloud->fields[i].name.c_str ());
-#if VTK_MAJOR_VERSION==6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
     ph_global.addFeatureHistogram (*cloud, cloud->fields[i].name, idx, ss.str ());
     ph_global.renderOnce ();
 #endif
@@ -209,7 +233,15 @@ main (int argc, char** argv)
   if (debug)
     pcl::console::setVerbosityLevel (pcl::console::L_DEBUG);
 
-  bool cam = pcl::console::find_switch (argc, argv, "-cam");
+  // Parse the command line arguments for .pcd files
+  std::vector<int> p_file_indices   = pcl::console::parse_file_extension_argument (argc, argv, ".pcd");
+  std::vector<int> vtk_file_indices = pcl::console::parse_file_extension_argument (argc, argv, ".vtk");
+
+  if (p_file_indices.size () == 0 && vtk_file_indices.size () == 0)
+  {
+    print_error ("No .PCD or .VTK file given. Nothing to visualize.\n");
+    return (-1);
+  }
 
   // Command line parsing
   double bcolor[3] = {0, 0, 0};
@@ -218,11 +250,18 @@ main (int argc, char** argv)
   std::vector<double> fcolor_r, fcolor_b, fcolor_g;
   bool fcolorparam = pcl::console::parse_multiple_3x_arguments (argc, argv, "-fc", fcolor_r, fcolor_g, fcolor_b);
 
+  std::vector<double> pose_x, pose_y, pose_z, pose_roll, pose_pitch, pose_yaw;
+  bool poseparam = pcl::console::parse_multiple_3x_arguments (argc, argv, "-position", pose_x, pose_y, pose_z);
+  poseparam &= pcl::console::parse_multiple_3x_arguments (argc, argv, "-orientation", pose_roll, pose_pitch, pose_yaw);
+
   std::vector<int> psize;
   pcl::console::parse_multiple_arguments (argc, argv, "-ps", psize);
 
   std::vector<double> opaque;
   pcl::console::parse_multiple_arguments (argc, argv, "-opaque", opaque);
+
+  std::vector<std::string> shadings;
+  pcl::console::parse_multiple_arguments (argc, argv, "-shading", shadings);
 
   int mview = 0;
   pcl::console::parse_argument (argc, argv, "-multiview", mview);
@@ -237,16 +276,26 @@ main (int argc, char** argv)
   float pc_scale = PC_SCALE;
   pcl::console::parse_argument (argc, argv, "-pc_scale", pc_scale);
 
-  bool use_vbos = pcl::console::find_switch (argc, argv, "-use_vbos");
+  bool use_vbos = false;
+  pcl::console::parse_argument (argc, argv, "-vbo_rendering", use_vbos);
+  if (use_vbos) 
+    print_highlight ("Vertex Buffer Object (VBO) visualization enabled.\n");
 
-  // Parse the command line arguments for .pcd files
-  std::vector<int> p_file_indices   = pcl::console::parse_file_extension_argument (argc, argv, ".pcd");
-  std::vector<int> vtk_file_indices = pcl::console::parse_file_extension_argument (argc, argv, ".vtk");
+  bool use_pp   = pcl::console::find_switch (argc, argv, "-use_point_picking");
+  if (use_pp) 
+    print_highlight ("Point picking enabled.\n");
 
-  if (p_file_indices.size () == 0 && vtk_file_indices.size () == 0)
+  bool use_optimal_l_colors = pcl::console::find_switch (argc, argv, "-optimal_label_colors");
+  if (use_optimal_l_colors)
+    print_highlight ("Optimal glasbey colors are being assigned to existing labels.\nNote: No static mapping between label ids and colors\n");
+
+  // If VBOs are not enabled, then try to use immediate rendering
+  bool use_immediate_rendering = false;
+  if (!use_vbos)
   {
-    print_error ("No .PCD or .VTK file given. Nothing to visualize.\n");
-    return (-1);
+    pcl::console::parse_argument (argc, argv, "-immediate_rendering", use_immediate_rendering);
+    if (use_immediate_rendering) 
+      print_highlight ("Using immediate mode rendering.\n");
   }
 
   // Multiview enabled?
@@ -284,8 +333,12 @@ main (int argc, char** argv)
     for (size_t i = opaque.size (); i < p_file_indices.size (); ++i)
       opaque.push_back (1.0);
 
+  if (shadings.size () != p_file_indices.size () && shadings.size () > 0)
+    for (size_t i = shadings.size (); i < p_file_indices.size (); ++i)
+      shadings.push_back ("flat");
+
   // Create the PCLVisualizer object
-#if VTK_MAJOR_VERSION==6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
   boost::shared_ptr<pcl::visualization::PCLPlotter> ph;
 #endif  
   // Using min_p, max_p to set the global Y min/max range for the histogram
@@ -344,22 +397,55 @@ main (int argc, char** argv)
     // Change the shape rendered opacity
     if (opaque.size () > 0)
       p->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, opaque.at (i), cloud_name.str ());
+
+    // Change the shape rendered shading
+    if (shadings.size () > 0)
+    {
+      if (shadings[i] == "flat")
+      {
+        print_highlight (stderr, "Setting shading property for %s to FLAT.\n", argv[vtk_file_indices.at (i)]);
+        p->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_SHADING, pcl::visualization::PCL_VISUALIZER_SHADING_FLAT, cloud_name.str ());
+      }
+      else if (shadings[i] == "gouraud")
+      {
+        print_highlight (stderr, "Setting shading property for %s to GOURAUD.\n", argv[vtk_file_indices.at (i)]);
+        p->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_SHADING, pcl::visualization::PCL_VISUALIZER_SHADING_GOURAUD, cloud_name.str ());
+      }
+      else if (shadings[i] == "phong")
+      {
+        print_highlight (stderr, "Setting shading property for %s to PHONG.\n", argv[vtk_file_indices.at (i)]);
+        p->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_SHADING, pcl::visualization::PCL_VISUALIZER_SHADING_PHONG, cloud_name.str ());
+      }
+    }
   }
 
-  sensor_msgs::PointCloud2::Ptr cloud;
+  pcl::PCLPointCloud2::Ptr cloud;
   // Go through PCD files
   for (size_t i = 0; i < p_file_indices.size (); ++i)
   {
-    cloud.reset (new sensor_msgs::PointCloud2);
+    tt.tic ();
+    cloud.reset (new pcl::PCLPointCloud2);
     Eigen::Vector4f origin;
     Eigen::Quaternionf orientation;
     int version;
 
     print_highlight (stderr, "Loading "); print_value (stderr, "%s ", argv[p_file_indices.at (i)]);
 
-    tt.tic ();
     if (pcd.read (argv[p_file_indices.at (i)], *cloud, origin, orientation, version) < 0)
       return (-1);
+
+    // Calculate transform if available.
+    if (pose_x.size () > i && pose_y.size () > i && pose_z.size () > i &&
+        pose_roll.size () > i && pose_pitch.size () > i && pose_yaw.size () > i)
+    {
+      Eigen::Affine3f pose =
+        Eigen::Translation3f (Eigen::Vector3f (pose_x[i], pose_y[i], pose_z[i])) *
+        Eigen::AngleAxisf (pose_yaw[i],   Eigen::Vector3f::UnitZ ()) *
+        Eigen::AngleAxisf (pose_pitch[i], Eigen::Vector3f::UnitY ()) *
+        Eigen::AngleAxisf (pose_roll[i],  Eigen::Vector3f::UnitX ());
+      orientation = pose.rotation () * orientation;
+      origin.block<3, 1> (0, 0) = (pose * Eigen::Translation3f (origin.block<3, 1> (0, 0))).translation ();
+    }
 
     std::stringstream cloud_name;
 
@@ -368,16 +454,34 @@ main (int argc, char** argv)
     {
       cloud_name << argv[p_file_indices.at (i)];
 
-#if VTK_MAJOR_VERSION==6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
       if (!ph)
         ph.reset (new pcl::visualization::PCLPlotter);
 #endif
-      print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud->fields[0].count); print_info (" points]\n");
 
       pcl::getMinMax (*cloud, 0, cloud->fields[0].name, min_p, max_p);
-#if VTK_MAJOR_VERSION==6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
       ph->addFeatureHistogram (*cloud, cloud->fields[0].name, cloud_name.str ());
 #endif
+      print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", cloud->fields[0].count); print_info (" points]\n");
+      continue;
+    }
+
+    // ---[ Special check for 2D images
+    if (cloud->fields.size () == 1 && isOnly2DImage (cloud->fields[0]))
+    {
+      print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%u", cloud->width * cloud->height); print_info (" points]\n");
+      print_info ("Available dimensions: "); print_value ("%s\n", pcl::getFieldsList (*cloud).c_str ());
+      
+      std::stringstream name;
+      name << "PCD Viewer :: " << argv[p_file_indices.at (i)];
+      pcl::visualization::ImageViewer::Ptr img (new pcl::visualization::ImageViewer (name.str ()));
+      pcl::PointCloud<pcl::RGB> rgb_cloud;
+      pcl::fromPCLPointCloud2 (*cloud, rgb_cloud);
+
+      img->addRGBImage (rgb_cloud);
+      imgs.push_back (img);
+
       continue;
     }
 
@@ -387,9 +491,13 @@ main (int argc, char** argv)
     if (!p)
     {
       p.reset (new pcl::visualization::PCLVisualizer (argc, argv, "PCD viewer"));
-      p->registerPointPickingCallback (&pp_callback, static_cast<void*> (&cloud));
+      if (use_pp)   // Only enable the point picking callback if the command line parameter is enabled
+        p->registerPointPickingCallback (&pp_callback, static_cast<void*> (&cloud));
 
-      if (!cam)
+      // Set whether or not we should be using the vtkVertexBufferObjectMapper
+      p->setUseVbos (use_vbos);
+
+      if (!p->cameraParamsSet () && !p->cameraFileLoaded ())
       {
         Eigen::Matrix3f rotation;
         rotation = orientation;
@@ -416,33 +524,28 @@ main (int argc, char** argv)
       print_error ("[error: no points found!]\n");
       return (-1);
     }
-    print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%u", cloud->width * cloud->height); print_info (" points]\n");
-    print_info ("Available dimensions: "); print_value ("%s\n", pcl::getFieldsList (*cloud).c_str ());
-
-    // Set whether or not we should be using the vtkVertexBufferObjectMapper
-    p->setUseVbos(use_vbos);
 
     // If no color was given, get random colors
     if (fcolorparam)
     {
       if (fcolor_r.size () > i && fcolor_g.size () > i && fcolor_b.size () > i)
-        color_handler.reset (new pcl::visualization::PointCloudColorHandlerCustom<sensor_msgs::PointCloud2> (cloud, fcolor_r[i], fcolor_g[i], fcolor_b[i]));
+        color_handler.reset (new pcl::visualization::PointCloudColorHandlerCustom<pcl::PCLPointCloud2> (cloud, fcolor_r[i], fcolor_g[i], fcolor_b[i]));
       else
-        color_handler.reset (new pcl::visualization::PointCloudColorHandlerRandom<sensor_msgs::PointCloud2> (cloud));
+        color_handler.reset (new pcl::visualization::PointCloudColorHandlerRandom<pcl::PCLPointCloud2> (cloud));
     }
     else
-      color_handler.reset (new pcl::visualization::PointCloudColorHandlerRandom<sensor_msgs::PointCloud2> (cloud));
+      color_handler.reset (new pcl::visualization::PointCloudColorHandlerRandom<pcl::PCLPointCloud2> (cloud));
 
     // Add the dataset with a XYZ and a random handler
-    geometry_handler.reset (new pcl::visualization::PointCloudGeometryHandlerXYZ<sensor_msgs::PointCloud2> (cloud));
+    geometry_handler.reset (new pcl::visualization::PointCloudGeometryHandlerXYZ<pcl::PCLPointCloud2> (cloud));
     // Add the cloud to the renderer
     //p->addPointCloud<pcl::PointXYZ> (cloud_xyz, geometry_handler, color_handler, cloud_name.str (), viewport);
     p->addPointCloud (cloud, geometry_handler, color_handler, origin, orientation, cloud_name.str (), viewport);
 
+
     if (mview)
       // Add text with file name
       p->addText (argv[p_file_indices.at (i)], 5, 5, 10, 1.0, 1.0, 1.0, "text_" + std::string (argv[p_file_indices.at (i)]), viewport);
-
 
     // If normal lines are enabled
     if (normals != 0)
@@ -457,12 +560,12 @@ main (int argc, char** argv)
       //
       // Convert from blob to pcl::PointCloud
       pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_xyz (new pcl::PointCloud<pcl::PointXYZ>);
-      pcl::fromROSMsg (*cloud, *cloud_xyz);
+      pcl::fromPCLPointCloud2 (*cloud, *cloud_xyz);
       cloud_xyz->sensor_origin_ = origin;
       cloud_xyz->sensor_orientation_ = orientation;
 
       pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
-      pcl::fromROSMsg (*cloud, *cloud_normals);
+      pcl::fromPCLPointCloud2 (*cloud, *cloud_normals);
       std::stringstream cloud_name_normals;
       cloud_name_normals << argv[p_file_indices.at (i)] << "-" << i << "-normals";
       p->addPointCloudNormals<pcl::PointXYZ, pcl::Normal> (cloud_xyz, cloud_normals, normals, normals_scale, cloud_name_normals.str (), viewport);
@@ -491,13 +594,13 @@ main (int argc, char** argv)
       //
       // Convert from blob to pcl::PointCloud
       pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_xyz (new pcl::PointCloud<pcl::PointXYZ>);
-      pcl::fromROSMsg (*cloud, *cloud_xyz);
+      pcl::fromPCLPointCloud2 (*cloud, *cloud_xyz);
       cloud_xyz->sensor_origin_ = origin;
       cloud_xyz->sensor_orientation_ = orientation;
       pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
-      pcl::fromROSMsg (*cloud, *cloud_normals);
+      pcl::fromPCLPointCloud2 (*cloud, *cloud_normals);
       pcl::PointCloud<pcl::PrincipalCurvatures>::Ptr cloud_pc (new pcl::PointCloud<pcl::PrincipalCurvatures>);
-      pcl::fromROSMsg (*cloud, *cloud_pc);
+      pcl::fromPCLPointCloud2 (*cloud, *cloud_pc);
       std::stringstream cloud_name_normals_pc;
       cloud_name_normals_pc << argv[p_file_indices.at (i)] << "-" << i << "-normals";
       int factor = (std::min)(normals, pc);
@@ -505,36 +608,50 @@ main (int argc, char** argv)
       p->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, cloud_name_normals_pc.str ());
       p->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 3, cloud_name_normals_pc.str ());
       cloud_name_normals_pc << "-pc";
-      p->addPointCloudPrincipalCurvatures (cloud_xyz, cloud_normals, cloud_pc, factor, pc_scale, cloud_name_normals_pc.str (), viewport);
+      p->addPointCloudPrincipalCurvatures<pcl::PointXYZ, pcl::Normal> (cloud_xyz, cloud_normals, cloud_pc, factor, pc_scale, cloud_name_normals_pc.str (), viewport);
       p->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 3, cloud_name_normals_pc.str ());
     }
 
     // Add every dimension as a possible color
     if (!fcolorparam)
     {
+      int rgb_idx = 0;
+      int label_idx = 0;
       for (size_t f = 0; f < cloud->fields.size (); ++f)
       {
         if (cloud->fields[f].name == "rgb" || cloud->fields[f].name == "rgba")
-          color_handler.reset (new pcl::visualization::PointCloudColorHandlerRGBField<sensor_msgs::PointCloud2> (cloud));
+        {
+          rgb_idx = f + 1;
+          color_handler.reset (new pcl::visualization::PointCloudColorHandlerRGBField<pcl::PCLPointCloud2> (cloud));
+        }
+        else if (cloud->fields[f].name == "label")
+        {
+          label_idx = f + 1;
+          color_handler.reset (new pcl::visualization::PointCloudColorHandlerLabelField<pcl::PCLPointCloud2> (cloud, !use_optimal_l_colors));
+        }
         else
         {
           if (!isValidFieldName (cloud->fields[f].name))
             continue;
-          color_handler.reset (new pcl::visualization::PointCloudColorHandlerGenericField<sensor_msgs::PointCloud2> (cloud, cloud->fields[f].name));
+          color_handler.reset (new pcl::visualization::PointCloudColorHandlerGenericField<pcl::PCLPointCloud2> (cloud, cloud->fields[f].name));
         }
         // Add the cloud to the renderer
         //p->addPointCloud<pcl::PointXYZ> (cloud_xyz, color_handler, cloud_name.str (), viewport);
         p->addPointCloud (cloud, color_handler, origin, orientation, cloud_name.str (), viewport);
       }
+      // Set RGB color handler or label handler as default
+      p->updateColorHandlerIndex (cloud_name.str (), (rgb_idx ? rgb_idx : label_idx));
     }
+
     // Additionally, add normals as a handler
-    geometry_handler.reset (new pcl::visualization::PointCloudGeometryHandlerSurfaceNormal<sensor_msgs::PointCloud2> (cloud));
+    geometry_handler.reset (new pcl::visualization::PointCloudGeometryHandlerSurfaceNormal<pcl::PCLPointCloud2> (cloud));
     if (geometry_handler->isCapable ())
       //p->addPointCloud<pcl::PointXYZ> (cloud_xyz, geometry_handler, cloud_name.str (), viewport);
       p->addPointCloud (cloud, geometry_handler, origin, orientation, cloud_name.str (), viewport);
 
-    // Set immediate mode rendering ON
-    p->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_IMMEDIATE_RENDERING, 1.0, cloud_name.str ());
+    if (use_immediate_rendering)
+      // Set immediate mode rendering ON
+      p->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_IMMEDIATE_RENDERING, 1.0, cloud_name.str ());
 
     // Change the cloud rendered point size
     if (psize.size () > 0)
@@ -545,11 +662,19 @@ main (int argc, char** argv)
       p->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, opaque.at (i), cloud_name.str ());
 
     // Reset camera viewpoint to center of cloud if camera parameters were not passed manually and this is the first loaded cloud
-    if (i == 0 && !p->cameraParamsSet ())
+    if (i == 0 && !p->cameraParamsSet () && !p->cameraFileLoaded ())
+    {
       p->resetCameraViewpoint (cloud_name.str ());
+      p->resetCamera ();
+    }
+
+    print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%u", cloud->width * cloud->height); print_info (" points]\n");
+    print_info ("Available dimensions: "); print_value ("%s\n", pcl::getFieldsList (*cloud).c_str ());
+    if (p->cameraFileLoaded ())
+      print_info ("Camera parameters restored from %s.\n", p->getCameraFile ().c_str ());
   }
 
-  if (!mview)
+  if (!mview && p)
   {
     std::string str;
     if (!p_file_indices.empty ())
@@ -574,31 +699,70 @@ main (int argc, char** argv)
   if (axes != 0.0 && p)
   {
     float ax_x = 0.0, ax_y = 0.0, ax_z = 0.0;
-    pcl::console::parse_3x_arguments (argc, argv, "-ax_pos", ax_x, ax_y, ax_z, false);
+    pcl::console::parse_3x_arguments (argc, argv, "-ax_pos", ax_x, ax_y, ax_z);
     // Draw XYZ axes if command-line enabled
-    p->addCoordinateSystem (axes, ax_x, ax_y, ax_z);
+    p->addCoordinateSystem (axes, ax_x, ax_y, ax_z, "global");
   }
 
   // Clean up the memory used by the binary blob
   // Note: avoid resetting the cloud, otherwise the PointPicking callback will fail
-  //cloud.reset ();
-
-#if VTK_MAJOR_VERSION==6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
-  if (ph)
+  if (!use_pp)   // Only enable the point picking callback if the command line parameter is enabled
   {
-    //print_highlight ("Setting the global Y range for all histograms to: "); print_value ("%f -> %f\n", min_p, max_p);
-    //ph->setGlobalYRange (min_p, max_p);
-    //ph->updateWindowPositions ();
-    if (p)
-      p->spin ();
-    else
+    cloud.reset ();
+    xyzcloud.reset ();
+  }
+
+  // If we have been given images, create our own loop so that we can spin each individually
+  if (!imgs.empty ())
+  {
+    bool stopped = false;
+    do
     {
-      ph->spin ();
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
+      if (ph) ph->spinOnce ();
+#endif
+
+      for (int i = 0; i < int (imgs.size ()); ++i)
+      {
+        if (imgs[i]->wasStopped ())
+        {
+          stopped = true;
+          break;
+        }
+        imgs[i]->spinOnce ();
+      }
+        
+      if (p)
+      {
+        if (p->wasStopped ())
+        {
+          stopped = true;
+          break;
+        }
+        p->spinOnce ();
+      }
+      boost::this_thread::sleep (boost::posix_time::microseconds (100));
     }
+    while (!stopped);
   }
   else
+  {
+    // If no images, continue
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>6)
+    if (ph)
+    {
+      //print_highlight ("Setting the global Y range for all histograms to: "); print_value ("%f -> %f\n", min_p, max_p);
+      //ph->setGlobalYRange (min_p, max_p);
+      //ph->updateWindowPositions ();
+      if (p)
+        p->spin ();
+      else
+        ph->spin ();
+    }
+    else
 #endif
-    if (p)
-      p->spin ();
+      if (p)
+        p->spin ();
+  }
 }
 /* ]--- */

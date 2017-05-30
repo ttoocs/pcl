@@ -50,14 +50,26 @@
 /*@{*/
 namespace pcl
 {
-  /** \brief Compute the smallest angle between two vectors in the [ 0, PI ) interval in 3D.
+  /** \brief Compute the smallest angle between two 3D vectors in radians (default) or degree.
     * \param v1 the first 3D vector (represented as a \a Eigen::Vector4f)
     * \param v2 the second 3D vector (represented as a \a Eigen::Vector4f)
-    * \return the angle between v1 and v2
+    * \return the angle between v1 and v2 in radians or degrees
+    * \note Handles rounding error for parallel and anti-parallel vectors
     * \ingroup common
     */
   inline double 
-  getAngle3D (const Eigen::Vector4f &v1, const Eigen::Vector4f &v2);
+  getAngle3D (const Eigen::Vector4f &v1, const Eigen::Vector4f &v2, const bool in_degree = false);
+
+  /** \brief Compute the smallest angle between two 3D vectors in radians (default) or degree.
+    * \param v1 the first 3D vector (represented as a \a Eigen::Vector3f)
+    * \param v2 the second 3D vector (represented as a \a Eigen::Vector3f)
+    * \param in_degree determine if angle should be in radians or degrees
+    * \return the angle between v1 and v2 in radians or degrees
+    * \ingroup common
+    */
+  inline double
+  getAngle3D (const Eigen::Vector3f &v1, const Eigen::Vector3f &v2, const bool in_degree = false);
+
 
   /** \brief Compute both the mean and the standard deviation of an array of values
     * \param values the array of values
@@ -160,6 +172,14 @@ namespace pcl
   template <typename PointT> inline void 
   getMinMax (const PointT &histogram, int len, float &min_p, float &max_p);
 
+  /** \brief Calculate the area of a polygon given a point cloud that defines the polygon 
+	  * \param polygon point cloud that contains those vertices that comprises the polygon. Vertices are stored in counterclockwise.
+	  * \return the polygon area 
+	  * \ingroup common
+	  */
+  template<typename PointT> inline float
+  calculatePolygonArea (const pcl::PointCloud<PointT> &polygon);
+
   /** \brief Get the minimum and maximum values on a point histogram
     * \param cloud the cloud containing multi-dimensional histograms
     * \param idx point index representing the histogram that we need to compute min/max for
@@ -169,7 +189,7 @@ namespace pcl
     * \ingroup common
     */
   PCL_EXPORTS void 
-  getMinMax (const sensor_msgs::PointCloud2 &cloud, int idx, const std::string &field_name, 
+  getMinMax (const pcl::PCLPointCloud2 &cloud, int idx, const std::string &field_name,
              float &min_p, float &max_p);
 
   /** \brief Compute both the mean and the standard deviation of an array of values

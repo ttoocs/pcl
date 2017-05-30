@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -39,6 +39,7 @@
 #define PCL_FILTERS_IMPL_FAST_VOXEL_GRID_H_
 
 #include <pcl/common/common.h>
+#include <pcl/common/io.h>
 #include <pcl/filters/approximate_voxel_grid.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +69,7 @@ pcl::ApproximateVoxelGrid<PointT>::applyFilter (PointCloud &output)
     centroid_size = boost::mpl::size<FieldList>::value;
 
   // ---[ RGB special case
-  std::vector<sensor_msgs::PointField> fields;
+  std::vector<pcl::PCLPointField> fields;
   int rgba_index = -1;
   rgba_index = pcl::getFieldIndex (*input_, "rgb", fields);
   if (rgba_index == -1)

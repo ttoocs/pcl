@@ -3,9 +3,11 @@
 #include <pcl/filters/passthrough.h>
 
 
-
-Q_EXPORT_PLUGIN2(cloud_composer_sanitize_cloud_tool, pcl::cloud_composer::SanitizeCloudToolFactory)
-
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+  Q_EXPORT_PLUGIN2(cloud_composer_sanitize_cloud_tool, pcl::cloud_composer::SanitizeCloudToolFactory)
+#else
+  Q_PLUGIN_METADATA(IID "cloud_composer.ToolFactory/1.0")
+#endif
 
 pcl::cloud_composer::SanitizeCloudTool::SanitizeCloudTool (PropertiesModel* parameter_model, QObject* parent)
 : ModifyItemTool (parameter_model, parent)
@@ -20,7 +22,7 @@ pcl::cloud_composer::SanitizeCloudTool::~SanitizeCloudTool ()
 }
 
 QList <pcl::cloud_composer::CloudComposerItem*>
-pcl::cloud_composer::SanitizeCloudTool::performAction (ConstItemList input_data, PointTypeFlags::PointType type)
+pcl::cloud_composer::SanitizeCloudTool::performAction (ConstItemList input_data, PointTypeFlags::PointType)
 {
   QList <CloudComposerItem*> output;
   const CloudComposerItem* input_item;
@@ -34,18 +36,18 @@ pcl::cloud_composer::SanitizeCloudTool::performAction (ConstItemList input_data,
   
   if (input_item->type () ==  CloudComposerItem::CLOUD_ITEM )
   {
-    sensor_msgs::PointCloud2::ConstPtr input_cloud = input_item->data (ItemDataRole::CLOUD_BLOB).value <sensor_msgs::PointCloud2::ConstPtr> ();
+    pcl::PCLPointCloud2::ConstPtr input_cloud = input_item->data (ItemDataRole::CLOUD_BLOB).value <pcl::PCLPointCloud2::ConstPtr> ();
     
     bool keep_organized = parameter_model_->getProperty("Keep Organized").toBool ();
    
     //////////////// THE WORK - FILTERING NANS ///////////////////
     // Create the filtering object
-    pcl::PassThrough<sensor_msgs::PointCloud2> pass_filter;
+    pcl::PassThrough<pcl::PCLPointCloud2> pass_filter;
     pass_filter.setInputCloud (input_cloud);
     pass_filter.setKeepOrganized (keep_organized);
         
     //Create output cloud
-    sensor_msgs::PointCloud2::Ptr cloud_filtered = boost::make_shared<sensor_msgs::PointCloud2> ();
+    pcl::PCLPointCloud2::Ptr cloud_filtered = boost::make_shared<pcl::PCLPointCloud2> ();
     //Filter!  
     pass_filter.filter (*cloud_filtered);
     
@@ -81,3 +83,4 @@ pcl::cloud_composer::SanitizeCloudToolFactory::createToolParameterModel (QObject
   
   return parameter_model;
 }
+

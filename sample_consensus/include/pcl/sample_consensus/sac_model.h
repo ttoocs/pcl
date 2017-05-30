@@ -157,7 +157,7 @@ namespace pcl
 
         if (indices_->size () > input_->points.size ())
         {
-          PCL_ERROR ("[pcl::SampleConsensusModel] Invalid index vector given with size %zu while the input PointCloud has size %zu!\n", indices_->size (), input_->points.size ());
+          PCL_ERROR ("[pcl::SampleConsensusModel] Invalid index vector given with size %lu while the input PointCloud has size %lu!\n", indices_->size (), input_->points.size ());
           indices_->clear ();
         }
         shuffled_indices_ = *indices_;
@@ -180,7 +180,7 @@ namespace pcl
         // We're assuming that indices_ have already been set in the constructor
         if (indices_->size () < getSampleSize ())
         {
-          PCL_ERROR ("[pcl::SampleConsensusModel::getSamples] Can not select %zu unique points out of %zu!\n",
+          PCL_ERROR ("[pcl::SampleConsensusModel::getSamples] Can not select %lu unique points out of %lu!\n",
                      samples.size (), indices_->size ());
           // one of these will make it stop :)
           samples.clear ();
@@ -193,14 +193,17 @@ namespace pcl
         for (unsigned int iter = 0; iter < max_sample_checks_; ++iter)
         {
           // Choose the random indices
-          if(samples_radius_ < std::numeric_limits<double>::epsilon())
+          if (samples_radius_ < std::numeric_limits<double>::epsilon ())
         	  SampleConsensusModel<PointT>::drawIndexSample (samples);
           else
         	  SampleConsensusModel<PointT>::drawIndexSampleRadius (samples);
 
           // If it's a good sample, stop here
           if (isSampleGood (samples))
+          {
+            PCL_DEBUG ("[pcl::SampleConsensusModel::getSamples] Selected %lu samples.\n", samples.size ());
             return;
+          }
         }
         PCL_DEBUG ("[pcl::SampleConsensusModel::getSamples] WARNING: Could not select %d sample points in %d iterations!\n", getSampleSize (), max_sample_checks_);
         samples.clear ();
@@ -345,14 +348,25 @@ namespace pcl
       virtual SacModel 
       getModelType () const = 0;
 
-      /** \brief Return the size of a sample from which a model is computed */
-      inline unsigned int 
-      getSampleSize () const 
-      { 
-        std::map<pcl::SacModel, unsigned int>::const_iterator it = SAC_SAMPLE_SIZE.find (getModelType ());
-        if (it == SAC_SAMPLE_SIZE.end ())
-          throw InvalidSACModelTypeException ("No sample size defined for given model type!\n");
-        return (it->second);
+      /** \brief Get a string representation of the name of this class. */
+      inline const std::string&
+      getClassName () const
+      {
+        return (model_name_);
+      }
+
+      /** \brief Return the size of a sample from which the model is computed. */
+      inline unsigned int
+      getSampleSize () const
+      {
+        return sample_size_;
+      }
+
+      /** \brief Return the number of coefficients in the model. */
+      inline unsigned int
+      getModelSize () const
+      {
+        return model_size_;
       }
 
       /** \brief Set the minimum and maximum allowable radius limits for the
@@ -383,6 +397,7 @@ namespace pcl
       
       /** \brief Set the maximum distance allowed when drawing random samples
         * \param[in] radius the maximum distance (L2 norm)
+        * \param search
         */
       inline void
       setSamplesMaxDist (const double &radius, SearchPtr search)
@@ -410,8 +425,9 @@ namespace pcl
       computeVariance (const std::vector<double> &error_sqr_dists)
       {
         std::vector<double> dists (error_sqr_dists);
-        std::sort (dists.begin (), dists.end ());
-        double median_error_sqr = dists[dists.size () >> 1];
+        const size_t medIdx = dists.size () >> 1;
+        std::nth_element (dists.begin (), dists.begin () + medIdx, dists.end ());
+        double median_error_sqr = dists[medIdx];
         return (2.1981 * median_error_sqr);
       }
 
@@ -430,7 +446,8 @@ namespace pcl
         return (computeVariance (error_sqr_dists_));
       }
 
-		protected:
+    protected:
+
       /** \brief Fills a sample array with random samples from the indices_ vector
         * \param[out] sample the set of indices of target_ to analyze
         */
@@ -463,14 +480,19 @@ namespace pcl
         std::vector<int> indices;
         std::vector<float> sqr_dists;
 
-        samples_radius_search_->radiusSearch (shuffled_indices_[0], samples_radius_,
-                                              indices, sqr_dists );
+        // If indices have been set when the search object was constructed,
+        // radiusSearch() expects an index into the indices vector as its
+        // first parameter. This can't be determined efficiently, so we use
+        // the point instead of the index.
+        // Returned indices are converted automatically.
+        samples_radius_search_->radiusSearch (input_->at(shuffled_indices_[0]),
+                                              samples_radius_, indices, sqr_dists );
 
         if (indices.size () < sample_size - 1)
         {
           // radius search failed, make an invalid model
           for(unsigned int i = 1; i < sample_size; ++i)
-        	shuffled_indices_[i] = shuffled_indices_[0];
+            shuffled_indices_[i] = shuffled_indices_[0];
         }
         else
         {
@@ -484,10 +506,22 @@ namespace pcl
       }
 
       /** \brief Check whether a model is valid given the user constraints.
+        *
+        * Default implementation verifies that the number of coefficients in the supplied model is as expected for this
+        * SAC model type. Specific SAC models should extend this function by checking the user constraints (if any).
+        *
         * \param[in] model_coefficients the set of model coefficients
         */
-      virtual inline bool
-      isModelValid (const Eigen::VectorXf &model_coefficients) = 0;
+      virtual bool
+      isModelValid (const Eigen::VectorXf &model_coefficients)
+      {
+        if (model_coefficients.size () != model_size_)
+        {
+          PCL_ERROR ("[pcl::%s::isModelValid] Invalid number of model coefficients given (%lu)!\n", getClassName ().c_str (), model_coefficients.size ());
+          return (false);
+        }
+        return (true);
+      }
 
       /** \brief Check if a sample of indices results in a good sample of points
         * indices. Pure virtual.
@@ -495,6 +529,9 @@ namespace pcl
         */
       virtual bool
       isSampleGood (const std::vector<int> &samples) const = 0;
+
+      /** \brief The model name. */
+      std::string model_name_;
 
       /** \brief A boost shared pointer to the point cloud data array. */
       PointCloudConstPtr input_;
@@ -530,6 +567,12 @@ namespace pcl
 
       /** \brief A vector holding the distances to the computed model. Used internally. */
       std::vector<double> error_sqr_dists_;
+
+      /** \brief The size of a sample from which the model is computed. Every subclass should initialize this appropriately. */
+      unsigned int sample_size_;
+
+      /** \brief The number of coefficients in the model. Every subclass should initialize this appropriately. */
+      unsigned int model_size_;
 
       /** \brief Boost-based random number generator. */
       inline int
@@ -620,7 +663,7 @@ namespace pcl
     typedef Eigen::Matrix<Scalar,InputsAtCompileTime,1> InputType;
     typedef Eigen::Matrix<Scalar,ValuesAtCompileTime,InputsAtCompileTime> JacobianType;
 
-    /** \brief Empty Construtor. */
+    /** \brief Empty Constructor. */
     Functor () : m_data_points_ (ValuesAtCompileTime) {}
 
     /** \brief Constructor

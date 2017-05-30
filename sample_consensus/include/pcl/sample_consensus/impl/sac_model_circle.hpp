@@ -71,7 +71,7 @@ pcl::SampleConsensusModelCircle2D<PointT>::computeModelCoefficients (const std::
   // Need 3 samples
   if (samples.size () != 3)
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::computeModelCoefficients] Invalid set of samples given (%zu)!\n", samples.size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::computeModelCoefficients] Invalid set of samples given (%lu)!\n", samples.size ());
     return (false);
   }
 
@@ -203,14 +203,14 @@ pcl::SampleConsensusModelCircle2D<PointT>::optimizeModelCoefficients (
   // Needs a set of valid model coefficients
   if (model_coefficients.size () != 3)
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::optimizeModelCoefficients] Invalid number of model coefficients given (%zu)!\n", model_coefficients.size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::optimizeModelCoefficients] Invalid number of model coefficients given (%lu)!\n", model_coefficients.size ());
     return;
   }
 
   // Need at least 3 samples
   if (inliers.size () <= 3)
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::optimizeModelCoefficients] Not enough inliers found to support a model (%zu)! Returning the same coefficients.\n", inliers.size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::optimizeModelCoefficients] Not enough inliers found to support a model (%lu)! Returning the same coefficients.\n", inliers.size ());
     return;
   }
 
@@ -235,7 +235,7 @@ pcl::SampleConsensusModelCircle2D<PointT>::projectPoints (
   // Needs a valid set of model coefficients
   if (model_coefficients.size () != 3)
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::projectPoints] Invalid number of model coefficients given (%zu)!\n", model_coefficients.size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::projectPoints] Invalid number of model coefficients given (%lu)!\n", model_coefficients.size ());
     return;
   }
 
@@ -301,7 +301,7 @@ pcl::SampleConsensusModelCircle2D<PointT>::doSamplesVerifyModel (
   // Needs a valid model coefficients
   if (model_coefficients.size () != 3)
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::doSamplesVerifyModel] Invalid number of model coefficients given (%zu)!\n", model_coefficients.size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::doSamplesVerifyModel] Invalid number of model coefficients given (%lu)!\n", model_coefficients.size ());
     return (false);
   }
 
@@ -323,12 +323,8 @@ pcl::SampleConsensusModelCircle2D<PointT>::doSamplesVerifyModel (
 template <typename PointT> bool 
 pcl::SampleConsensusModelCircle2D<PointT>::isModelValid (const Eigen::VectorXf &model_coefficients)
 {
-  // Needs a valid model coefficients
-  if (model_coefficients.size () != 3)
-  {
-    PCL_ERROR ("[pcl::SampleConsensusModelCircle2D::isModelValid] Invalid number of model coefficients given (%zu)!\n", model_coefficients.size ());
+  if (!SampleConsensusModel<PointT>::isModelValid (model_coefficients))
     return (false);
-  }
 
   if (radius_min_ != -std::numeric_limits<double>::max() && model_coefficients[2] < radius_min_)
     return (false);

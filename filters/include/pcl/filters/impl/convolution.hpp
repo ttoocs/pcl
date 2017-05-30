@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -41,6 +41,7 @@
 #define PCL_FILTERS_CONVOLUTION_IMPL_HPP
 
 #include <pcl/pcl_config.h>
+#include <pcl/common/distances.h>
 
 template <typename PointIn, typename PointOut>
 pcl::filters::Convolution<PointIn, PointOut>::Convolution ()
@@ -411,7 +412,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_rows (PointCloudOut& outp
   if (input_->is_dense)
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int j = 0; j < height; ++j)
     {
@@ -428,7 +429,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_rows (PointCloudOut& outp
   else
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int j = 0; j < height; ++j)
     {
@@ -456,7 +457,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_rows_duplicate (PointClou
   if (input_->is_dense)
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int j = 0; j < height; ++j)
     {
@@ -473,7 +474,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_rows_duplicate (PointClou
   else
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int j = 0; j < height; ++j)
     {
@@ -501,7 +502,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_rows_mirror (PointCloudOu
   if (input_->is_dense)
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int j = 0; j < height; ++j)
     {
@@ -518,7 +519,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_rows_mirror (PointCloudOu
   else
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int j = 0; j < height; ++j)
     {
@@ -545,7 +546,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_cols (PointCloudOut& outp
   if (input_->is_dense)
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int i = 0; i < width; ++i)
     {
@@ -562,7 +563,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_cols (PointCloudOut& outp
   else
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int i = 0; i < width; ++i)
     {
@@ -590,7 +591,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_cols_duplicate (PointClou
   if (input_->is_dense)
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int i = 0; i < width; ++i)
     {
@@ -607,7 +608,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_cols_duplicate (PointClou
   else
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int i = 0; i < width; ++i)
     {
@@ -635,7 +636,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_cols_mirror (PointCloudOu
   if (input_->is_dense)
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int i = 0; i < width; ++i)
     {
@@ -652,7 +653,7 @@ pcl::filters::Convolution<PointIn, PointOut>::convolve_cols_mirror (PointCloudOu
   else
   {
 #ifdef _OPENMP
-#pragma omp parallel for shared (output, last) num_threads (threads_)
+#pragma omp parallel for shared (output) num_threads (threads_)
 #endif
     for(int i = 0; i < width; ++i)
     {

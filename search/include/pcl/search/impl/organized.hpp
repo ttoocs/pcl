@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -77,7 +77,7 @@ pcl::search::OrganizedNeighbor<PointT>::radiusSearch (const               PointT
   k_sqr_distances.reserve (max_nn);
 
   unsigned yEnd  = (bottom + 1) * input_->width + right + 1;
-  register unsigned idx  = top * input_->width + left;
+  unsigned idx  = top * input_->width + left;
   unsigned skip = input_->width - right + left - 1;
   unsigned xEnd = idx - left + right + 1;
 
@@ -337,7 +337,6 @@ template<typename PointT> void
 pcl::search::OrganizedNeighbor<PointT>::estimateProjectionMatrix ()
 {
   // internally we calculate with double but store the result into float matrices.
-  typedef double Scalar;
   projection_matrix_.setZero ();
   if (input_->height == 1 || input_->width == 1)
   {
@@ -345,20 +344,20 @@ pcl::search::OrganizedNeighbor<PointT>::estimateProjectionMatrix ()
     return;
   }
   
-  const unsigned ySkip = (input_->height >> pyramid_level_);
-  const unsigned xSkip = (input_->width >> pyramid_level_);
+  const unsigned ySkip = (std::max) (input_->height >> pyramid_level_, unsigned (1));
+  const unsigned xSkip = (std::max) (input_->width >> pyramid_level_, unsigned (1));
 
   std::vector<int> indices;
   indices.reserve (input_->size () >> (pyramid_level_ << 1));
   
-  for (unsigned yIdx = 0, idx = 0; yIdx < input_->height; yIdx += ySkip, idx += input_->width * (ySkip - 1))
+  for (unsigned yIdx = 0, idx = 0; yIdx < input_->height; yIdx += ySkip, idx += input_->width * ySkip)
   {
-    for (unsigned xIdx = 0; xIdx < input_->width; xIdx += xSkip, idx += xSkip)
+    for (unsigned xIdx = 0, idx2 = idx; xIdx < input_->width; xIdx += xSkip, idx2 += xSkip)
     {
-      if (!mask_ [idx])
+      if (!mask_ [idx2])
         continue;
 
-      indices.push_back (idx);
+      indices.push_back (idx2);
     }
   }
 

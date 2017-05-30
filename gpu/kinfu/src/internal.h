@@ -53,10 +53,10 @@ namespace pcl
     typedef DeviceArray2D<ushort> DepthMap;
     typedef float4 PointType;
 
-    //Tsdf fixed point divisor (if old format is enabled)
+    //TSDF fixed point divisor (if old format is enabled)
     const int DIVISOR = 32767;     // SHRT_MAX;
 
-	//should be multiple of 32
+	//Should be multiple of 32
     enum { VOLUME_X = 512, VOLUME_Y = 512, VOLUME_Z = 512 };
 
 	
@@ -174,7 +174,7 @@ namespace pcl
       * \param[in] v_src source normal map (current frame cloud) 
       * \param[in] coresp Corespondances
       * \param[out] gbuf temp buffer for GPU reduction
-      * \param[out] mbuf ouput GPU buffer for matrix computed
+      * \param[out] mbuf output GPU buffer for matrix computed
       * \param[out] matrixA_host A
       * \param[out] vectorB_host b
       */
@@ -196,7 +196,7 @@ namespace pcl
       * \param[in] distThres distance filtering threshold
       * \param[in] angleThres angle filtering threshold. Represents sine of angle between normals
       * \param[out] gbuf temp buffer for GPU reduction
-      * \param[out] mbuf ouput GPU buffer for matrix computed
+      * \param[out] mbuf output GPU buffer for matrix computed
       * \param[out] matrixA_host A
       * \param[out] vectorB_host b
       */
@@ -299,9 +299,9 @@ namespace pcl
 
 
     /** \brief Renders depth image from give pose
-      * \param[in] vmap inverse camera rotation
-      * \param[in] nmap camera translation
-      * \param[in] light vertex map
+      * \param[in] R_inv inverse camera rotation
+      * \param[in] t camera translation
+      * \param[in] vmap vertex map
       * \param[out] dst buffer where depth is generated
       */
     void
@@ -310,7 +310,7 @@ namespace pcl
      /** \brief Paints 3D view with color map
       * \param[in] colors rgb color frame from OpenNI   
       * \param[out] dst output 3D view
-      * \param[in] colors_wight weight for colors   
+      * \param[in] colors_weight weight for colors   
       */
     void 
     paint3DView(const PtrStep<uchar3>& colors, PtrStepSz<uchar3> dst, float colors_weight = 0.5f);
@@ -374,7 +374,7 @@ namespace pcl
     convert (const MapArr& vmap, DeviceArray2D<T>& output);
 
     /** \brief Merges pcl::PointXYZ and pcl::Normal to PointNormal
-      * \param[in] coud points cloud
+      * \param[in] cloud points cloud
       * \param[in] normals normals cloud
       * \param[out] output array of PointNomals.
       */

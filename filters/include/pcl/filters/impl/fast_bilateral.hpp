@@ -2,7 +2,6 @@
  * Software License Agreement (BSD License)
  *
  * Point Cloud Library (PCL) - www.pointclouds.org
- * Copyright (c) 2009-2012, Willow Garage, Inc.
  * Copyright (c) 2012-, Open Perception, Inc.
  * Copyright (c) 2004, Sylvain Paris and Francois Sillion
 
@@ -38,14 +37,10 @@
  * $Id$
  *
  */
+#ifndef PCL_FILTERS_IMPL_FAST_BILATERAL_HPP_
+#define PCL_FILTERS_IMPL_FAST_BILATERAL_HPP_
 
-#ifndef FAST_BILATERAL_HPP_
-#define FAST_BILATERAL_HPP_
-
-#include <pcl/filters/fast_bilateral.h>
 #include <pcl/common/io.h>
-
-
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT> void
@@ -58,17 +53,28 @@ pcl::FastBilateralFilter<PointT>::applyFilter (PointCloud &output)
   }
 
   copyPointCloud (*input_, output);
-  float base_max = std::numeric_limits<float>::min (),
+  float base_max = -std::numeric_limits<float>::max (),
         base_min = std::numeric_limits<float>::max ();
+  bool found_finite = false;
   for (size_t x = 0; x < output.width; ++x)
+  {
     for (size_t y = 0; y < output.height; ++y)
+    {
       if (pcl_isfinite (output (x, y).z))
       {
         if (base_max < output (x, y).z)
           base_max = output (x, y).z;
         if (base_min > output (x, y).z)
           base_min = output (x, y).z;
+        found_finite = true;
       }
+    }
+  }
+  if (!found_finite)
+  {
+    PCL_WARN ("[pcl::FastBilateralFilter] Given an empty cloud. Doing nothing.\n");
+    return;
+  }
 
   for (size_t x = 0; x < output.width; ++x)
       for (size_t y = 0; y < output.height; ++y)
@@ -130,7 +136,7 @@ pcl::FastBilateralFilter<PointT>::applyFilter (PointCloud &output)
 
   if (early_division_)
   {
-    for (std::vector<Eigen::Vector2f >::iterator d = data.begin (); d != data.end (); ++d)
+    for (std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> >::iterator d = data.begin (); d != data.end (); ++d)
       *d /= ((*d)[0] != 0) ? (*d)[1] : 1;
 
     for (size_t x = 0; x < input_->width; x++)
@@ -209,4 +215,4 @@ pcl::FastBilateralFilter<PointT>::Array3D::trilinear_interpolation (const float 
       x_alpha        * y_alpha        * z_alpha        * (*this)(xx_index, yy_index, zz_index);
 }
 
-#endif /* FAST_BILATERAL_HPP_ */
+#endif /* PCL_FILTERS_IMPL_FAST_BILATERAL_HPP_ */

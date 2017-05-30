@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -32,8 +33,6 @@
  *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
- *
- * $Id$
  *
  */
 
@@ -69,6 +68,8 @@ pcl::PFHEstimation<PointInT, PointNT, PointOutT>::computePointPFHSignature (
   float hist_incr = 100.0f / static_cast<float> (indices.size () * (indices.size () - 1) / 2);
 
   std::pair<int, int> key;
+  bool key_found = false;
+
   // Iterate over all the points in the neighborhood
   for (size_t i_idx = 0; i_idx < indices.size (); ++i_idx)
   {
@@ -95,15 +96,20 @@ pcl::PFHEstimation<PointInT, PointNT, PointOutT>::computePointPFHSignature (
         key = std::pair<int, int> (p1, p2);
 
         // Check to see if we already estimated this pair in the global hashmap
-        std::map<std::pair<int, int>, Eigen::Vector4f, std::less<std::pair<int, int> >, Eigen::aligned_allocator<Eigen::Vector4f> >::iterator fm_it = feature_map_.find (key);
+        std::map<std::pair<int, int>, Eigen::Vector4f, std::less<std::pair<int, int> >, Eigen::aligned_allocator<std::pair<const std::pair<int, int>, Eigen::Vector4f> > >::iterator fm_it = feature_map_.find (key);
         if (fm_it != feature_map_.end ())
+        {
           pfh_tuple_ = fm_it->second;
+          key_found = true;
+        }
         else
         {
           // Compute the pair NNi to NNj
           if (!computePairFeatures (cloud, normals, indices[i_idx], indices[j_idx],
                                     pfh_tuple_[0], pfh_tuple_[1], pfh_tuple_[2], pfh_tuple_[3]))
             continue;
+
+          key_found = false;
         }
       }
       else
@@ -134,7 +140,7 @@ pcl::PFHEstimation<PointInT, PointNT, PointOutT>::computePointPFHSignature (
       }
       pfh_histogram[h_index] += hist_incr;
 
-      if (use_cache_)
+      if (use_cache_ && !key_found)
       {
         // Save the value in the hashmap
         feature_map_[key] = pfh_tuple_;
@@ -144,8 +150,8 @@ pcl::PFHEstimation<PointInT, PointNT, PointOutT>::computePointPFHSignature (
         // Check to see if we need to remove an element due to exceeding max_size
         if (key_list_.size () > max_cache_size_)
         {
-          // Remove the last element.
-          feature_map_.erase (key_list_.back ());
+          // Remove the oldest element.
+          feature_map_.erase (key_list_.front ());
           key_list_.pop ();
         }
       }
@@ -214,68 +220,6 @@ pcl::PFHEstimation<PointInT, PointNT, PointOutT>::computeFeature (PointCloudOut 
       // Copy into the resultant cloud
       for (int d = 0; d < pfh_histogram_.size (); ++d)
         output.points[idx].histogram[d] = pfh_histogram_[d];
-    }
-  }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////
-template <typename PointInT, typename PointNT> void
-pcl::PFHEstimation<PointInT, PointNT, Eigen::MatrixXf>::computeFeatureEigen (pcl::PointCloud<Eigen::MatrixXf> &output)
-{
-  // Set up the output channels
-  output.channels["pfh"].name     = "pfh";
-  output.channels["pfh"].offset   = 0;
-  output.channels["pfh"].size     = 4;
-  output.channels["pfh"].count    = nr_subdiv_ * nr_subdiv_ * nr_subdiv_;
-  output.channels["pfh"].datatype = sensor_msgs::PointField::FLOAT32;
-
-  // Clear the feature map
-  feature_map_.clear ();
-  std::queue<std::pair<int, int> > empty;
-  std::swap (key_list_, empty);
-  pfh_histogram_.setZero (nr_subdiv_ * nr_subdiv_ * nr_subdiv_);
-
-  // Allocate enough space to hold the results
-  output.points.resize (indices_->size (), nr_subdiv_ * nr_subdiv_ * nr_subdiv_);
-  // \note This resize is irrelevant for a radiusSearch ().
-  std::vector<int> nn_indices (k_);
-  std::vector<float> nn_dists (k_);
-
-  output.is_dense = true;
-  // Save a few cycles by not checking every point for NaN/Inf values if the cloud is set to dense
-  if (input_->is_dense)
-  {
-    // Iterating over the entire index vector
-    for (size_t idx = 0; idx < indices_->size (); ++idx)
-    {
-      if (this->searchForNeighbors ((*indices_)[idx], search_parameter_, nn_indices, nn_dists) == 0)
-      {
-        output.points.row (idx).setConstant (std::numeric_limits<float>::quiet_NaN ());
-        output.is_dense = false;
-        continue;
-      }
-
-      // Estimate the PFH signature at each patch
-      computePointPFHSignature (*surface_, *normals_, nn_indices, nr_subdiv_, pfh_histogram_);
-      output.points.row (idx) = pfh_histogram_;
-    }
-  }
-  else
-  {
-    // Iterating over the entire index vector
-    for (size_t idx = 0; idx < indices_->size (); ++idx)
-    {
-      if (!isFinite ((*input_)[(*indices_)[idx]]) ||
-          this->searchForNeighbors ((*indices_)[idx], search_parameter_, nn_indices, nn_dists) == 0)
-      {
-        output.points.row (idx).setConstant (std::numeric_limits<float>::quiet_NaN ());
-        output.is_dense = false;
-        continue;
-      }
-
-      // Estimate the PFH signature at each patch
-      computePointPFHSignature (*surface_, *normals_, nn_indices, nr_subdiv_, pfh_histogram_);
-      output.points.row (idx) = pfh_histogram_;
     }
   }
 }

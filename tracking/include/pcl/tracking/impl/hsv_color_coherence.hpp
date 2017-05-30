@@ -39,15 +39,12 @@
 #ifndef PCL_TRACKING_IMPL_HSV_COLOR_COHERENCE_H_
 #define PCL_TRACKING_IMPL_HSV_COLOR_COHERENCE_H_
 
-#include <Eigen/Dense>
-
-#ifdef BUILD_Maintainer
-#  if defined __GNUC__
-#      pragma GCC system_header 
-#  elif defined _MSC_VER
-#    pragma warning(push, 1)
-#  endif
+#if defined __GNUC__
+#  pragma GCC system_header 
 #endif
+
+#include <pcl/tracking/hsv_color_coherence.h>
+#include <Eigen/Dense>
 
 namespace pcl
 {
@@ -159,11 +156,19 @@ namespace pcl
                target_h, target_s, target_v);
       // hue value is in 0 ~ 2pi, but circulated.
       const float _h_diff = fabsf (source_h - target_h);
+      // Also need to compute distance other way around circle - but need to check which is closer to 0
+      float _h_diff2;
+      if (source_h < target_h)
+        _h_diff2 = fabsf (1.0f + source_h - target_h); //Add 2pi to source, subtract target
+      else 
+        _h_diff2 = fabsf (1.0f + target_h - source_h); //Add 2pi to target, subtract source
+      
       float h_diff;
-      if (_h_diff > 0.5f)
-        h_diff = static_cast<float> (h_weight_) * (_h_diff - 0.5f) * (_h_diff - 0.5f);
-      else
+      //Now we need to choose the smaller distance
+      if (_h_diff < _h_diff2)
         h_diff = static_cast<float> (h_weight_) * _h_diff * _h_diff;
+      else
+        h_diff = static_cast<float> (h_weight_) * _h_diff2 * _h_diff2;
 
       const float s_diff = static_cast<float> (s_weight_) * (source_s - target_s) * (source_s - target_s);
       const float v_diff = static_cast<float> (v_weight_) * (source_v - target_v) * (source_v - target_v);
@@ -175,11 +180,5 @@ namespace pcl
 }
 
 #define PCL_INSTANTIATE_HSVColorCoherence(T) template class PCL_EXPORTS pcl::tracking::HSVColorCoherence<T>;
-
-#ifdef BUILD_Maintainer
-#  if defined _MSC_VER
-#    pragma warning(pop)
-#  endif
-#endif
 
 #endif

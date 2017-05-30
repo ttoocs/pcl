@@ -72,6 +72,9 @@ namespace pcl
   class BriskKeypoint2D: public Keypoint<PointInT, PointOutT>
   {
     public:
+      typedef boost::shared_ptr<BriskKeypoint2D<PointInT, PointOutT, IntensityT> > Ptr;
+      typedef boost::shared_ptr<const BriskKeypoint2D<PointInT, PointOutT, IntensityT> > ConstPtr;
+
       typedef typename Keypoint<PointInT, PointOutT>::PointCloudIn PointCloudIn;
       typedef typename Keypoint<PointInT, PointOutT>::PointCloudOut PointCloudOut;
       typedef typename Keypoint<PointInT, PointOutT>::KdTree KdTree;
@@ -86,6 +89,7 @@ namespace pcl
       BriskKeypoint2D (int octaves = 4, int threshold = 60)
         : threshold_ (threshold)
         , octaves_ (octaves)
+        , remove_invalid_3D_keypoints_ (false)
       {
         k_ = 1;
         name_ = "BriskKeypoint2D";
@@ -128,11 +132,91 @@ namespace pcl
         return (octaves_);
       }
 
+      /** \brief Specify whether we should do a 2nd pass through the list of keypoints
+        * found, and remove the ones that do not have a valid 3D (x-y-z) position 
+        * (i.e., are NaN or Inf).
+        * \param[in] remove set to true whether we want the invalid 3D keypoints removed
+        */
+      inline void
+      setRemoveInvalid3DKeypoints (bool remove)
+      {
+        remove_invalid_3D_keypoints_ = remove;
+      }
+
+      /** \brief Specify whether the keypoints that do not have a valid 3D position are
+        * kept (false) or removed (true).
+        */
+      inline bool
+      getRemoveInvalid3DKeypoints ()
+      {
+        return (remove_invalid_3D_keypoints_);
+      }
+
+      /////////////////////////////////////////////////////////////////////////
+      inline void
+      bilinearInterpolation (const PointCloudInConstPtr &cloud, 
+                             float x, float y,
+                             PointOutT &pt)
+      {
+        int u = int (x);
+        int v = int (y);
+        
+        pt.x = pt.y = pt.z = 0;
+
+        const PointInT &p1 = (*cloud)(u,   v);
+        const PointInT &p2 = (*cloud)(u+1, v);
+        const PointInT &p3 = (*cloud)(u,   v+1);
+        const PointInT &p4 = (*cloud)(u+1, v+1);
+        
+        float fx = x - float (u), fy = y - float (v);
+        float fx1 = 1.0f - fx, fy1 = 1.0f - fy;
+
+        float w1 = fx1 * fy1, w2 = fx * fy1, w3 = fx1 * fy, w4 = fx * fy;
+        float weight = 0;
+        
+        if (pcl::isFinite (p1))
+        {
+          pt.x += p1.x * w1;
+          pt.y += p1.y * w1;
+          pt.z += p1.z * w1;
+          weight += w1;
+        }
+        if (pcl::isFinite (p2))
+        {
+          pt.x += p2.x * w2;
+          pt.y += p2.y * w2;
+          pt.z += p2.z * w2;
+          weight += w2;
+        }
+        if (pcl::isFinite (p3))
+        {
+          pt.x += p3.x * w3;
+          pt.y += p3.y * w3;
+          pt.z += p3.z * w3;
+          weight += w3;
+        }
+        if (pcl::isFinite (p4))
+        {
+          pt.x += p4.x * w4;
+          pt.y += p4.y * w4;
+          pt.z += p4.z * w4;
+          weight += w4;
+        }
+
+        if (weight == 0)
+          pt.x = pt.y = pt.z = std::numeric_limits<float>::quiet_NaN ();
+        else
+        {
+          weight = 1.0f / weight;
+          pt.x *= weight; pt.y *= weight; pt.z *= weight;
+        }
+      }
+
     protected:
       /** \brief Initializes everything and checks whether input data is fine. */
       bool 
       initCompute ();
-      
+
       /** \brief Detects the keypoints. */
       void 
       detectKeypoints (PointCloudOut &output);
@@ -145,6 +229,11 @@ namespace pcl
       int threshold_;
 
       int octaves_;
+
+      /** \brief Specify whether the keypoints that do not have a valid 3D position are
+        * kept (false) or removed (true).
+        */
+      bool remove_invalid_3D_keypoints_;
   };
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,14 +284,14 @@ namespace pcl
             * \param[in] y the V coordinate of the pixel
             * \param[in] threshold the threshold to use for cutting the response
             */
-          inline uint8_t 
+          uint8_t 
           getAgastScore (int x, int y, uint8_t threshold);
           /** \brief Get the AGAST keypoint score for a given pixel using a threshold
             * \param[in] x the U coordinate of the pixel
             * \param[in] y the V coordinate of the pixel
             * \param[in] threshold the threshold to use for cutting the response
             */
-          inline uint8_t 
+          uint8_t 
           getAgastScore_5_8 (int x, int y, uint8_t threshold);
           /** \brief Get the AGAST keypoint score for a given pixel using a threshold
             * \param[in] xf the X coordinate of the pixel
@@ -210,7 +299,7 @@ namespace pcl
             * \param[in] threshold the threshold to use for cutting the response
             * \param[in] scale the scale
             */
-          inline uint8_t 
+          uint8_t 
           getAgastScore (float xf, float yf, uint8_t threshold, float scale = 1.0f);
 
           /** \brief Access gray values (smoothed/interpolated) 
@@ -221,33 +310,33 @@ namespace pcl
             * \param[in] yf the y coordinate
             * \param[in] scale the scale
             */
-          inline uint8_t 
+          uint8_t 
           getValue (const std::vector<unsigned char>& mat, 
                     int width, int height, float xf, float yf, float scale);
          
           /** \brief Get the image used. */
-          inline const std::vector<unsigned char>&
+          const std::vector<unsigned char>&
           getImage () const
           {
             return (img_);
           }
 
           /** \brief Get the width of the image used. */
-          inline int
+          int
           getImageWidth () const
           {
             return (img_width_);
           }
 
           /** \brief Get the height of the image used. */
-          inline int
+          int
           getImageHeight () const
           {
             return (img_height_);
           }
 
           /** \brief Get the scale used. */
-          inline float
+          float
           getScale () const
           {
             return (scale_);

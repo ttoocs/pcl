@@ -107,7 +107,11 @@ main (int argc, char** argv)
   if (copy_normals)
   {
     vtkSmartPointer<vtkPolyDataNormals> ng = vtkSmartPointer<vtkPolyDataNormals>::New ();
+#if VTK_MAJOR_VERSION < 6
     ng->SetInput (polydata);
+#else
+    ng->SetInputData (polydata);
+#endif
     ng->ComputePointNormalsOn ();
     ng->ComputeCellNormalsOff ();
     ng->Update ();
@@ -125,5 +129,7 @@ main (int argc, char** argv)
     // Convert to pcd and save
     saveCloud (argv[pcd_file_indices[0]], cloud);
   }
+
+  return (0);
 }
 

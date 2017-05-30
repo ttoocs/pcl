@@ -66,7 +66,7 @@ class OpenNIOrganizedEdgeDetection
       viewer->setSize (640, 480);
       viewer->addPointCloud<PointT> (cloud, "cloud");
       viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cloud");
-      viewer->addCoordinateSystem (0.2f);
+      viewer->addCoordinateSystem (0.2f, "global");
       viewer->initCameraParameters ();
       viewer->registerKeyboardCallback (&OpenNIOrganizedEdgeDetection::keyboard_callback, *this);
       viewer->resetCameraViewpoint ("cloud");
@@ -203,7 +203,7 @@ class OpenNIOrganizedEdgeDetection
           // Make gray point cloud
           for (size_t idx = 0; idx < cloud_.points.size (); idx++)
           {
-            uint8_t gray = uint8_t((cloud_.points[idx].r + cloud_.points[idx].g + cloud_.points[idx].b)/3);
+            pcl::uint8_t gray = pcl::uint8_t((cloud_.points[idx].r + cloud_.points[idx].g + cloud_.points[idx].b)/3);
             cloud_.points[idx].r = cloud_.points[idx].g = cloud_.points[idx].b = gray;
           }
 

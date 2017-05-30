@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -63,6 +63,7 @@ pcl::PassThrough<PointT>::applyFilter (PointCloud &output)
   }
   else
   {
+    output.is_dense = true;
     applyFilterIndices (indices);
     copyPointCloud (*input_, indices, output);
   }
@@ -98,7 +99,7 @@ pcl::PassThrough<PointT>::applyFilterIndices (std::vector<int> &indices)
   else
   {
     // Attempt to get the field name's index
-    std::vector<sensor_msgs::PointField> fields;
+    std::vector<pcl::PCLPointField> fields;
     int distance_idx = pcl::getFieldIndex (*input_, filter_field_name_, fields);
     if (distance_idx == -1)
     {
@@ -143,7 +144,7 @@ pcl::PassThrough<PointT>::applyFilterIndices (std::vector<int> &indices)
       }
 
       // Inside of the field limits are passed to removed indices if negative was set
-      if (negative_ && field_value > filter_limit_min_ && field_value < filter_limit_max_)
+      if (negative_ && field_value >= filter_limit_min_ && field_value <= filter_limit_max_)
       {
         if (extract_removed_indices_)
           (*removed_indices_)[rii++] = (*indices_)[iii];

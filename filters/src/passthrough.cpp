@@ -1,7 +1,10 @@
 /*
  * Software License Agreement (BSD License)
  *
+ *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
+ *
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -14,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -35,14 +38,11 @@
  *
  */
 
-#include <pcl/impl/instantiate.hpp>
-#include <pcl/point_types.h>
-#include <pcl/filters/passthrough.h>
 #include <pcl/filters/impl/passthrough.hpp>
 
 //////////////////////////////////////////////////////////////////////////
 void
-pcl::PassThrough<sensor_msgs::PointCloud2>::applyFilter (PointCloud2 &output)
+pcl::PassThrough<pcl::PCLPointCloud2>::applyFilter (PCLPointCloud2 &output)
 {
   if (!input_)
   {
@@ -117,7 +117,7 @@ pcl::PassThrough<sensor_msgs::PointCloud2>::applyFilter (PointCloud2 &output)
     }
 
     // @todo fixme
-    if (input_->fields[distance_idx].datatype != sensor_msgs::PointField::FLOAT32)
+    if (input_->fields[distance_idx].datatype != pcl::PCLPointField::FLOAT32)
     {
       PCL_ERROR ("[pcl::%s::downsample] Distance filtering requested, but distances are not float/double in the dataset! Only FLOAT32/FLOAT64 distances are supported right now.\n", getClassName ().c_str ());
       output.width = output.height = 0;
@@ -125,7 +125,7 @@ pcl::PassThrough<sensor_msgs::PointCloud2>::applyFilter (PointCloud2 &output)
       return;
     }
 
-    float badpt = std::numeric_limits<float>::quiet_NaN ();
+    float badpt = user_filter_value_;
     // Check whether we need to store filtered valued in place
     if (keep_organized_)
     {
@@ -278,6 +278,13 @@ pcl::PassThrough<sensor_msgs::PointCloud2>::applyFilter (PointCloud2 &output)
 
   removed_indices_->resize (nr_removed_p);
 }
+
+#ifndef PCL_NO_PRECOMPILE
+#include <pcl/impl/instantiate.hpp>
+#include <pcl/point_types.h>
+
 // Instantiations of specific point types
 PCL_INSTANTIATE(PassThrough, PCL_XYZ_POINT_TYPES)
+
+#endif    // PCL_NO_PRECOMPILE
 

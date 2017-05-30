@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -47,7 +48,7 @@
 #include <pcl/registration/boost.h>
 #include <pcl/registration/eigen.h>
 #include <pcl/registration/icp.h>
-#include <boost/graph/adjacency_list.hpp>
+#include <pcl/registration/boost_graph.h>
 
 namespace pcl
 {
@@ -72,11 +73,12 @@ namespace pcl
         {
           Vertex () : cloud () {}
           PointCloudPtr cloud;
+          Eigen::Affine3f transform;
         };
 
         /** \brief graph structure to hold the SLAM graph */
         typedef boost::adjacency_list<
-          boost::listS, boost::vecS, boost::undirectedS,
+          boost::listS, boost::eigen_vecS, boost::undirectedS,
           Vertex,
           boost::no_property>
         LoopGraph;
@@ -97,6 +99,9 @@ namespace pcl
           compute_loop_ (true),
           vd_ ()
         {};
+      
+        /** \brief Empty destructor */
+        virtual ~ELCH () {}
 
         /** \brief Add a new point cloud to the internal graph.
          * \param[in] cloud the new point cloud
@@ -192,7 +197,7 @@ namespace pcl
           compute_loop_ = false;
         }
 
-        /** \brief Computes now poses for all point clouds by closing the loop
+        /** \brief Computes new poses for all point clouds by closing the loop
          * between start and end point cloud. This will transform all given point
          * clouds for now!
          */

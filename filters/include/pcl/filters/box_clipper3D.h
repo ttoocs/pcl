@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -51,6 +51,11 @@ namespace pcl
   class BoxClipper3D : public Clipper3D<PointT>
   {
     public:
+
+      typedef boost::shared_ptr< BoxClipper3D<PointT> > Ptr;
+      typedef boost::shared_ptr< const BoxClipper3D<PointT> > ConstPtr;
+
+
       /**
         * \author Suat Gedikli <gedikli@willowgarage.com>
         * \brief Constructor taking an affine transformation matrix, which allows also shearing of the clipping area
@@ -92,10 +97,10 @@ namespace pcl
       clipLineSegment3D (PointT& from, PointT& to) const;
 
       virtual void
-      clipPlanarPolygon3D (std::vector<PointT>& polygon) const;
+      clipPlanarPolygon3D (std::vector<PointT, Eigen::aligned_allocator<PointT> >& polygon) const;
 
       virtual void
-      clipPlanarPolygon3D (const std::vector<PointT>& polygon, std::vector<PointT>& clipped_polygon) const;
+      clipPlanarPolygon3D (const std::vector<PointT, Eigen::aligned_allocator<PointT> >& polygon, std::vector<PointT, Eigen::aligned_allocator<PointT> >& clipped_polygon) const;
 
       virtual void
       clipPointCloud3D (const pcl::PointCloud<PointT> &cloud_in, std::vector<int>& clipped, const std::vector<int>& indices = std::vector<int> ()) const;
@@ -111,11 +116,12 @@ namespace pcl
         * \brief the affine transformation that is applied before clipping is done on the unit cube.
         */
       Eigen::Affine3f transformation_;
+
+    public:
+      EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 }
 
-#ifdef PCL_NO_PRECOMPILE
 #include <pcl/filters/impl/box_clipper3D.hpp>
-#endif
 
 #endif // PCL_BOX_CLIPPER3D_H_

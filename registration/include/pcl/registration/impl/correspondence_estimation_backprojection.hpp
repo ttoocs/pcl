@@ -39,7 +39,7 @@
 #ifndef PCL_REGISTRATION_IMPL_CORRESPONDENCE_ESTIMATION_BACK_PROJECTION_HPP_
 #define PCL_REGISTRATION_IMPL_CORRESPONDENCE_ESTIMATION_BACK_PROJECTION_HPP_
 
-#include <pcl/registration/correspondence_estimation_normal_shooting.h>
+#include <pcl/common/copy_point.h>
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointSource, typename PointTarget, typename NormalT, typename Scalar> bool
@@ -56,41 +56,12 @@ pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarg
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointSource, typename PointTarget, typename NormalT, typename Scalar> void
-pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarget, NormalT, Scalar>::rotatePointCloudNormals (
-    const pcl::PointCloud<NormalT> &cloud_in,
-    pcl::PointCloud<NormalT> &cloud_out,
-    const Eigen::Matrix<Scalar, 4, 4> &transform)
-{
-  if (&cloud_in != &cloud_out)
-  {
-    // Note: could be replaced by cloud_out = cloud_in
-    cloud_out.header   = cloud_in.header;
-    cloud_out.width    = cloud_in.width;
-    cloud_out.height   = cloud_in.height;
-    cloud_out.is_dense = cloud_in.is_dense;
-    cloud_out.points.reserve (cloud_out.points.size ());
-    cloud_out.points.assign (cloud_in.points.begin (), cloud_in.points.end ());
-  }
-
-  for (size_t i = 0; i < cloud_out.points.size (); ++i)
-  {
-    // Rotate normals (WARNING: transform.rotation () uses SVD internally!)
-    Eigen::Matrix<Scalar, 3, 1> nt (cloud_in[i].normal_x, cloud_in[i].normal_y, cloud_in[i].normal_z);
-    cloud_out[i].normal_x = static_cast<float> (transform (0, 0) * nt.coeffRef (0) + transform (0, 1) * nt.coeffRef (1) + transform (0, 2) * nt.coeffRef (2));
-    cloud_out[i].normal_y = static_cast<float> (transform (1, 0) * nt.coeffRef (0) + transform (1, 1) * nt.coeffRef (1) + transform (1, 2) * nt.coeffRef (2));
-    cloud_out[i].normal_z = static_cast<float> (transform (2, 0) * nt.coeffRef (0) + transform (2, 1) * nt.coeffRef (1) + transform (2, 2) * nt.coeffRef (2));
-  }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////
-template <typename PointSource, typename PointTarget, typename NormalT, typename Scalar> void
 pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarget, NormalT, Scalar>::determineCorrespondences (
     pcl::Correspondences &correspondences, double max_distance)
 {
   if (!initCompute ())
     return;
 
-  typedef typename pcl::traits::fieldList<PointTarget>::type FieldListTarget;
   correspondences.resize (indices_->size ());
 
   std::vector<int> nn_indices (k_);
@@ -121,7 +92,7 @@ pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarg
         float cos_angle = source_normals_->points[*idx_i].normal_x * target_normals_->points[nn_indices[j]].normal_x +
                           source_normals_->points[*idx_i].normal_y * target_normals_->points[nn_indices[j]].normal_y +
                           source_normals_->points[*idx_i].normal_z * target_normals_->points[nn_indices[j]].normal_z ;
-        float dist = nn_dists[min_index] * (2.0f - cos_angle * cos_angle);
+        float dist = nn_dists[j] * (2.0f - cos_angle * cos_angle);
         
         if (dist < min_dist)
         {
@@ -155,14 +126,12 @@ pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarg
       {
         PointSource pt_src;
         // Copy the source data to a target PointTarget format so we can search in the tree
-        pcl::for_each_type <FieldListTarget> (pcl::NdConcatenateFunctor <PointSource, PointTarget> (
-            input_->points[*idx_i], 
-            pt_src));
+        copyPoint (input_->points[*idx_i], pt_src);
 
         float cos_angle = source_normals_->points[*idx_i].normal_x * target_normals_->points[nn_indices[j]].normal_x +
                           source_normals_->points[*idx_i].normal_y * target_normals_->points[nn_indices[j]].normal_y +
                           source_normals_->points[*idx_i].normal_z * target_normals_->points[nn_indices[j]].normal_z ;
-        float dist = nn_dists[min_index] * (2.0f - cos_angle * cos_angle);
+        float dist = nn_dists[j] * (2.0f - cos_angle * cos_angle);
         
         if (dist < min_dist)
         {
@@ -191,17 +160,9 @@ pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarg
   if (!initCompute ())
     return;
 
-  typedef typename pcl::traits::fieldList<PointSource>::type FieldListSource;
-  typedef typename pcl::traits::fieldList<PointTarget>::type FieldListTarget;
-  typedef typename pcl::intersect<FieldListSource, FieldListTarget>::type FieldList;
-  
-  // setup tree for reciprocal search
-  pcl::KdTreeFLANN<PointSource> tree_reciprocal;
   // Set the internal point representation of choice
-  if (point_representation_)
-    tree_reciprocal.setPointRepresentation (point_representation_);
-
-  tree_reciprocal.setInputCloud (input_, indices_);
+  if(!initComputeReciprocal())
+    return;
 
   correspondences.resize (indices_->size ());
 
@@ -236,7 +197,7 @@ pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarg
         float cos_angle = source_normals_->points[*idx_i].normal_x * target_normals_->points[nn_indices[j]].normal_x +
                           source_normals_->points[*idx_i].normal_y * target_normals_->points[nn_indices[j]].normal_y +
                           source_normals_->points[*idx_i].normal_z * target_normals_->points[nn_indices[j]].normal_z ;
-        float dist = nn_dists[min_index] * (2.0f - cos_angle * cos_angle);
+        float dist = nn_dists[j] * (2.0f - cos_angle * cos_angle);
         
         if (dist < min_dist)
         {
@@ -249,7 +210,7 @@ pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarg
 
       // Check if the correspondence is reciprocal
       target_idx = nn_indices[min_index];
-      tree_reciprocal.nearestKSearch (target_->points[target_idx], 1, index_reciprocal, distance_reciprocal);
+      tree_reciprocal_->nearestKSearch (target_->points[target_idx], 1, index_reciprocal, distance_reciprocal);
 
       if (*idx_i != index_reciprocal[0])
         continue;
@@ -277,14 +238,12 @@ pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarg
       {
         PointSource pt_src;
         // Copy the source data to a target PointTarget format so we can search in the tree
-        pcl::for_each_type <FieldListTarget> (pcl::NdConcatenateFunctor <PointSource, PointTarget> (
-            input_->points[*idx_i], 
-            pt_src));
+        copyPoint (input_->points[*idx_i], pt_src);
 
         float cos_angle = source_normals_->points[*idx_i].normal_x * target_normals_->points[nn_indices[j]].normal_x +
                           source_normals_->points[*idx_i].normal_y * target_normals_->points[nn_indices[j]].normal_y +
                           source_normals_->points[*idx_i].normal_z * target_normals_->points[nn_indices[j]].normal_z ;
-        float dist = nn_dists[min_index] * (2.0f - cos_angle * cos_angle);
+        float dist = nn_dists[j] * (2.0f - cos_angle * cos_angle);
         
         if (dist < min_dist)
         {
@@ -297,7 +256,7 @@ pcl::registration::CorrespondenceEstimationBackProjection<PointSource, PointTarg
       
       // Check if the correspondence is reciprocal
       target_idx = nn_indices[min_index];
-      tree_reciprocal.nearestKSearch (target_->points[target_idx], 1, index_reciprocal, distance_reciprocal);
+      tree_reciprocal_->nearestKSearch (target_->points[target_idx], 1, index_reciprocal, distance_reciprocal);
 
       if (*idx_i != index_reciprocal[0])
         continue;

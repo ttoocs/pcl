@@ -41,7 +41,7 @@
 #ifndef PCL_SAMPLE_CONSENSUS_IMPL_SAC_MODEL_STICK_H_
 #define PCL_SAMPLE_CONSENSUS_IMPL_SAC_MODEL_STICK_H_
 
-#include <pcl/sample_consensus/sac_model_line.h>
+#include <pcl/sample_consensus/sac_model_stick.h>
 #include <pcl/common/centroid.h>
 #include <pcl/common/concatenate.h>
 
@@ -68,7 +68,7 @@ pcl::SampleConsensusModelStick<PointT>::computeModelCoefficients (
   // Need 2 samples
   if (samples.size () != 2)
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelStick::computeModelCoefficients] Invalid set of samples given (%zu)!\n", samples.size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelStick::computeModelCoefficients] Invalid set of samples given (%lu)!\n", samples.size ());
     return (false);
   }
 
@@ -233,7 +233,7 @@ pcl::SampleConsensusModelStick<PointT>::optimizeModelCoefficients (
   // Need at least 2 points to estimate a line
   if (inliers.size () <= 2)
   {
-    PCL_ERROR ("[pcl::SampleConsensusModelStick::optimizeModelCoefficients] Not enough inliers found to support a model (%zu)! Returning the same coefficients.\n", inliers.size ());
+    PCL_ERROR ("[pcl::SampleConsensusModelStick::optimizeModelCoefficients] Not enough inliers found to support a model (%lu)! Returning the same coefficients.\n", inliers.size ());
     optimized_coefficients = model_coefficients;
     return;
   }

@@ -60,6 +60,7 @@ namespace pcl
   class SampleConsensusModelCircle2D : public SampleConsensusModel<PointT>
   {
     public:
+      using SampleConsensusModel<PointT>::model_name_;
       using SampleConsensusModel<PointT>::input_;
       using SampleConsensusModel<PointT>::indices_;
       using SampleConsensusModel<PointT>::radius_min_;
@@ -74,18 +75,30 @@ namespace pcl
 
       /** \brief Constructor for base SampleConsensusModelCircle2D.
         * \param[in] cloud the input point cloud dataset
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelCircle2D (const PointCloudConstPtr &cloud) : 
-        SampleConsensusModel<PointT> (cloud), tmp_inliers_ () 
-      {};
+      SampleConsensusModelCircle2D (const PointCloudConstPtr &cloud, bool random = false) 
+        : SampleConsensusModel<PointT> (cloud, random), tmp_inliers_ () 
+      {
+        model_name_ = "SampleConsensusModelCircle2D";
+        sample_size_ = 3;
+        model_size_ = 3;
+      }
 
       /** \brief Constructor for base SampleConsensusModelCircle2D.
         * \param[in] cloud the input point cloud dataset
         * \param[in] indices a vector of point indices to be used from \a cloud
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelCircle2D (const PointCloudConstPtr &cloud, const std::vector<int> &indices) : 
-        SampleConsensusModel<PointT> (cloud, indices), tmp_inliers_ ()
-      {};
+      SampleConsensusModelCircle2D (const PointCloudConstPtr &cloud, 
+                                    const std::vector<int> &indices,
+                                    bool random = false)
+        : SampleConsensusModel<PointT> (cloud, indices, random), tmp_inliers_ ()
+      {
+        model_name_ = "SampleConsensusModelCircle2D";
+        sample_size_ = 3;
+        model_size_ = 3;
+      }
 
       /** \brief Copy constructor.
         * \param[in] source the model to copy into this
@@ -94,7 +107,11 @@ namespace pcl
         SampleConsensusModel<PointT> (), tmp_inliers_ () 
       {
         *this = source;
+        model_name_ = "SampleConsensusModelCircle2D";
       }
+      
+      /** \brief Empty destructor */
+      virtual ~SampleConsensusModelCircle2D () {}
 
       /** \brief Copy constructor.
         * \param[in] source the model to copy into this
@@ -145,7 +162,7 @@ namespace pcl
                            const double threshold);
 
        /** \brief Recompute the 2d circle coefficients using the given inlier set and return them to the user.
-        * @note: these are the coefficients of the 2d circle model after refinement (eg. after SVD)
+        * @note: these are the coefficients of the 2d circle model after refinement (e.g. after SVD)
         * \param[in] inliers the data inliers found as supporting the model
         * \param[in] model_coefficients the initial guess for the optimization
         * \param[out] optimized_coefficients the resultant recomputed coefficients after non-linear optimization
@@ -182,10 +199,13 @@ namespace pcl
       getModelType () const { return (SACMODEL_CIRCLE2D); }
 
     protected:
+      using SampleConsensusModel<PointT>::sample_size_;
+      using SampleConsensusModel<PointT>::model_size_;
+
       /** \brief Check whether a model is valid given the user constraints.
         * \param[in] model_coefficients the set of model coefficients
         */
-      bool 
+      virtual bool
       isModelValid (const Eigen::VectorXf &model_coefficients);
 
       /** \brief Check if a sample of indices results in a good sample of points indices.

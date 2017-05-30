@@ -14,7 +14,7 @@ query/test the model. The matched results in order from best to worst go from
 left to right starting at bottom left. For more information please see
 :ref:`vfh_recognition` and/or [VFH]_.
 
-.. image:: images/vfh_estimation/vfh_example.png
+.. image:: images/vfh_estimation/vfh_example.jpg
    :align: center
 
 Theoretical primer
@@ -32,7 +32,7 @@ viewpoint direction and the normals estimated at each point. To do this, we
 used the key idea of mixing the viewpoint direction directly into the relative
 normal angle calculation in the FPFH.
 
-.. image:: images/vfh_estimation/first_component.png
+.. image:: images/vfh_estimation/first_component.jpg
    :align: center
 
 The viewpoint component is computed by collecting a histogram of the angles
@@ -43,7 +43,7 @@ normal. The second component measures the relative pan, tilt and yaw angles as
 described in :ref:`fpfh_estimation` but now measured between the viewpoint
 direction at the central point and each of the normals on the surface.
 
-.. image:: images/vfh_estimation/second_component.png
+.. image:: images/vfh_estimation/second_component.jpg
    :align: center
 
 The new assembled feature is therefore called the Viewpoint Feature Histogram (VFH). The figure below presents this idea with the new feature consisting of two parts:
@@ -52,14 +52,14 @@ The new assembled feature is therefore called the Viewpoint Feature Histogram (V
 
   2. a surface shape component comprised of an extended FPFH.
 
-.. image:: images/vfh_estimation/vfh_histogram.png
+.. image:: images/vfh_estimation/vfh_histogram.jpg
    :align: center
 
 Estimating VFH features
 -----------------------
 
 The Viewpoint Feature Histogram is implemented in PCL as part of the
-`pcl_features <http://docs.pointclouds.org/trunk/group__features.html>`_
+`pcl_features <http://docs.pointclouds.org/trunk/a02944.html>`_
 library.
 
 The default VFH implementation uses 45 binning subdivisions for each of the
@@ -112,11 +112,11 @@ Visualizing VFH signatures
 --------------------------
 
 *libpcl_visualization* contains a special **PCLHistogramVisualization** class,
-which is also used by **pcd_viewer** to automaticall display the VFH
+which is also used by **pcl_viewer** to automaticall display the VFH
 descriptors as a histogram of float values. For more information, please see
 http://www.pointclouds.org/documentation/overview/visualization.php.
 
-.. image:: images/vfh_estimation/vfh_histogram_visualized.png
+.. image:: images/vfh_estimation/vfh_histogram_visualized.jpg
    :align: center
 
 .. [VFH] http://www.willowgarage.com/sites/default/files/Rusu10IROS.pdf

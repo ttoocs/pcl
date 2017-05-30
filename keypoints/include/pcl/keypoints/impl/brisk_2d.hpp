@@ -77,21 +77,32 @@ pcl::BriskKeypoint2D<PointInT, PointOutT, IntensityT>::detectKeypoints (PointClo
 
   pcl::keypoints::brisk::ScaleSpace brisk_scale_space (octaves_);
   brisk_scale_space.constructPyramid (image_data, width, height);
-  // Check if the template types are the same. If true, avoid a copy.
-  // The PointOutT MUST be registered using the POINT_CLOUD_REGISTER_POINT_STRUCT macro!
-  if (isSamePointType<PointOutT, pcl::PointWithScale> ())
-    brisk_scale_space.getKeypoints (threshold_, output.points);
-  else
-  {
-    pcl::PointCloud<pcl::PointWithScale> output_temp;
-    brisk_scale_space.getKeypoints (threshold_, output_temp.points);
-    pcl::copyPointCloud<pcl::PointWithScale, PointOutT> (output_temp, output);
-  }
+  pcl::PointCloud<pcl::PointWithScale> output_temp;
+  brisk_scale_space.getKeypoints (threshold_, output_temp.points);
+  pcl::copyPointCloud<pcl::PointWithScale, PointOutT> (output_temp, output);
 
   // we do not change the denseness
   output.width = int (output.points.size ());
   output.height = 1;
-  output.is_dense = true;
+  output.is_dense = false;      // set to false to be sure
+
+  // 2nd pass to remove the invalid set of 3D keypoints
+  if (remove_invalid_3D_keypoints_)
+  {
+    PointCloudOut output_clean;
+    for (size_t i = 0; i < output.size (); ++i)
+    {
+      PointOutT pt;
+      // Interpolate its position in 3D, as the "u" and "v" are subpixel accurate
+      bilinearInterpolation (input_, output[i].x, output[i].y, pt);
+
+      // Check if the point is finite
+      if (pcl::isFinite (pt))
+        output_clean.push_back (output[i]);
+    }
+    output = output_clean;
+    output.is_dense = true;      // set to true as there's no keypoint at an invalid XYZ
+  }
 }
 
 #endif 

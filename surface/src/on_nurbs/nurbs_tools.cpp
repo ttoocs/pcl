@@ -310,7 +310,7 @@ NurbsTools::computeBoundingBox (const ON_NurbsSurface &nurbs, Eigen::Vector3d &_
 }
 
 double
-NurbsTools::computeRScale (Eigen::Vector3d _min, Eigen::Vector3d _max)
+NurbsTools::computeRScale (const Eigen::Vector3d &_min, const Eigen::Vector3d &_max)
 {
   Eigen::Vector3d a = _max - _min;
 
@@ -352,6 +352,41 @@ NurbsTools::pca (const vector_vec3d &data, Eigen::Vector3d &mean, Eigen::Matrix3
       eigenvectors.col (2) = eigenvectors.col (0).cross (eigenvectors.col (1));
     else
       eigenvectors.col (i) = eigensolver.eigenvectors ().col (2 - i);
+  }
+}
+
+void
+NurbsTools::pca (const vector_vec2d &data, Eigen::Vector2d &mean, Eigen::Matrix2d &eigenvectors,
+                 Eigen::Vector2d &eigenvalues)
+{
+  if (data.empty ())
+  {
+    printf ("[NurbsTools::pca] Error, data is empty\n");
+    abort ();
+  }
+
+  mean = computeMean (data);
+
+  unsigned s = unsigned (data.size ());
+
+  Eigen::MatrixXd Q (2, s);
+
+  for (unsigned i = 0; i < s; i++)
+    Q.col (i) << (data[i] - mean);
+
+  Eigen::Matrix2d C = Q * Q.transpose ();
+
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver (C);
+  if (eigensolver.info () != Success)
+  {
+    printf ("[NurbsTools::pca] Can not find eigenvalues.\n");
+    abort ();
+  }
+
+  for (int i = 0; i < 2; ++i)
+  {
+    eigenvalues (i) = eigensolver.eigenvalues () (1 - i);
+    eigenvectors.col (i) = eigensolver.eigenvectors ().col (1 - i);
   }
 }
 

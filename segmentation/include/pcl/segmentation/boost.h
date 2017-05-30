@@ -17,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -45,13 +45,17 @@
 #pragma GCC system_header 
 #endif
 
+#ifndef Q_MOC_RUN
 // Marking all Boost headers as system headers to remove warnings
 #include <boost/version.hpp>
 #include <boost/make_shared.hpp>
-#if (BOOST_VERSION >= 104400) 
-#include <boost/graph/boykov_kolmogorov_max_flow.hpp>
-#endif 
 #include <boost/graph/adjacency_list.hpp>
-#include <boost/shared_ptr.hpp>
+#include <boost/multi_array.hpp>
+#include <boost/ptr_container/ptr_list.hpp>
+
+#if (BOOST_VERSION >= 104400) 
+  #include <boost/graph/boykov_kolmogorov_max_flow.hpp>
+#endif 
+#endif
 
 #endif    // PCL_SEGMENTATION_BOOST_H_

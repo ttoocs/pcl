@@ -139,52 +139,6 @@ namespace
     else
       positive_score = surface_change_score * (1.0f-distance_factor);
   }
-
-  void 
-  translateDirection180To360 (Eigen::Vector2f& direction_vector)
-  {
-    // The following code does the equivalent to this:
-    // Get the angle of the 2D direction (with positive x) alpha, and return the direction of 2*alpha
-    // We do this to create a normal angular wrap-around at -180,180 instead of the one at -90,90, 
-    // enabling us to calculate the average angle as the direction of the sum of all unit vectors.
-    // We use sin (2a)=2*sin (a)*cos (a) and cos (2a)=2cos^2 (a)-1 so that we needn't actually compute the angles,
-    // which would be expensive
-    float cos_a = direction_vector[0],
-          cos_2a = 2*cos_a*cos_a - 1.0f,
-          sin_a = direction_vector[1],
-          sin_2a = 2.0f*sin_a*cos_a;
-    direction_vector[0] = cos_2a;
-    direction_vector[1] = sin_2a;
-  }
-
-  void 
-  translateDirection360To180 (Eigen::Vector2f& direction_vector)
-  {
-    // Inverse of the above
-    float cos_2a = direction_vector[0],
-          cos_a = sqrtf (0.5f* (cos_2a+1.0f)),
-          sin_2a = direction_vector[1],
-          sin_a = sin_2a / (2.0f*cos_a);
-    direction_vector[0] = cos_a;
-    direction_vector[1] = sin_a;
-  }
-  
-  inline Eigen::Vector2f 
-  nkdGetDirectionVector (const Eigen::Vector3f& direction, const Eigen::Affine3f& rotation)
-  {
-    Eigen::Vector3f rotated_direction = rotation*direction;
-    Eigen::Vector2f direction_vector (rotated_direction[0], rotated_direction[1]);
-    direction_vector.normalize ();
-    if (direction_vector[0]<0.0f)
-      direction_vector *= -1.0f;
-    
-
-#   if USE_BEAM_AVERAGE
-      translateDirection180To360 (direction_vector);
-#   endif
-    
-    return direction_vector;
-  }
   
   inline float 
   nkdGetDirectionAngle (const Eigen::Vector3f& direction, const Eigen::Affine3f& rotation)
@@ -446,7 +400,9 @@ NarfKeypoint::calculateCompleteInterestImage ()
         float max_histogram_cell_value = 0.0f;
         for (int histogram_cell=0; histogram_cell<angle_histogram_size; ++histogram_cell)
           max_histogram_cell_value = (std::max) (max_histogram_cell_value, angle_histogram[histogram_cell]);
-        interest_value = (std::min) (interest_value+max_histogram_cell_value, 1.0f);
+        //std::cout << PVARN(max_histogram_cell_value);
+        interest_value = 0.5f*(interest_value+max_histogram_cell_value);
+        //std::cout << PVARN(interest_value);
       }
     }
     
@@ -624,7 +580,7 @@ NarfKeypoint::calculateSparseInterestImage ()
       float max_histogram_cell_value = 0.0f;
       for (int histogram_cell=0; histogram_cell<angle_histogram_size; ++histogram_cell)
         max_histogram_cell_value = (std::max) (max_histogram_cell_value, angle_histogram[histogram_cell]);
-      maximum_interest_value = (std::min) (maximum_interest_value+max_histogram_cell_value, 1.0f);
+      maximum_interest_value = 0.5f * (maximum_interest_value+max_histogram_cell_value);
     }
     
     // Every point in distance search_radius cannot have a higher value
@@ -726,6 +682,15 @@ NarfKeypoint::calculateSparseInterestImage ()
         }
         angle_change_value = sqrtf (angle_change_value);
         interest_value = negative_score * angle_change_value;
+        if (parameters_.add_points_on_straight_edges)
+        {
+          float max_histogram_cell_value = 0.0f;
+          for (int histogram_cell=0; histogram_cell<angle_histogram_size; ++histogram_cell)
+            max_histogram_cell_value = (std::max) (max_histogram_cell_value, angle_histogram[histogram_cell]);
+          //std::cout << PVARN(max_histogram_cell_value);
+          interest_value = 0.5f*(interest_value+max_histogram_cell_value);
+          //std::cout << PVARN(interest_value);
+        }
       }
     }
   }
@@ -759,7 +724,7 @@ NarfKeypoint::calculateInterestPoints ()
   typedef double RealForPolynomial;
   PolynomialCalculationsT<RealForPolynomial> polynomial_calculations;
   BivariatePolynomialT<RealForPolynomial> polynomial (2);
-  std::vector<Eigen::Matrix<RealForPolynomial, 3, 1> > sample_points;
+  std::vector<Eigen::Matrix<RealForPolynomial, 3, 1>, Eigen::aligned_allocator<Eigen::Matrix<RealForPolynomial, 3, 1> > > sample_points;
   std::vector<RealForPolynomial> x_values, y_values;
   std::vector<int> types;
   std::vector<bool> invalid_beams, old_invalid_beams;
@@ -771,7 +736,7 @@ NarfKeypoint::calculateInterestPoints ()
     {
       int index = y*width + x;
       float interest_value = interest_image_[index];
-      if (interest_value < parameters_.min_interest_value)
+      if (!range_image.isValid (index) || interest_value < parameters_.min_interest_value)
         continue;
       const PointWithRange& point = range_image.getPoint (index);
       bool is_maximum = true;
@@ -864,7 +829,6 @@ NarfKeypoint::calculateInterestPoints ()
       InterestPoint interest_point;
       interest_point.getVector3fMap () = keypoint_3d.getVector3fMap ();
       interest_point.strength = interest_value;
-      interest_point.strength = interest_value;
       tmp_interest_points.push_back (interest_point);
     }
   }
@@ -893,6 +857,7 @@ NarfKeypoint::calculateInterestPoints ()
       continue;
     interest_points_->points.push_back (interest_point);
     int image_x, image_y;
+    //std::cout << interest_point.x<<","<<interest_point.y<<","<<interest_point.z<<", "<<std::flush;
     range_image.getImagePoint (interest_point.getVector3fMap (), image_x, image_y);
     if (range_image.isValid (image_x, image_y))
       is_interest_point_image_[image_y*width + image_x] = true;

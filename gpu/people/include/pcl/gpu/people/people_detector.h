@@ -50,6 +50,8 @@
 //#include <opencv2/core/core.hpp>
 
 #include <pcl/gpu/people/bodyparts_detector.h>
+#include <pcl/gpu/people/face_detector.h>
+#include <pcl/gpu/people/organized_plane_detector.h>
 #include <pcl/gpu/people/probability_processor.h>
 
 namespace pcl
@@ -59,11 +61,6 @@ namespace pcl
     namespace people
     {
       /*
-      struct FaceDetector
-      {
-          typedef boost::shared_ptr<FaceDetector> Ptr;
-      };
-
       struct OtherDetector
       {
           typedef boost::shared_ptr<OtherDetector> Ptr;
@@ -74,15 +71,20 @@ namespace pcl
         public:
           typedef boost::shared_ptr<PeopleDetector> Ptr;                              
 
-          typedef pcl::PointXYZ PointType;
-          typedef DeviceArray2D<unsigned short> Depth;
-          typedef DeviceArray2D<pcl::RGB> Image;
+          typedef pcl::PointXYZRGBA               PointTC;
+          typedef pcl::PointXYZ                   PointT;
+          typedef DeviceArray2D<unsigned short>   Depth;
+          typedef DeviceArray2D<pcl::RGB>         Image;
 
-          RDFBodyPartsDetector::Ptr rdf_detector_;
-          //FaceDetector::Ptr         face_detector_;
-          //OtherDetector::Ptr        other_detector_;
-          PersonAttribs::Ptr        person_attribs_;
-          ProbabilityProcessor::Ptr probability_processor_;
+          // ALL THE DETECTOR OBJECTS
+          RDFBodyPartsDetector::Ptr     rdf_detector_;
+          OrganizedPlaneDetector::Ptr   org_plane_detector_;
+          FaceDetector::Ptr             face_detector_;
+          //OtherDetector::Ptr          other_detector_;
+
+          // ALL THE OTHER PEOPLE STUFF
+          PersonAttribs::Ptr            person_attribs_;
+          ProbabilityProcessor::Ptr     probability_processor_;
 
           /** \brief Class constructor. */
           PeopleDetector ();
@@ -96,10 +98,10 @@ namespace pcl
 
           /** \brief Possible will be removed because of extra overheads */
           int
-          process (const PointCloud<PointXYZRGB>::ConstPtr &cloud);
+          process (const PointCloud<PointTC>::ConstPtr &cloud);
 
           int
-          processProb (const PointCloud<PointXYZRGB>::ConstPtr &cloud);
+          processProb (const PointCloud<PointTC>::ConstPtr &cloud);
 
           int
           process (const Depth& depth, const Image& rgba);
@@ -121,32 +123,32 @@ namespace pcl
           /** \brief Class getName method. */
           inline const std::string getClassName () const { return "PeopleDetector"; }
 
-        public:       
           typedef DeviceArray2D<unsigned char> Labels;
           typedef DeviceArray2D<unsigned char> Mask;
           typedef DeviceArray2D<float> Hue;
 
           /** \brief indicates first time callback (allows for tracking features to start from second frame) **/
-          bool first_iteration;
+          bool first_iteration_;
           float fx_, fy_, cx_, cy_;
           unsigned int  delta_hue_tolerance_;
                    
-          DeviceArray<unsigned char> kernelRect5x5_;
+          DeviceArray<unsigned char>  kernelRect5x5_;
 
-          PointCloud<PointType> cloud_host_;
-          PointCloud<float> hue_host_;
-          PointCloud<unsigned short> depth_host_;
-          PointCloud<unsigned char> flowermat_host_;
+          PointCloud<PointT>          cloud_host_;
+          PointCloud<PointTC>         cloud_host_color_;
+          PointCloud<float>           hue_host_;
+          PointCloud<unsigned short>  depth_host_;
+          PointCloud<unsigned char>   flowermat_host_;
                     
-          DeviceArray2D<PointType> cloud_device_;
+          DeviceArray2D<PointT>       cloud_device_;
 
-          Hue hue_device_;
+          Hue                         hue_device_;
 
-          Depth depth_device1_;
-          Depth depth_device2_;
+          Depth                       depth_device1_;
+          Depth                       depth_device2_;
           
-          Mask fg_mask_;
-          Mask fg_mask_grown_;
+          Mask                        fg_mask_;
+          Mask                        fg_mask_grown_;
 
           int
           process ();
@@ -161,7 +163,7 @@ namespace pcl
           allocate_buffers (int rows = 480, int cols = 640);
 
           void 
-          shs5 (const pcl::PointCloud<pcl::PointXYZ> &cloud, const std::vector<int>& indices, unsigned char *mask);
+          shs5 (const pcl::PointCloud<PointT> &cloud, const std::vector<int>& indices, unsigned char *mask);
 
           //!!! only for debug purposes TODO: remove this. 
           friend class PeoplePCDApp;

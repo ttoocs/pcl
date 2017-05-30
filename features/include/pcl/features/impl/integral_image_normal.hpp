@@ -1,7 +1,10 @@
 /*
  * Software License Agreement (BSD License)
  *
+ *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
+ *
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -14,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -36,21 +39,19 @@
 #ifndef PCL_FEATURES_INTEGRALIMAGE_BASED_IMPL_NORMAL_ESTIMATOR_H_
 #define PCL_FEATURES_INTEGRALIMAGE_BASED_IMPL_NORMAL_ESTIMATOR_H_
 
-#include <pcl/features/boost.h>
 #include <pcl/features/integral_image_normal.h>
-#include <pcl/features/normal_3d.h>
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT>
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::~IntegralImageNormalEstimation ()
 {
-  if (diff_x_ != NULL) delete diff_x_;
-  if (diff_y_ != NULL) delete diff_y_;
-  if (depth_data_ != NULL) delete depth_data_;
-  if (distance_map_ != NULL) delete distance_map_;
+  if (diff_x_ != NULL) delete[] diff_x_;
+  if (diff_y_ != NULL) delete[] diff_y_;
+  if (depth_data_ != NULL) delete[] depth_data_;
+  if (distance_map_ != NULL) delete[] distance_map_;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initData ()
 {
@@ -67,10 +68,10 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initData ()
                          "[pcl::IntegralImageNormalEstimation::initData] unknown normal estimation method.");
 
   // compute derivatives
-  if (diff_x_ != NULL) delete diff_x_;
-  if (diff_y_ != NULL) delete diff_y_;
-  if (depth_data_ != NULL) delete depth_data_;
-  if (distance_map_ != NULL) delete distance_map_;
+  if (diff_x_ != NULL) delete[] diff_x_;
+  if (diff_y_ != NULL) delete[] diff_y_;
+  if (depth_data_ != NULL) delete[] depth_data_;
+  if (distance_map_ != NULL) delete[] distance_map_;
   diff_x_ = NULL;
   diff_y_ = NULL;
   depth_data_ = NULL;
@@ -87,7 +88,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initData ()
 }
 
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::setRectSize (const int width, const int height)
 {
@@ -99,7 +100,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::setRectSize (const int 
   rect_height_4_   = height/4;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initSimple3DGradientMethod ()
 {
@@ -117,7 +118,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initSimple3DGradientMet
   init_covariance_matrix_ = init_average_3d_gradient_ = init_depth_change_ = false;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initCovarianceMatrixMethod ()
 {
@@ -135,7 +136,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initCovarianceMatrixMet
   init_average_3d_gradient_ = init_depth_change_ = init_simple_3d_gradient_ = false;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initAverage3DGradientMethod ()
 {
@@ -184,7 +185,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initAverage3DGradientMe
   init_average_3d_gradient_ = true;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initAverageDepthChangeMethod ()
 {
@@ -201,7 +202,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initAverageDepthChangeM
   init_covariance_matrix_ = init_average_3d_gradient_ = init_simple_3d_gradient_ = false;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormal (
     const int pos_x, const int pos_y, const unsigned point_index, PointOutT &normal)
@@ -238,8 +239,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormal (
     float eigen_value;
     Eigen::Vector3f eigen_vector;
     pcl::eigen33 (covariance_matrix, eigen_value, eigen_vector);
-    //pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, eigen_vector);
-    pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, eigen_vector[0], eigen_vector[1], eigen_vector[2]);
+    flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, eigen_vector[0], eigen_vector[1], eigen_vector[2]);
     normal.getNormalVector3fMap () = eigen_vector;
 
     // Compute the curvature surface change
@@ -280,8 +280,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormal (
     float ny = static_cast<float> (normal_vector [1]);
     float nz = static_cast<float> (normal_vector [2]);
 
-    //pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, normal_vector);
-    pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, nx, ny, nz);
+    flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, nx, ny, nz);
 
     normal.normal_x = nx;
     normal.normal_y = ny;
@@ -293,17 +292,6 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormal (
   {
     if (!init_depth_change_)
       initAverageDepthChangeMethod ();
-
-//    unsigned count = integral_image_depth_.getFiniteElementsCount (pos_x - rect_width_2_, pos_y - rect_height_2_, rect_width_, rect_height_);
-//    if (count == 0)
-//    {
-//      normal.normal_x = normal.normal_y = normal.normal_z = normal.curvature = bad_point;
-//      return;
-//    }
-//    const float mean_L_z = integral_image_depth_.getFirstOrderSum (pos_x - rect_width_2_ - 1, pos_y - rect_height_2_    , rect_width_ - 1, rect_height_ - 1) / ((rect_width_-1)*(rect_height_-1));
-//    const float mean_R_z = integral_image_depth_.getFirstOrderSum (pos_x - rect_width_2_ + 1, pos_y - rect_height_2_    , rect_width_ - 1, rect_height_ - 1) / ((rect_width_-1)*(rect_height_-1));
-//    const float mean_U_z = integral_image_depth_.getFirstOrderSum (pos_x - rect_width_2_    , pos_y - rect_height_2_ - 1, rect_width_ - 1, rect_height_ - 1) / ((rect_width_-1)*(rect_height_-1));
-//    const float mean_D_z = integral_image_depth_.getFirstOrderSum (pos_x - rect_width_2_    , pos_y - rect_height_2_ + 1, rect_width_ - 1, rect_height_ - 1) / ((rect_width_-1)*(rect_height_-1));
 
     // width and height are at least 3 x 3
     unsigned count_L_z = integral_image_depth_.getFiniteElementsCount (pos_x - rect_width_2_, pos_y - rect_height_4_, rect_width_2_, rect_height_2_);
@@ -348,7 +336,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormal (
       return;
     }
 
-    pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, normal_x, normal_y, normal_z);
+    flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, normal_x, normal_y, normal_z);
     
     const float scale = 1.0f / sqrtf (normal_length);
 
@@ -385,8 +373,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormal (
     float ny = static_cast<float> (normal_vector [1]);
     float nz = static_cast<float> (normal_vector [2]);
 
-    //pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, normal_vector);
-    pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, nx, ny, nz);
+    flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, nx, ny, nz);
     
     normal.normal_x = nx;
     normal.normal_y = ny;
@@ -400,41 +387,13 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormal (
   return;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename T>
 void
 sumArea (int start_x, int start_y, int end_x, int end_y, const int width, const int height,
   const boost::function<T(unsigned, unsigned, unsigned, unsigned)> &f, 
   T & result)
 {
-  //if (start_x < 0 && end_x < 0)
-  //{
-  //  int tmp = -end_x;
-  //  end_x = -start_x;
-  //  start_x = tmp;
-  //}
-
-  //if (start_y < 0 && end_y < 0)
-  //{
-  //  int tmp = -end_y;
-  //  end_y = -start_y;
-  //  start_y = tmp;
-  //}
-
-  //if (start_x >= width && end_x >= width)
-  //{
-  //  int tmp = width-(end_x-(width-1));
-  //  end_x = width-(start_x-(width-1));
-  //  start_x = tmp;
-  //}
-
-  //if (start_y >= height && end_y >= height)
-  //{
-  //  int tmp = height-(end_y-(height-1));
-  //  end_y = height-(start_y-(height-1));
-  //  start_y = tmp;
-  //}
-
   if (start_x < 0)
   {
     if (start_y < 0)
@@ -498,7 +457,7 @@ sumArea (int start_x, int start_y, int end_x, int end_y, const int width, const 
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirror (
     const int pos_x, const int pos_y, const unsigned point_index, PointOutT &normal)
@@ -508,7 +467,8 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
   const int width = input_->width;
   const int height = input_->height;
 
-  if (normal_estimation_method_ == COVARIANCE_MATRIX) // ==============================================================
+  // ==============================================================
+  if (normal_estimation_method_ == COVARIANCE_MATRIX) 
   {
     if (!init_covariance_matrix_)
       initCovarianceMatrixMethod ();
@@ -564,8 +524,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
     float eigen_value;
     Eigen::Vector3f eigen_vector;
     pcl::eigen33 (covariance_matrix, eigen_value, eigen_vector);
-    //pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, eigen_vector);
-    pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, eigen_vector[0], eigen_vector[1], eigen_vector[2]);
+    flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, eigen_vector[0], eigen_vector[1], eigen_vector[2]);
     normal.getNormalVector3fMap () = eigen_vector;
 
     // Compute the curvature surface change
@@ -576,7 +535,8 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
 
     return;
   }
-  else if (normal_estimation_method_ == AVERAGE_3D_GRADIENT) // =======================================================
+  // =======================================================
+  else if (normal_estimation_method_ == AVERAGE_3D_GRADIENT) 
   {
     if (!init_average_3d_gradient_)
       initAverage3DGradientMethod ();
@@ -598,9 +558,6 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
       normal.normal_x = normal.normal_y = normal.normal_z = normal.curvature = bad_point;
       return;
     }
-    //Eigen::Vector3d gradient_x = integral_image_DX_.getFirstOrderSum (pos_x - rect_width_2_, pos_y - rect_height_2_, rect_width_, rect_height_);
-    //Eigen::Vector3d gradient_y = integral_image_DY_.getFirstOrderSum (pos_x - rect_width_2_, pos_y - rect_height_2_, rect_width_, rect_height_);
-
     Eigen::Vector3d gradient_x (0, 0, 0);
     Eigen::Vector3d gradient_y (0, 0, 0);
 
@@ -623,8 +580,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
     float ny = static_cast<float> (normal_vector [1]);
     float nz = static_cast<float> (normal_vector [2]);
 
-    //pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, normal_vector);
-    pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, nx, ny, nz);
+    flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, nx, ny, nz);
 
     normal.normal_x = nx;
     normal.normal_y = ny;
@@ -632,15 +588,11 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
     normal.curvature = bad_point;
     return;
   }
-  else if (normal_estimation_method_ == AVERAGE_DEPTH_CHANGE) // ======================================================
+  // ======================================================
+  else if (normal_estimation_method_ == AVERAGE_DEPTH_CHANGE) 
   {
     if (!init_depth_change_)
       initAverageDepthChangeMethod ();
-
-    //const size_t point_index_L = point_index - rect_width_4_ - 1;
-    //const size_t point_index_R = point_index + rect_width_4_ + 1;
-    //const size_t point_index_U = point_index - rect_height_4_ * width - 1;
-    //const size_t point_index_D = point_index + rect_height_4_ * width + 1;
 
     int point_index_L_x = pos_x - rect_width_4_ - 1;
     int point_index_L_y = pos_y;
@@ -665,18 +617,6 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
     if (point_index_D_y >= height)
       point_index_D_y = height-(point_index_D_y-(height-1));
 
-    //const size_t min_x = pos_x - rect_width_4_ - 1;
-    //const size_t max_x = pos_x + rect_width_4_ + 1;
-    //const size_t min_y = pos_y - rect_height_4_ - 1;
-    //const size_t max_y = pos_y + rect_height_4_ + 1;
-
-    //if (min_x >= width || max_x >= width || min_y >= height || max_y >= height)
-    //{
-    //  normal.normal_x = normal.normal_y = normal.normal_z = normal.curvature = bad_point;
-    //  return;
-    //}
-
-
     const int start_x_L = pos_x - rect_width_2_;
     const int start_y_L = pos_y - rect_height_4_;
     const int end_x_L = start_x_L + rect_width_2_;
@@ -697,12 +637,6 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
     const int end_x_D = start_x_D + rect_width_2_;
     const int end_y_D = start_y_D + rect_height_2_;
 
-    // width and height are at least 3 x 3
-    //unsigned count_L_z = integral_image_depth_.getFiniteElementsCount (pos_x - rect_width_2_, pos_y - rect_height_4_, rect_width_2_, rect_height_2_);
-    //unsigned count_R_z = integral_image_depth_.getFiniteElementsCount (pos_x + 1            , pos_y - rect_height_4_, rect_width_2_, rect_height_2_);
-    //unsigned count_U_z = integral_image_depth_.getFiniteElementsCount (pos_x - rect_width_4_, pos_y - rect_height_2_, rect_width_2_, rect_height_2_);
-    //unsigned count_D_z = integral_image_depth_.getFiniteElementsCount (pos_x - rect_width_4_, pos_y + 1             , rect_width_2_, rect_height_2_);
-
     unsigned count_L_z = 0;
     unsigned count_R_z = 0;
     unsigned count_U_z = 0;
@@ -718,11 +652,6 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
       normal.normal_x = normal.normal_y = normal.normal_z = normal.curvature = bad_point;
       return;
     }
-
-    //float mean_L_z = static_cast<float> (integral_image_depth_.getFirstOrderSum (pos_x - rect_width_2_, pos_y - rect_height_4_, rect_width_2_, rect_height_2_) / count_L_z);
-    //float mean_R_z = static_cast<float> (integral_image_depth_.getFirstOrderSum (pos_x + 1            , pos_y - rect_height_4_, rect_width_2_, rect_height_2_) / count_R_z);
-    //float mean_U_z = static_cast<float> (integral_image_depth_.getFirstOrderSum (pos_x - rect_width_4_, pos_y - rect_height_2_, rect_width_2_, rect_height_2_) / count_U_z);
-    //float mean_D_z = static_cast<float> (integral_image_depth_.getFirstOrderSum (pos_x - rect_width_4_, pos_y + 1             , rect_width_2_, rect_height_2_) / count_D_z);
 
     float mean_L_z = 0;
     float mean_R_z = 0;
@@ -740,10 +669,6 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
     mean_D_z /= float (count_D_z);
 
 
-    //PointInT pointL = input_->points[point_index - rect_width_4_ - 1];
-    //PointInT pointR = input_->points[point_index + rect_width_4_ + 1];
-    //PointInT pointU = input_->points[point_index - rect_height_4_ * input_->width - 1];
-    //PointInT pointD = input_->points[point_index + rect_height_4_ * input_->width + 1];
     PointInT pointL = input_->points[point_index_L_y*width + point_index_L_x];
     PointInT pointR = input_->points[point_index_R_y*width + point_index_R_x];
     PointInT pointU = input_->points[point_index_U_y*width + point_index_U_x];
@@ -770,7 +695,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
       return;
     }
 
-    pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, normal_x, normal_y, normal_z);
+    flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, normal_x, normal_y, normal_z);
     
     const float scale = 1.0f / sqrtf (normal_length);
 
@@ -781,61 +706,10 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
 
     return;
   }
-  else if (normal_estimation_method_ == SIMPLE_3D_GRADIENT) // ========================================================
+  // ========================================================
+  else if (normal_estimation_method_ == SIMPLE_3D_GRADIENT) 
   {
     PCL_THROW_EXCEPTION (PCLException, "BORDER_POLICY_MIRROR not supported for normal estimation method SIMPLE_3D_GRADIENT");
-
-    //if (!init_simple_3d_gradient_)
-    //  initSimple3DGradientMethod ();
-
-    //// this method does not work if lots of NaNs are in the neighborhood of the point
-    ////Eigen::Vector3d gradient_x = integral_image_XYZ_.getFirstOrderSum (pos_x + rect_width_2_, pos_y - rect_height_2_, 1, rect_height_) -
-    ////                             integral_image_XYZ_.getFirstOrderSum (pos_x - rect_width_2_, pos_y - rect_height_2_, 1, rect_height_);
-
-    ////Eigen::Vector3d gradient_y = integral_image_XYZ_.getFirstOrderSum (pos_x - rect_width_2_, pos_y + rect_height_2_, rect_width_, 1) -
-    ////                             integral_image_XYZ_.getFirstOrderSum (pos_x - rect_width_2_, pos_y - rect_height_2_, rect_width_, 1);
-
-
-    //const int start_x = pos_x - rect_width_2_;
-    //const int start_y = pos_y - rect_height_2_;
-    //const int end_x = start_x + rect_width_;
-    //const int end_y = start_y + rect_height_;
-
-    //Eigen::Vector3d gradient_x (0, 0, 0);
-    //Eigen::Vector3d gradient_y (0, 0, 0);
-
-    //sumArea<typename IntegralImage2D<float, 3>::ElementType>(pos_x - rect_width_2_,  pos_y - rect_height_2_,  pos_x - rect_width_2_ + 1,  pos_y - rect_height_2_ + rect_height_, width, height, boost::bind(&IntegralImage2D<float, 3>::getFirstOrderSumSE, &integral_image_XYZ_, _1, _2, _3, _4), gradient_x);
-    //gradient_x *= -1;
-    //sumArea<typename IntegralImage2D<float, 3>::ElementType>(pos_x + rect_width_2_,  pos_y - rect_height_2_,  pos_x + rect_width_2_ + 1,  pos_y - rect_height_2_ + rect_height_, width, height, boost::bind(&IntegralImage2D<float, 3>::getFirstOrderSumSE, &integral_image_XYZ_, _1, _2, _3, _4), gradient_x);
-
-    //sumArea<typename IntegralImage2D<float, 3>::ElementType>(pos_x - rect_width_2_,  pos_y - rect_height_2_,  pos_x - rect_width_2_ + rect_width_,  pos_y - rect_height_2_ + 1,  width, height, boost::bind(&IntegralImage2D<float, 3>::getFirstOrderSumSE, &integral_image_XYZ_, _1, _2, _3, _4), gradient_y);
-    //gradient_y *= -1;
-    //sumArea<typename IntegralImage2D<float, 3>::ElementType>(pos_x - rect_width_2_,  pos_y + rect_height_2_,  pos_x - rect_width_2_ + rect_width_,  pos_y + rect_height_2_ + 1,  width, height, boost::bind(&IntegralImage2D<float, 3>::getFirstOrderSumSE, &integral_image_XYZ_, _1, _2, _3, _4), gradient_y);
-
-
-    //Eigen::Vector3d normal_vector = gradient_y.cross (gradient_x);
-    //double normal_length = normal_vector.squaredNorm ();
-    //if (normal_length == 0.0f)
-    //{
-    //  normal.getNormalVector3fMap ().setConstant (bad_point);
-    //  normal.curvature = bad_point;
-    //  return;
-    //}
-
-    //normal_vector /= sqrt (normal_length);
-
-    //float nx = static_cast<float> (normal_vector [0]);
-    //float ny = static_cast<float> (normal_vector [1]);
-    //float nz = static_cast<float> (normal_vector [2]);
-
-    ////pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, normal_vector);
-    //pcl::flipNormalTowardsViewpoint (input_->points[point_index], vpx_, vpy_, vpz_, nx, ny, nz);
-    //
-    //normal.normal_x = nx;
-    //normal.normal_y = ny;
-    //normal.normal_z = nz;
-    //normal.curvature = bad_point;
-    //return;
   }
 
   normal.getNormalVector3fMap ().setConstant (bad_point);
@@ -843,7 +717,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computePointNormalMirro
   return;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> void
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computeFeature (PointCloudOut &output)
 {
@@ -887,7 +761,7 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computeFeature (PointCl
 
   // compute distance map
   //float *distanceMap = new float[input_->points.size ()];
-  if (distance_map_ != NULL) delete distance_map_;
+  if (distance_map_ != NULL) delete[] distance_map_;
   distance_map_ = new float[input_->points.size ()];
   float *distanceMap = distance_map_;
   for (size_t index = 0; index < input_->points.size (); ++index)
@@ -941,6 +815,22 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computeFeature (PointCl
     next_row = current_row;
     current_row -= input_->width;
   }
+
+  if (indices_->size () < input_->size ())
+    computeFeaturePart (distanceMap, bad_point, output);
+  else
+    computeFeatureFull (distanceMap, bad_point, output);
+
+  delete[] depthChangeMap;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointInT, typename PointOutT> void
+pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computeFeatureFull (const float *distanceMap,
+                                                                             const float &bad_point,
+                                                                             PointCloudOut &output)
+{
+  unsigned index = 0;
 
   if (border_policy_ == BORDER_POLICY_IGNORE)
   {
@@ -1119,12 +1009,176 @@ pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computeFeature (PointCl
       }
     }
   }
-
-  delete[] depthChangeMap;
-  //delete[] distanceMap;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointInT, typename PointOutT> void
+pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::computeFeaturePart (const float *distanceMap,
+                                                                             const float &bad_point,
+                                                                             PointCloudOut &output)
+{
+  if (border_policy_ == BORDER_POLICY_IGNORE)
+  {
+    output.is_dense = false;
+    unsigned border = int(normal_smoothing_size_);
+    unsigned bottom = input_->height > border ? input_->height - border : 0;
+    unsigned right = input_->width > border ? input_->width - border : 0;
+    if (use_depth_dependent_smoothing_)
+    {
+      // Iterating over the entire index vector
+      for (std::size_t idx = 0; idx < indices_->size (); ++idx)
+      {
+        unsigned pt_index = (*indices_)[idx];
+        unsigned u = pt_index % input_->width;
+        unsigned v = pt_index / input_->width;
+        if (v < border || v > bottom)
+        {
+          output.points[idx].getNormalVector3fMap ().setConstant (bad_point);
+          output.points[idx].curvature = bad_point;
+          continue;
+        }
+
+        if (u < border || v > right)
+        {
+          output.points[idx].getNormalVector3fMap ().setConstant (bad_point);
+          output.points[idx].curvature = bad_point;
+          continue;
+        }
+
+        const float depth = input_->points[pt_index].z;
+        if (!pcl_isfinite (depth))
+        {
+          output.points[idx].getNormalVector3fMap ().setConstant (bad_point);
+          output.points[idx].curvature = bad_point;
+          continue;
+        }
+
+        float smoothing = (std::min)(distanceMap[pt_index], normal_smoothing_size_ + static_cast<float>(depth)/10.0f);
+        if (smoothing > 2.0f)
+        {
+          setRectSize (static_cast<int> (smoothing), static_cast<int> (smoothing));
+          computePointNormal (u, v, pt_index, output [idx]);
+        }
+        else
+        {
+          output[idx].getNormalVector3fMap ().setConstant (bad_point);
+          output[idx].curvature = bad_point;
+        }
+      }
+    }
+    else
+    {
+      float smoothing_constant = normal_smoothing_size_;
+      // Iterating over the entire index vector
+      for (std::size_t idx = 0; idx < indices_->size (); ++idx)
+      {
+        unsigned pt_index = (*indices_)[idx];
+        unsigned u = pt_index % input_->width;
+        unsigned v = pt_index / input_->width;
+        if (v < border || v > bottom)
+        {
+          output.points[idx].getNormalVector3fMap ().setConstant (bad_point);
+          output.points[idx].curvature = bad_point;
+          continue;
+        }
+
+        if (u < border || v > right)
+        {
+          output.points[idx].getNormalVector3fMap ().setConstant (bad_point);
+          output.points[idx].curvature = bad_point;
+          continue;
+        }
+
+        if (!pcl_isfinite (input_->points[pt_index].z))
+        {
+          output [idx].getNormalVector3fMap ().setConstant (bad_point);
+          output [idx].curvature = bad_point;
+          continue;
+        }
+
+        float smoothing = (std::min)(distanceMap[pt_index], smoothing_constant);
+
+        if (smoothing > 2.0f)
+        {
+          setRectSize (static_cast<int> (smoothing), static_cast<int> (smoothing));
+          computePointNormal (u, v, pt_index, output [idx]);
+        }
+        else
+        {
+          output [pt_index].getNormalVector3fMap ().setConstant (bad_point);
+          output [pt_index].curvature = bad_point;
+        }
+      }
+    }
+  }// border_policy_ == BORDER_POLICY_IGNORE
+  else if (border_policy_ == BORDER_POLICY_MIRROR)
+  {
+    output.is_dense = false;
+
+    if (use_depth_dependent_smoothing_)
+    {
+      for (std::size_t idx = 0; idx < indices_->size (); ++idx)
+      {
+        unsigned pt_index = (*indices_)[idx];
+        unsigned u = pt_index % input_->width;
+        unsigned v = pt_index / input_->width;
+
+        const float depth = input_->points[pt_index].z;
+        if (!pcl_isfinite (depth))
+        {
+          output[idx].getNormalVector3fMap ().setConstant (bad_point);
+          output[idx].curvature = bad_point;
+          continue;
+        }
+
+        float smoothing = (std::min)(distanceMap[pt_index], normal_smoothing_size_ + static_cast<float>(depth)/10.0f);
+
+        if (smoothing > 2.0f)
+        {
+          setRectSize (static_cast<int> (smoothing), static_cast<int> (smoothing));
+          computePointNormalMirror (u, v, pt_index, output [idx]);
+        }
+        else
+        {
+          output[idx].getNormalVector3fMap ().setConstant (bad_point);
+          output[idx].curvature = bad_point;
+        }
+      }
+    }
+    else
+    {
+      float smoothing_constant = normal_smoothing_size_;
+      for (size_t idx = 0; idx < indices_->size (); ++idx)
+      {
+        unsigned pt_index = (*indices_)[idx];
+        unsigned u = pt_index % input_->width;
+        unsigned v = pt_index / input_->width;
+
+        if (!pcl_isfinite (input_->points[pt_index].z))
+        {
+          output [idx].getNormalVector3fMap ().setConstant (bad_point);
+          output [idx].curvature = bad_point;
+          continue;
+        }
+
+        float smoothing = (std::min)(distanceMap[pt_index], smoothing_constant);
+
+        if (smoothing > 2.0f)
+        {
+          setRectSize (static_cast<int> (smoothing), static_cast<int> (smoothing));
+          computePointNormalMirror (u, v, pt_index, output [idx]);
+        }
+        else
+        {
+          output [idx].getNormalVector3fMap ().setConstant (bad_point);
+          output [idx].curvature = bad_point;
+        }
+      }
+    }
+  } // border_policy_ == BORDER_POLICY_MIRROR
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointInT, typename PointOutT> bool
 pcl::IntegralImageNormalEstimation<PointInT, PointOutT>::initCompute ()
 {

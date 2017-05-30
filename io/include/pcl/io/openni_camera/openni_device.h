@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -48,6 +48,7 @@
 
 #include <pcl/io/boost.h>
 #include <pcl/pcl_macros.h>
+
 
 /// @todo Get rid of all exception-specifications, these are useless and soon to be deprecated
 
@@ -191,7 +192,7 @@ namespace openni_wrapper
       isSynchronized () const throw ();
 
       /** \return true if the Device supports hardware synchronization between Depth and RGB streams or not. */ 
-      bool 
+      virtual bool 
       isSynchronizationSupported () const throw ();
 
       /** \return true if depth stream is a cropped version of the native depth stream, false otherwise. */
@@ -288,6 +289,7 @@ namespace openni_wrapper
         *        This version is used to register a member function of any class.
         *        The callback will always be called with a new image and the user data "cookie".
         * \param[in] callback the user callback to be called if a new image is available
+        * \param instance
         * \param[in] cookie the cookie that needs to be passed to the callback together with the new image.
         * \return a callback handler that can be used to remove the user callback from list of image-stream callbacks.
         */
@@ -315,6 +317,7 @@ namespace openni_wrapper
         *        This version is used to register a member function of any class.
         *        The callback will always be called with a new depth image and the user data "cookie".
         * \param[in] callback the user callback to be called if a new depth image is available
+        * \param instance
         * \param[in] cookie the cookie that needs to be passed to the callback together with the new depth image.
         * \return a callback handler that can be used to remove the user callback from list of depth-stream callbacks.
         */
@@ -341,6 +344,7 @@ namespace openni_wrapper
         *        This version is used to register a member function of any class.
         *        The callback will always be called with a new IR image and the user data "cookie".
         * \param[in] callback the user callback to be called if a new IR image is available
+        * \param instance
         * \param[in] cookie the cookie that needs to be passed to the callback together with the new IR image.
         * \return a callback handler that can be used to remove the user callback from list of IR-stream callbacks.
         */
@@ -416,6 +420,22 @@ namespace openni_wrapper
       XnUInt64 
       getDepthOutputFormat () const;
 
+
+      /** \brief Convert shift to depth value. */
+      pcl::uint16_t
+      shiftToDepth (pcl::uint16_t shift_value) const
+      {
+        assert (shift_conversion_parameters_.init_);
+
+        pcl::uint16_t ret = 0;
+
+        // lookup depth value in shift lookup table
+        if (shift_value<shift_to_depth_table_.size())
+          ret = shift_to_depth_table_[shift_value];
+
+        return ret;
+      }
+
     private:
       // make OpenNIDevice non copyable
       OpenNIDevice (OpenNIDevice const &);
@@ -454,6 +474,31 @@ namespace openni_wrapper
 
       void 
       Init ();
+
+      void InitShiftToDepthConversion();
+      void ReadDeviceParametersFromSensorNode();
+
+      struct ShiftConversion
+      {
+        ShiftConversion() : init_(false) {}
+
+        XnUInt16 zero_plane_distance_;
+        XnFloat zero_plane_pixel_size_;
+        XnFloat emitter_dcmos_distace_;
+        XnUInt32 max_shift_;
+        XnUInt32 device_max_shift_;
+        XnUInt32 const_shift_;
+        XnUInt32 pixel_size_factor_;
+        XnUInt32 param_coeff_;
+        XnUInt32 shift_scale_;
+        XnUInt32 min_depth_;
+        XnUInt32 max_depth_;
+        bool init_;
+
+      } shift_conversion_parameters_;
+
+      std::vector<pcl::uint16_t> shift_to_depth_table_;
+
       // holds the callback functions together with custom data
       // since same callback function can be registered multiple times with e.g. different custom data
       // we use a map structure with a handle as the key

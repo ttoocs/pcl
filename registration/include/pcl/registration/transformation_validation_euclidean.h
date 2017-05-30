@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -40,6 +41,7 @@
 #define PCL_REGISTRATION_TRANSFORMATION_VALIDATION_EUCLIDEAN_H_
 
 #include <pcl/point_representation.h>
+#include <pcl/search/kdtree.h>
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/registration/transformation_validation.h>
@@ -77,8 +79,8 @@ namespace pcl
         typedef boost::shared_ptr<TransformationValidation<PointSource, PointTarget, Scalar> > Ptr;
         typedef boost::shared_ptr<const TransformationValidation<PointSource, PointTarget, Scalar> > ConstPtr;
 
-        typedef typename pcl::KdTree<PointTarget> KdTree;
-        typedef typename pcl::KdTree<PointTarget>::Ptr KdTreePtr;
+        typedef typename pcl::search::KdTree<PointTarget> KdTree;
+        typedef typename pcl::search::KdTree<PointTarget>::Ptr KdTreePtr;
 
         typedef typename KdTree::PointRepresentationConstPtr PointRepresentationConstPtr;
 
@@ -92,7 +94,8 @@ namespace pcl
         TransformationValidationEuclidean () : 
           max_range_ (std::numeric_limits<double>::max ()),
           threshold_ (std::numeric_limits<double>::quiet_NaN ()),
-          tree_ (new pcl::KdTreeFLANN<PointTarget>)
+          tree_ (new pcl::search::KdTree<PointTarget>),
+          force_no_recompute_ (false)
         {
         }
 
@@ -115,6 +118,25 @@ namespace pcl
         getMaxRange ()
         {
           return (max_range_);
+        }
+
+
+        /** \brief Provide a pointer to the search object used to find correspondences in
+          * the target cloud.
+          * \param[in] tree a pointer to the spatial search object.
+          * \param[in] force_no_recompute If set to true, this tree will NEVER be 
+          * recomputed, regardless of calls to setInputTarget. Only use if you are 
+          * confident that the tree will be set correctly.
+          */
+        inline void
+        setSearchMethodTarget (const KdTreePtr &tree, 
+                               bool force_no_recompute = false) 
+        { 
+          tree_ = tree; 
+          if (force_no_recompute)
+          {
+            force_no_recompute_ = true;
+          }
         }
 
         /** \brief Set a threshold for which a specific transformation is considered valid.
@@ -204,6 +226,11 @@ namespace pcl
         /** \brief A pointer to the spatial search object. */
         KdTreePtr tree_;
 
+        /** \brief A flag which, if set, means the tree operating on the target cloud 
+         * will never be recomputed*/
+        bool force_no_recompute_;
+
+
         /** \brief Internal point representation uses only 3D coordinates for L2 */
         class MyPointRepresentation: public pcl::PointRepresentation<PointTarget>
         {
@@ -218,6 +245,9 @@ namespace pcl
               nr_dimensions_ = 3;
               trivial_ = true;
             }
+      
+            /** \brief Empty destructor */
+            virtual ~MyPointRepresentation () {}
 
             virtual void
             copyToFloatArray (const PointTarget &p, float * out) const

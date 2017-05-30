@@ -52,6 +52,9 @@ namespace pcl
   class HarrisKeypoint3D : public Keypoint<PointInT, PointOutT>
   {
     public:
+      typedef boost::shared_ptr<HarrisKeypoint3D<PointInT, PointOutT, NormalT> > Ptr;
+      typedef boost::shared_ptr<const HarrisKeypoint3D<PointInT, PointOutT, NormalT> > ConstPtr;
+
       typedef typename Keypoint<PointInT, PointOutT>::PointCloudIn PointCloudIn;
       typedef typename Keypoint<PointInT, PointOutT>::PointCloudOut PointCloudOut;
       typedef typename Keypoint<PointInT, PointOutT>::KdTree KdTree;
@@ -69,7 +72,9 @@ namespace pcl
       using Keypoint<PointInT, PointOutT>::k_;
       using Keypoint<PointInT, PointOutT>::search_radius_;
       using Keypoint<PointInT, PointOutT>::search_parameter_;
+      using Keypoint<PointInT, PointOutT>::keypoints_indices_;
       using Keypoint<PointInT, PointOutT>::initCompute;
+      using PCLBase<PointInT>::setInputCloud;
 
       typedef enum {HARRIS = 1, NOBLE, LOWE, TOMASI, CURVATURE} ResponseMethod;
 
@@ -88,6 +93,15 @@ namespace pcl
         name_ = "HarrisKeypoint3D";
         search_radius_ = radius;
       }
+      
+      /** \brief Empty destructor */
+      virtual ~HarrisKeypoint3D () {}
+
+      /** \brief Provide a pointer to the input dataset
+        * \param[in] cloud the const boost shared pointer to a PointCloud message
+        */
+      virtual void
+      setInputCloud (const PointCloudInConstPtr &cloud);
 
       /** \brief Set the method of the response to be calculated.
         * \param[in] type

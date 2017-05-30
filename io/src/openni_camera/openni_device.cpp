@@ -98,28 +98,27 @@ openni_wrapper::OpenNIDevice::OpenNIDevice (
 #ifdef __APPLE__
   XnStatus rc;
 
+  std::string config ("/etc/openni/SamplesConfig.xml");
   xn::EnumerationErrors errors;
-  rc = context_.InitFromXmlFile ("/etc/openni/SamplesConfig.xml", &errors);
+  rc = context_.InitFromXmlFile (config.c_str (), &errors);
   if (rc == XN_STATUS_NO_NODE_PRESENT)
   {
-    XnChar strError[1024];
-    errors.ToString(strError, 1024);
-    printf ("%s\n", strError);
+    XnChar str_error[1024];
+    errors.ToString (str_error, 1024);
+    THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] %s\n", str_error);
   }
   else if (rc != XN_STATUS_OK)
-  {
-    printf ("Open failed: %s\n", xnGetStatusString (rc));
-  }
+    THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] Cannot open %s! (OpenNI: %s)\n", config.c_str (), xnGetStatusString (rc));
 
   XnStatus status = context_.FindExistingNode (XN_NODE_TYPE_DEPTH, depth_generator_);
-//  if (status != XN_STATUS_OK)
-//    std::cerr << "node depth problems" << std::endl;
+  //if (status != XN_STATUS_OK)
+  //  THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] Cannot find any depth nodes!\n");
   status = context_.FindExistingNode (XN_NODE_TYPE_IMAGE, image_generator_);
-//  if (status != XN_STATUS_OK)
-//    std:cerr << "node image problems" << std::endl;
+  //if (status != XN_STATUS_OK)
+  //  THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] Cannot find any image nodes!\n");
   status = context_.FindExistingNode (XN_NODE_TYPE_IR, ir_generator_);
-  if (status != XN_STATUS_OK) {}
-//      std::cerr << "node ir problems" << std::endl;
+  //if (status != XN_STATUS_OK)
+  //  THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] Cannot find any IR nodes!\n");
 
 #else
 
@@ -169,6 +168,9 @@ openni_wrapper::OpenNIDevice::OpenNIDevice (
   image_generator_.RegisterToNewDataAvailable (static_cast<xn::StateChangedHandler> (NewImageDataAvailable), this, image_callback_handle_);
 
   Init ();
+
+  // read sensor configuration from device
+  InitShiftToDepthConversion();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,26 +214,24 @@ openni_wrapper::OpenNIDevice::OpenNIDevice (xn::Context& context, const xn::Node
 #ifdef __APPLE__
   XnStatus rc;
 
+  std::string config ("/etc/openni/SamplesConfig.xml");
   xn::EnumerationErrors errors;
-  rc = context_.InitFromXmlFile("/etc/primesense/SamplesConfig.xml", &errors);
+  rc = context_.InitFromXmlFile (config.c_str (), &errors);
   if (rc == XN_STATUS_NO_NODE_PRESENT)
   {
-    XnChar strError[1024];
-    errors.ToString(strError, 1024);
-    printf("%s\n", strError);
+    XnChar str_error[1024];
+    errors.ToString (str_error, 1024);
+    THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] %s\n", str_error);
   }
   else if (rc != XN_STATUS_OK)
-  {
-    printf ("Open failed: %s\n", xnGetStatusString(rc));
-  }
+    THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] Cannot open %s! (OpenNI: %s)\n", config.c_str (), xnGetStatusString (rc));
 
   XnStatus status = context_.FindExistingNode (XN_NODE_TYPE_DEPTH, depth_generator_);
-//  if (status != XN_STATUS_OK)
-//    cerr << "node depth problems" << endl;
+  //if (status != XN_STATUS_OK)
+  //  THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] Cannot find any depth nodes!\n");
   status = context_.FindExistingNode (XN_NODE_TYPE_IR, ir_generator_);
-  if (status != XN_STATUS_OK) {}
-//    if (status != XN_STATUS_OK)
-//      cerr << "node ir problems" << endl;
+  //if (status != XN_STATUS_OK)
+  //  THROW_OPENNI_EXCEPTION ("[openni_wrapper::OpenNIDevice::OpenNIDevice] Cannot find any IR nodes!\n");
 
 #else
   XnStatus status;
@@ -267,6 +267,9 @@ openni_wrapper::OpenNIDevice::OpenNIDevice (xn::Context& context, const xn::Node
   depth_generator_.RegisterToNewDataAvailable (static_cast <xn::StateChangedHandler> (NewDepthDataAvailable), this, depth_callback_handle_);
   // set up rest
   Init ();
+
+  // read sensor configuration from device
+  InitShiftToDepthConversion();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -403,6 +406,134 @@ openni_wrapper::OpenNIDevice::Init ()
   {
     boost::lock_guard<boost::mutex> ir_lock (ir_mutex_);
     ir_thread_ = boost::thread (&OpenNIDevice::IRDataThreadFunction, this);
+  }
+}
+
+void openni_wrapper::OpenNIDevice::InitShiftToDepthConversion ()
+{
+  // Read device configuration from OpenNI sensor node
+  ReadDeviceParametersFromSensorNode();
+
+  if (shift_conversion_parameters_.init_)
+  {
+    // Calculate shift conversion table
+
+    pcl::uint32_t nIndex = 0;
+    pcl::int32_t nShiftValue = 0;
+    double dFixedRefX = 0;
+    double dMetric = 0;
+    double dDepth = 0;
+    double dPlanePixelSize = shift_conversion_parameters_.zero_plane_pixel_size_;
+    double dPlaneDsr = shift_conversion_parameters_.zero_plane_distance_;
+    double dPlaneDcl = shift_conversion_parameters_.emitter_dcmos_distace_;
+    pcl::int32_t nConstShift = shift_conversion_parameters_.param_coeff_ *
+        shift_conversion_parameters_.const_shift_;
+
+    dPlanePixelSize *= shift_conversion_parameters_.pixel_size_factor_;
+    nConstShift /= shift_conversion_parameters_.pixel_size_factor_;
+
+    shift_to_depth_table_.resize(shift_conversion_parameters_.device_max_shift_+1);
+
+    for (nIndex = 1; nIndex < shift_conversion_parameters_.device_max_shift_; nIndex++)
+    {
+      nShiftValue = (pcl::int32_t)nIndex;
+
+      dFixedRefX = (double) (nShiftValue - nConstShift) /
+                   (double) shift_conversion_parameters_.param_coeff_;
+      dFixedRefX -= 0.375;
+      dMetric = dFixedRefX * dPlanePixelSize;
+      dDepth = shift_conversion_parameters_.shift_scale_ *
+               ((dMetric * dPlaneDsr / (dPlaneDcl - dMetric)) + dPlaneDsr);
+
+      // check cut-offs
+      if ((dDepth > shift_conversion_parameters_.min_depth_) &&
+          (dDepth < shift_conversion_parameters_.max_depth_))
+      {
+        shift_to_depth_table_[nIndex] = (pcl::uint16_t)(dDepth);
+      }
+    }
+
+  }
+  else
+      THROW_OPENNI_EXCEPTION ("Shift-to-depth lookup calculation failed. Reason: Device configuration not initialized.");
+}
+
+void
+openni_wrapper::OpenNIDevice::ReadDeviceParametersFromSensorNode ()
+{
+  if (hasDepthStream ())
+  {
+
+    XnUInt64 nTemp;
+    XnDouble dTemp;
+
+    XnStatus status = depth_generator_.GetIntProperty ("ZPD", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the zero plane distance failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.zero_plane_distance_ =  (XnUInt16)nTemp;
+
+    status = depth_generator_.GetRealProperty ("ZPPS", dTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the zero plane pixel size failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.zero_plane_pixel_size_ =  (XnFloat)dTemp;
+
+    status = depth_generator_.GetRealProperty ("LDDIS", dTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the dcmos distance failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.emitter_dcmos_distace_ =  (XnFloat)dTemp;
+
+    status = depth_generator_.GetIntProperty ("MaxShift", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the max shift parameter failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.max_shift_ =  (XnUInt32)nTemp;
+
+    status = depth_generator_.GetIntProperty ("DeviceMaxDepth", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the device max depth parameter failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.device_max_shift_ =  (XnUInt32)nTemp;
+
+    status = depth_generator_.GetIntProperty ("ConstShift", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the const shift parameter failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.const_shift_ =  (XnUInt32)nTemp;
+
+    status = depth_generator_.GetIntProperty ("PixelSizeFactor", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the pixel size factor failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.pixel_size_factor_ =  (XnUInt32)nTemp;
+
+    status = depth_generator_.GetIntProperty ("ParamCoeff", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the param coeff parameter failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.param_coeff_ =  (XnUInt32)nTemp;
+
+    status = depth_generator_.GetIntProperty ("ShiftScale", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the shift scale parameter failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.shift_scale_ =  (XnUInt32)nTemp;
+
+    status = depth_generator_.GetIntProperty ("MinDepthValue", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the min depth value parameter failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.min_depth_ =  (XnUInt32)nTemp;
+
+    status = depth_generator_.GetIntProperty ("MaxDepthValue", nTemp);
+    if (status != XN_STATUS_OK)
+      THROW_OPENNI_EXCEPTION ("reading the max depth value parameter failed. Reason: %s", xnGetStatusString (status));
+
+    shift_conversion_parameters_.max_depth_ =  (XnUInt32)nTemp;
+
+    shift_conversion_parameters_.init_ = true;
   }
 }
 
@@ -742,11 +873,12 @@ openni_wrapper::OpenNIDevice::ImageDataThreadFunction ()
       return;
 
     image_generator_.WaitAndUpdateData ();
-    //xn::ImageMetaData* image_data = boost::shared_ptr<xn::ImageMetaData>;
+    xn::ImageMetaData image_md;
+    image_generator_.GetMetaData (image_md);
     boost::shared_ptr<xn::ImageMetaData> image_data (new xn::ImageMetaData);
-    image_generator_.GetMetaData (*image_data);
+    image_data->CopyFrom (image_md);
     image_lock.unlock ();
-
+    
     boost::shared_ptr<Image> image = getCurrentImage (image_data);
     for (std::map< OpenNIDevice::CallbackHandle, ActualImageCallbackFunction >::iterator callbackIt = image_callback_.begin (); callbackIt != image_callback_.end (); ++callbackIt)
     {
@@ -770,8 +902,10 @@ openni_wrapper::OpenNIDevice::DepthDataThreadFunction ()
       return;
 
     depth_generator_.WaitAndUpdateData ();
+    xn::DepthMetaData depth_md;
+    depth_generator_.GetMetaData (depth_md);    
     boost::shared_ptr<xn::DepthMetaData> depth_data (new xn::DepthMetaData);
-    depth_generator_.GetMetaData (*depth_data);
+    depth_data->CopyFrom (depth_md);
     depth_lock.unlock ();
 
     boost::shared_ptr<DepthImage> depth_image ( new DepthImage (depth_data, baseline_, getDepthFocalLength (), shadow_value_, no_sample_value_) );
@@ -799,8 +933,10 @@ openni_wrapper::OpenNIDevice::IRDataThreadFunction ()
       return;
 
     ir_generator_.WaitAndUpdateData ();
+    xn::IRMetaData ir_md;
+    ir_generator_.GetMetaData (ir_md);
     boost::shared_ptr<xn::IRMetaData> ir_data (new xn::IRMetaData);
-    ir_generator_.GetMetaData (*ir_data);
+    ir_data->CopyFrom (ir_md);
     ir_lock.unlock ();
 
     boost::shared_ptr<IRImage> ir_image ( new IRImage (ir_data) );
@@ -993,7 +1129,7 @@ openni_wrapper::OpenNIDevice::findCompatibleImageMode (const XnMapOutputMode& ou
       if (modeIt->nFPS == output_mode.nFPS && isImageResizeSupported (modeIt->nXRes, modeIt->nYRes, output_mode.nXRes, output_mode.nYRes))
       {
         if (found)
-        { // check wheter the new mode is better -> smaller than the current one.
+        { // check whether the new mode is better -> smaller than the current one.
           if (mode.nXRes * mode.nYRes > modeIt->nXRes * modeIt->nYRes )
             mode = *modeIt;
         }
@@ -1025,7 +1161,7 @@ openni_wrapper::OpenNIDevice::findCompatibleDepthMode (const XnMapOutputMode& ou
       if (modeIt->nFPS == output_mode.nFPS && isImageResizeSupported (modeIt->nXRes, modeIt->nYRes, output_mode.nXRes, output_mode.nYRes))
       {
         if (found)
-        { // check wheter the new mode is better -> smaller than the current one.
+        { // check whether the new mode is better -> smaller than the current one.
           if (mode.nXRes * mode.nYRes > modeIt->nXRes * modeIt->nYRes )
             mode = *modeIt;
         }

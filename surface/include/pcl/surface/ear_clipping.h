@@ -53,6 +53,9 @@ namespace pcl
   class PCL_EXPORTS EarClipping : public MeshProcessing
   {
     public:
+      typedef boost::shared_ptr<EarClipping> Ptr;
+      typedef boost::shared_ptr<const EarClipping> ConstPtr;
+
       using MeshProcessing::input_mesh_;
       using MeshProcessing::initCompute;
       /** \brief Empty constructor */
@@ -103,11 +106,10 @@ namespace pcl
         * \param[in] p the point to check
         */
       bool
-      isInsideTriangle (const Eigen::Vector2f& u,
-                        const Eigen::Vector2f& v,
-                        const Eigen::Vector2f& w,
-                        const Eigen::Vector2f& p);
-
+      isInsideTriangle (const Eigen::Vector3f& u,
+                        const Eigen::Vector3f& v,
+                        const Eigen::Vector3f& w,
+                        const Eigen::Vector3f& p);
 
       /** \brief Compute the cross product between 2D vectors.
        * \param[in] p1 the first 2D vector

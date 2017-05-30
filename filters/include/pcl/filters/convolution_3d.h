@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -56,7 +56,8 @@ namespace pcl
     {
       public:
         typedef boost::shared_ptr<ConvolvingKernel<PointInT, PointOutT> > Ptr;
-        typedef boost::shared_ptr<ConvolvingKernel<PointInT, PointOutT> > ConstPtr;
+        typedef boost::shared_ptr<const ConvolvingKernel<PointInT, PointOutT> > ConstPtr;
+ 
         typedef typename PointCloud<PointInT>::ConstPtr PointCloudInConstPtr;
 
         /// \brief empty constructor
@@ -93,7 +94,7 @@ namespace pcl
         initCompute () { return false; }
 
         /** \brief Utility function that annihilates a point making it fail the \ref pcl::isFinite test
-          * \param[in/out] p point to annihilate
+          * \param p point to annihilate
           */
         static void
         makeInfinite (PointOutT& p)
@@ -128,7 +129,7 @@ namespace pcl
           , threshold_ (std::numeric_limits<float>::infinity ())
         {}
 
-        ~GaussianKernel () {}
+        virtual ~GaussianKernel () {}
 
         /** Set the sigma parameter of the Gaussian
           * \param[in] sigma

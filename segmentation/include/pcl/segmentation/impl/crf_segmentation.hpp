@@ -15,7 +15,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -220,8 +220,8 @@ pcl::CrfSegmentation<PointT>::createDataVectorFromVoxelGrid ()
   //data_.reserve (dim_.x () * dim_.y () * dim_.z ());
 
 /*
-  std::vector<Eigen::Vector3i> data;
-  std::vector<Eigen::Vector3i> color;
+  std::vector<Eigen::Vector3i, Eigen::aligned_allocator<Eigen::Vector3i> > data;
+  std::vector<Eigen::Vector3i, Eigen::aligned_allocator<Eigen::Vector3i> > color;
   // fill the data vector
   for (int kk = min_b.z (), k = 0; kk <= max_b.z (); kk++, k++)
   {
@@ -244,7 +244,7 @@ pcl::CrfSegmentation<PointT>::createDataVectorFromVoxelGrid ()
   
 /*
   // get the size of the input fields
-  std::vector< sensor_msgs::PointField > fields;
+  std::vector< pcl::PCLPointField > fields;
   pcl::getFields (*input_cloud_, fields);
   
   for (int i = 0; i < fields.size (); i++)
@@ -255,7 +255,7 @@ pcl::CrfSegmentation<PointT>::createDataVectorFromVoxelGrid ()
   // reserve space for the data vector
   data_.resize (filtered_cloud_->points.size ());
 
-  std::vector< sensor_msgs::PointField > fields;
+  std::vector< pcl::PCLPointField > fields;
   // check if we have color data
   bool color_data = false;
   int rgba_index = -1;  
@@ -573,7 +573,7 @@ pcl::CrfSegmentation<PointT>::segmentPoints (pcl::PointCloud<pcl::PointXYZRGBL> 
   // create the output cloud
   output = *filtered_anno_;
 
-  for (size_t i = 0; i < N; i++)
+  for (int i = 0; i < N; i++)
   {
     output.points[i].label = labels[r[i]];
   }

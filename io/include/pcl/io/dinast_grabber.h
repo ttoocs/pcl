@@ -33,18 +33,20 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
+ * $Id$
+ *
  */
 
-#ifndef __PCL_IO_DINAST_GRABBER__
-#define __PCL_IO_DINAST_GRABBER__
+#ifndef PCL_IO_DINAST_GRABBER_
+#define PCL_IO_DINAST_GRABBER_
 
-#include <pcl/pcl_config.h>
 #include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
 #include <pcl/io/grabber.h>
 #include <pcl/common/time.h>
+#include <pcl/console/print.h>
 #include <libusb-1.0/libusb.h>
 #include <boost/circular_buffer.hpp>
-#include <string>
 
 namespace pcl
 {
@@ -52,79 +54,71 @@ namespace pcl
     * \author Marco A. Gutierrez <marcog@unex.es>
     * \ingroup io
     */
-  
   class PCL_EXPORTS DinastGrabber: public Grabber
   {
-
+    // Define callback signature typedefs
+    typedef void (sig_cb_dinast_point_cloud) (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZI> >&);
+    
     public:
- 
-      /** \brief Constructor. */
-      DinastGrabber ();
+      /** \brief Constructor that sets up the grabber constants.
+        * \param[in] device_position Number corresponding the device to grab
+        */
+      DinastGrabber (const int device_position=1);
 
-      /** \brief Destructor */
-      ~DinastGrabber () throw ();
+      /** \brief Destructor. It never throws. */
+      virtual ~DinastGrabber () throw ();
 
       /** \brief Check if the grabber is running
         * \return true if grabber is running / streaming. False otherwise.
         */
-      bool 
+      virtual bool 
       isRunning () const;
+      
+      /** \brief Returns the name of the concrete subclass, DinastGrabber.
+        * \return DinastGrabber.
+        */
+      virtual std::string
+      getName () const
+      { return (std::string ("DinastGrabber")); }
+      
+      /** \brief Start the data acquisition process.
+        */
+      virtual void
+      start ();
 
+      /** \brief Stop the data acquisition process.
+        */
+      virtual void
+      stop ();
+      
       /** \brief Obtain the number of frames per second (FPS). */
-      float 
+      virtual float 
       getFramesPerSecond () const;
-
-
-      /** \brief Find the specified Dinast 3D camera device
-        * \param[in] device_position Number corresponding to the device to grab
-        * \param[in] id_vendor the ID of the camera vendor (should be 0x18d1)
-        * \param[in] id_product the ID of the product (should be 0x1402)
-        */
-      void
-      findDevice (int device_position,
-                  const int id_vendor = 0x18d1, 
-                  const int id_product = 0x1402);
-
-      /** \brief Claims the interface for an already founded device
-        */
-      void
-      openDevice ();
-
-      /** \brief Close the DINAST camera device
-        */
-      void
-      closeDevice ();
 
       /** \brief Get the version number of the currently opened device
         */
       std::string
       getDeviceVersion ();
-
-      /** \brief Start the data acquisition process.
-        */
-      void
-      start ();
-
-      /** \brief Stop the data acquisition process.
-        */
-      void
-      stop ();
-
-      /** \brief Read image data
-        * \param[out] the image data in unsigned short format
-        */
-      int
-      readImage (unsigned char *image);
       
-      /** \brief Obtains the image and the corresponding XYZI Point Cloud
-	*  \param[out] the image data in unsigned short format and the corresponding point cloud from the camera
-	*/
-      void
-      getData (unsigned char *image, pcl::PointCloud<pcl::PointXYZI>::Ptr cloud);
+    protected:  
       
-    protected:      
+      /** \brief On initialization processing. */
+      void
+      onInit (const int device_id);
+      
+      /** \brief Setup a Dinast 3D camera device
+        * \param[in] device_position Number corresponding the device to grab
+        * \param[in] id_vendor The ID of the camera vendor (should be 0x18d1)
+        * \param[in] id_product The ID of the product (should be 0x1402)
+        */
+      void
+      setupDevice (int device_position,
+                  const int id_vendor = 0x18d1, 
+                  const int id_product = 0x1402);
+      
       /** \brief Send a RX data packet request
         * \param[in] req_code the request to send (the request field for the setup packet)
+        * \param buffer
         * \param[in] length the length field for the setup packet. The data buffer should be at least this size.
         */
       bool
@@ -134,6 +128,7 @@ namespace pcl
 
       /** \brief Send a TX data packet request
         * \param[in] req_code the request to send (the request field for the setup packet)
+        * \param buffer
         * \param[in] length the length field for the setup packet. The data buffer should be at least this size.
         */
       bool
@@ -149,48 +144,74 @@ namespace pcl
       int
       checkHeader ();
       
-      /** \brief Returns the name of the concrete subclass, DinastGrabber.
-        * \return DinastGrabber.
+      /** \brief Read image data and leaves it on image_
         */
-      std::string
-      getName() const;
+      void
+      readImage ();
+      
+      /** \brief Obtains XYZI Point Cloud from the image of the camera
+        * \return the point cloud from the image data
+        */
+      pcl::PointCloud<pcl::PointXYZI>::Ptr
+      getXYZIPointCloud ();
+      
+       /** \brief The function in charge of getting the data from the camera
+        */     
+      void 
+      captureThreadFunction ();
       
       /** \brief Width of image */
-      const static int IMAGE_WIDTH = 320;
+      int image_width_;
       
       /** \brief Height of image */
-      const static int IMAGE_HEIGHT  = 240;
+      int image_height_;
       
       /** \brief Total size of image */
-      const static int IMAGE_SIZE = IMAGE_HEIGHT * IMAGE_WIDTH;
+      int image_size_;
       
       /** \brief Length of a sync packet */
-      const static int SYNC_PACKET = 512;
+      int sync_packet_size_;
+      
+      double dist_max_2d_;
+      
+      /** \brief diagonal Field of View*/
+      double fov_;
       
       /** \brief Size of pixel */
-      enum pixel_syze { RAW8=1, RGB16=2, RGB24=3, RGB32=4 };
+      enum pixel_size { RAW8=1, RGB16=2, RGB24=3, RGB32=4 };
       
       /** \brief The libusb context*/
-      libusb_context *context;
+      libusb_context *context_;
       
       /** \brief the actual device_handle for the camera */
-      struct libusb_device_handle* device_handle;
+      struct libusb_device_handle *device_handle_;
       
-      /** \brief Temporary USB read buffer, since we read two RGB16 images at a time size is the double of two images plus a sync packet */
-      unsigned char raw_buffer[(RGB16 * (IMAGE_SIZE) + SYNC_PACKET)*2];
+      /** \brief Temporary USB read buffer, since we read two RGB16 images at a time size is the double of two images
+        * plus a sync packet.
+        */
+      unsigned char *raw_buffer_ ;
 
-      /** \brief Global buffer */
-      boost::circular_buffer<unsigned char> g_buffer;
+      /** \brief Global circular buffer */
+      boost::circular_buffer<unsigned char> g_buffer_;
 
-      /**  \brief Bulk endpoint address value */
-      unsigned char bulk_ep;
-
-      // Since there is no header after the first image, we need to save the state
-      bool second_image;
-      bool running;
-
+      /** \brief Bulk endpoint address value */
+      unsigned char bulk_ep_;
       
+      /** \brief Device command values */
+      enum { CMD_READ_START=0xC7, CMD_READ_STOP=0xC8, CMD_GET_VERSION=0xDC, CMD_SEND_DATA=0xDE };
+
+      unsigned char *image_;
+      
+      /** \brief Since there is no header after the first image, we need to save the state */
+      bool second_image_;
+      
+      bool running_;
+      
+      boost::thread capture_thread_;
+      
+      mutable boost::mutex capture_mutex_;
+      boost::signals2::signal<sig_cb_dinast_point_cloud>* point_cloud_signal_;
   };
 } //namespace pcl
 
-#endif // __PCL_IO_DINAST_GRABBER__
+#endif // PCL_IO_DINAST_GRABBER_

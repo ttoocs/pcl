@@ -51,7 +51,7 @@ namespace pcl
     *   * ACM Transations in Graphics, July 2007
     *
     * Takes in a colored organized point cloud (i.e. PointXYZRGB or PointXYZRGBA), that might contain nan values for the
-    * depth information, and it will returned an upsampled version of this cloud, based on the formula:
+    * depth information, and it will return an upsampled version of this cloud, based on the formula:
     * \f[
     *    \tilde{S}_p = \frac{1}{k_p} \sum_{q_d \in \Omega} {S_{q_d} f(||p_d - q_d|| g(||\tilde{I}_p-\tilde{I}_q||})
     * \f]
@@ -63,6 +63,9 @@ namespace pcl
   class BilateralUpsampling: public CloudSurfaceProcessing<PointInT, PointOutT>
   {
     public:
+      typedef boost::shared_ptr<BilateralUpsampling<PointInT, PointOutT> > Ptr;
+      typedef boost::shared_ptr<const BilateralUpsampling<PointInT, PointOutT> > ConstPtr;
+
       using PCLBase<PointInT>::input_;
       using PCLBase<PointInT>::indices_;
       using PCLBase<PointInT>::initCompute;
@@ -141,6 +144,12 @@ namespace pcl
     protected:
       void
       performProcessing (pcl::PointCloud<PointOutT> &output);
+
+      /** \brief Computes the distance for depth and RGB.
+        * \param[out] val_exp_depth distance values for depth
+        * \param[out] val_exp_rgb distance values for RGB */
+      void
+      computeDistances (Eigen::MatrixXf &val_exp_depth, Eigen::VectorXf &val_exp_rgb);
 
     private:
       int window_size_;

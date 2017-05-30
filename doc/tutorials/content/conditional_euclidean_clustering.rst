@@ -1,7 +1,7 @@
 .. _conditional_euclidean_clustering:
 
 Conditional Euclidean Clustering
-----------------------------
+--------------------------------
 
 This tutorial describes how to use the ``pcl::ConditionalEuclideanClustering`` class:
 A segmentation algorithm that clusters points based on Euclidean distance and a user-customizable condition that needs to hold.
@@ -26,7 +26,7 @@ The clusters classified as too small or too large can still be retrieved afterwa
 The Code
 --------
 
-First, download the dataset `Statues_4.pcd <http://svn.pointclouds.org/data/Trimble/Outdoor1/Statues_4.pcd>`_ and save it somewhere to disk.
+First, download the dataset `Statues_4.pcd <https://raw.github.com/PointCloudLibrary/data/master/Trimble/Outdoor1/Statues_4.pcd>`_ and save it somewhere to disk.
 This is a very large data set of an outdoor environment where we aim to cluster the separate objects and also want to separate the building from the ground plane even though it is attached in a Euclidean sense.
 
 Now create a file, let's say, ``conditional_euclidean_clustering.cpp`` in your favorite editor, and place the following inside it:
@@ -113,11 +113,11 @@ After you have made the executable, you can run it. Simply do:
 
 The resulting output point cloud can be opened like so:
 
- $ ./pcd_viewer output.pcd
+ $ ./pcl_viewer output.pcd
 
 You should see something similar to this:
 
-.. image:: images/conditional_euclidean_clustering.png
+.. image:: images/conditional_euclidean_clustering.jpg
    :alt: Output Cluster Extraction
    :align: center
 

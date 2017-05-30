@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -45,7 +46,7 @@
 #include <pcl/console/print.h>
 #include <pcl/common/transforms.h>
 #include <pcl/point_cloud.h>
-#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/search/kdtree.h>
 
 namespace pcl
 {
@@ -133,12 +134,53 @@ namespace pcl
         inline const std::string& 
         getClassName () const { return (rejection_name_); }
 
-        /** \brief Provide a simple mechanism to update the internal source cloud
-          * using a given transformation. Used in registration loops.
-          * \param[in] transform the transform to apply over the source cloud
-          */
+
+        /** \brief See if this rejector requires source points */
         virtual bool
-        updateSource (const Eigen::Matrix4d &transform) = 0;
+        requiresSourcePoints () const
+        { return (false); }
+
+        /** \brief Abstract method for setting the source cloud */
+        virtual void
+        setSourcePoints (pcl::PCLPointCloud2::ConstPtr /*cloud2*/)
+        {
+          PCL_WARN ("[pcl::registration::%s::setSourcePoints] This class does not require an input source cloud", getClassName ().c_str ());
+        }
+        
+        /** \brief See if this rejector requires source normals */
+        virtual bool
+        requiresSourceNormals () const
+        { return (false); }
+
+        /** \brief Abstract method for setting the source normals */
+        virtual void
+        setSourceNormals (pcl::PCLPointCloud2::ConstPtr /*cloud2*/)
+        { 
+          PCL_WARN ("[pcl::registration::%s::setSourceNormals] This class does not require input source normals", getClassName ().c_str ());
+        }
+        /** \brief See if this rejector requires a target cloud */
+        virtual bool
+        requiresTargetPoints () const
+        { return (false); }
+
+        /** \brief Abstract method for setting the target cloud */
+        virtual void
+        setTargetPoints (pcl::PCLPointCloud2::ConstPtr /*cloud2*/)
+        {
+          PCL_WARN ("[pcl::registration::%s::setTargetPoints] This class does not require an input target cloud", getClassName ().c_str ());
+        }
+        
+        /** \brief See if this rejector requires target normals */
+        virtual bool
+        requiresTargetNormals () const
+        { return (false); }
+
+        /** \brief Abstract method for setting the target normals */
+        virtual void
+        setTargetNormals (pcl::PCLPointCloud2::ConstPtr /*cloud2*/)
+        {
+          PCL_WARN ("[pcl::registration::%s::setTargetNormals] This class does not require input target normals", getClassName ().c_str ());
+        }
 
       protected:
 
@@ -163,7 +205,7 @@ namespace pcl
         virtual ~DataContainerInterface () {}
         virtual double getCorrespondenceScore (int index) = 0;
         virtual double getCorrespondenceScore (const pcl::Correspondence &) = 0;
-        virtual bool updateSource (const Eigen::Matrix4d &transform) = 0;
+        virtual double getCorrespondenceScoreFromNormals (const pcl::Correspondence &) = 0;
      };
 
     /** @b DataContainer is a container for the input and target point clouds and implements the interface 
@@ -177,7 +219,7 @@ namespace pcl
       typedef typename PointCloud::Ptr PointCloudPtr;
       typedef typename PointCloud::ConstPtr PointCloudConstPtr;
 
-      typedef typename pcl::KdTree<PointT>::Ptr KdTreePtr;
+      typedef typename pcl::search::KdTree<PointT>::Ptr KdTreePtr;
       
       typedef pcl::PointCloud<NormalT> Normals;
       typedef typename Normals::Ptr NormalsPtr;
@@ -193,30 +235,29 @@ namespace pcl
           , input_normals_ ()
           , input_normals_transformed_ ()
           , target_normals_ ()
-          , tree_ (new pcl::KdTreeFLANN<PointT>)
+          , tree_ (new pcl::search::KdTree<PointT>)
           , class_name_ ("DataContainer")
           , needs_normals_ (needs_normals)
+          , target_cloud_updated_ (true)
+          , force_no_recompute_ (false)
         {
         }
+      
+        /** \brief Empty destructor */
+        virtual ~DataContainer () {}
 
         /** \brief Provide a source point cloud dataset (must contain XYZ
           * data!), used to compute the correspondence distance.  
           * \param[in] cloud a cloud containing XYZ data
           */
-        inline void 
-        setInputCloud (const PointCloudConstPtr &cloud)
-        {
-          PCL_WARN ("[pcl::registration::%s::setInputCloud] setInputCloud is deprecated. Please use setInputSource instead.\n", getClassName ().c_str ());
-          input_ = cloud;
-        }
+        PCL_DEPRECATED ("[pcl::registration::DataContainer::setInputCloud] setInputCloud is deprecated. Please use setInputSource instead.")
+        void
+        setInputCloud (const PointCloudConstPtr &cloud);
 
         /** \brief Get a pointer to the input point cloud dataset target. */
-        inline PointCloudConstPtr const 
-        getInputCloud () 
-        { 
-          PCL_WARN ("[pcl::registration::%s::getInputCloud] getInputCloud is deprecated. Please use getInputSource instead.\n", getClassName ().c_str ());
-          return (input_); 
-        }
+        PCL_DEPRECATED ("[pcl::registration::DataContainer::getInputCloud] getInputCloud is deprecated. Please use getInputSource instead.")
+        PointCloudConstPtr const
+        getInputCloud ();
 
         /** \brief Provide a source point cloud dataset (must contain XYZ
           * data!), used to compute the correspondence distance.  
@@ -240,12 +281,31 @@ namespace pcl
         setInputTarget (const PointCloudConstPtr &target)
         {
           target_ = target;
-          tree_->setInputCloud (target_);
+          target_cloud_updated_ = true;
         }
 
         /** \brief Get a pointer to the input point cloud dataset target. */
         inline PointCloudConstPtr const 
         getInputTarget () { return (target_); }
+        
+        /** \brief Provide a pointer to the search object used to find correspondences in
+          * the target cloud.
+          * \param[in] tree a pointer to the spatial search object.
+          * \param[in] force_no_recompute If set to true, this tree will NEVER be 
+          * recomputed, regardless of calls to setInputTarget. Only use if you are 
+          * confident that the tree will be set correctly.
+          */
+        inline void
+        setSearchMethodTarget (const KdTreePtr &tree, 
+                               bool force_no_recompute = false) 
+        { 
+          tree_ = tree; 
+          if (force_no_recompute)
+          {
+            force_no_recompute_ = true;
+          }
+          target_cloud_updated_ = true;
+        }
 
         /** \brief Set the normals computed on the input point cloud
           * \param[in] normals the normals computed for the input cloud
@@ -273,6 +333,10 @@ namespace pcl
         inline double 
         getCorrespondenceScore (int index)
         {
+          if ( target_cloud_updated_ && !force_no_recompute_ )
+          {
+            tree_->setInputCloud (target_);
+          }
           std::vector<int> indices (1);
           std::vector<float> distances (1);
           if (tree_->nearestKSearch (input_->points[index], 1, indices, distances))
@@ -309,47 +373,7 @@ namespace pcl
           return (double ((src.normal[0] * tgt.normal[0]) + (src.normal[1] * tgt.normal[1]) + (src.normal[2] * tgt.normal[2])));
         }
 
-        /** \brief Provide a simple mechanism to update the internal source cloud
-          * using a given transformation. Used in registration loops.
-          * \param[in] transform the transform to apply over the source cloud
-          */
-        virtual bool
-        updateSource (const Eigen::Matrix4d &transform)
-        {
-          if (!input_)
-          {
-            PCL_ERROR ("[pcl::registration::%s::updateSource] No input XYZ dataset given. Please specify the input source cloud using setInputSource.\n", getClassName ().c_str ());
-            return (false);
-          }
-          if (needs_normals_ && !input_normals_)
-          {
-            PCL_ERROR ("[pcl::registration::%s::updateSource] No input normals dataset given. Please specify the input normal cloud using setInputNormals.\n", getClassName ().c_str ());
-            return (false);
-          }
-          input_transformed_.reset (new PointCloud);
-          pcl::transformPointCloud<PointT, double> (*input_, *input_transformed_, transform);
-          input_ = input_transformed_;
-          
-          if (!needs_normals_)
-            return (true);
-
-          input_normals_transformed_.reset (new Normals);
-          rotatePointCloudNormals (*input_normals_, *input_normals_transformed_, transform);
-          input_normals_ = input_normals_transformed_;
-          return (true);
-        }
-
-      private:
-        /** \brief Rotate the normals in a point cloud.
-          * \param[in] cloud_in the input point cloud
-          * \param[out] cloud_out the resultant output cloud containing rotated normals
-          * \param[in] transform the 4x4 rigid transformation holding the rotation
-          */
-        void
-        rotatePointCloudNormals (const pcl::PointCloud<NormalT> &cloud_in, 
-                                 pcl::PointCloud<NormalT> &cloud_out,
-                                 const Eigen::Matrix4d &transform);
-
+     private:
         /** \brief The input point cloud dataset */
         PointCloudConstPtr input_;
 
@@ -376,6 +400,16 @@ namespace pcl
 
         /** \brief Should the current data container use normals? */
         bool needs_normals_;
+
+        /** \brief Variable that stores whether we have a new target cloud, meaning we need to pre-process it again.
+         * This way, we avoid rebuilding the kd-tree */
+        bool target_cloud_updated_;
+
+        /** \brief A flag which, if set, means the tree operating on the target cloud 
+         * will never be recomputed*/
+        bool force_no_recompute_;
+
+
 
         /** \brief Get a string representation of the name of this class. */
         inline const std::string& 

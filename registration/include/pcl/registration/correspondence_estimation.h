@@ -45,8 +45,7 @@
 
 #include <pcl/pcl_base.h>
 #include <pcl/common/transforms.h>
-#include <pcl/kdtree/kdtree.h>
-#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/search/kdtree.h>
 #include <pcl/pcl_macros.h>
 
 #include <pcl/registration/correspondence_types.h>
@@ -67,14 +66,17 @@ namespace pcl
         typedef boost::shared_ptr<CorrespondenceEstimationBase<PointSource, PointTarget, Scalar> > Ptr;
         typedef boost::shared_ptr<const CorrespondenceEstimationBase<PointSource, PointTarget, Scalar> > ConstPtr;
 
-        using PCLBase<PointSource>::initCompute;
+        // using PCLBase<PointSource>::initCompute;
         using PCLBase<PointSource>::deinitCompute;
         using PCLBase<PointSource>::input_;
         using PCLBase<PointSource>::indices_;
         using PCLBase<PointSource>::setIndices;
 
-        typedef typename pcl::KdTree<PointTarget> KdTree;
-        typedef typename pcl::KdTree<PointTarget>::Ptr KdTreePtr;
+        typedef pcl::search::KdTree<PointTarget> KdTree;
+        typedef typename KdTree::Ptr KdTreePtr;
+
+        typedef pcl::search::KdTree<PointSource> KdTreeReciprocal;
+        typedef typename KdTree::Ptr KdTreeReciprocalPtr;
 
         typedef pcl::PointCloud<PointSource> PointCloudSource;
         typedef typename PointCloudSource::Ptr PointCloudSourcePtr;
@@ -89,35 +91,36 @@ namespace pcl
         /** \brief Empty constructor. */
         CorrespondenceEstimationBase () 
           : corr_name_ ("CorrespondenceEstimationBase")
-          , tree_ (new pcl::KdTreeFLANN<PointTarget>)
+          , tree_ (new pcl::search::KdTree<PointTarget>)
+          , tree_reciprocal_ (new pcl::search::KdTree<PointSource>)
           , target_ ()
           , target_indices_ ()
           , point_representation_ ()
           , input_transformed_ ()
           , input_fields_ ()
+          , target_cloud_updated_ (true)
+          , source_cloud_updated_ (true)
+          , force_no_recompute_ (false)
+          , force_no_recompute_reciprocal_ (false)
         {
         }
+      
+        /** \brief Empty destructor */
+        virtual ~CorrespondenceEstimationBase () {}
 
         /** \brief Provide a pointer to the input source 
           * (e.g., the point cloud that we want to align to the target)
           *
           * \param[in] cloud the input point cloud source
           */
-        inline void 
-        setInputCloud (const PointCloudSourceConstPtr &cloud)
-        {
-          PCL_WARN ("[pcl::registration::%s::setInputCloud] setInputCloud is deprecated. Please use setInputSource instead.\n", getClassName ().c_str ());
-          PCLBase<PointSource>::setInputCloud (cloud);
-          pcl::getFields (*cloud, input_fields_);
-        }
+        PCL_DEPRECATED ("[pcl::registration::CorrespondenceEstimationBase::setInputCloud] setInputCloud is deprecated. Please use setInputSource instead.")
+        void
+        setInputCloud (const PointCloudSourceConstPtr &cloud);
 
         /** \brief Get a pointer to the input point cloud dataset target. */
-        inline PointCloudSourceConstPtr const 
-        getInputCloud () 
-        { 
-          PCL_WARN ("[pcl::registration::%s::getInputCloud] getInputCloud is deprecated. Please use getInputSource instead.\n", getClassName ().c_str ());
-          return (input_ ); 
-        }
+        PCL_DEPRECATED ("[pcl::registration::CorrespondenceEstimationBase::getInputCloud] getInputCloud is deprecated. Please use getInputSource instead.")
+        PointCloudSourceConstPtr const
+        getInputCloud ();
 
         /** \brief Provide a pointer to the input source 
           * (e.g., the point cloud that we want to align to the target)
@@ -127,6 +130,7 @@ namespace pcl
         inline void 
         setInputSource (const PointCloudSourceConstPtr &cloud)
         {
+          source_cloud_updated_ = true;
           PCLBase<PointSource>::setInputCloud (cloud);
           pcl::getFields (*cloud, input_fields_);
         }
@@ -149,6 +153,31 @@ namespace pcl
         inline PointCloudTargetConstPtr const 
         getInputTarget () { return (target_ ); }
 
+
+        /** \brief See if this rejector requires source normals */
+        virtual bool
+        requiresSourceNormals () const
+        { return (false); }
+
+        /** \brief Abstract method for setting the source normals */
+        virtual void
+        setSourceNormals (pcl::PCLPointCloud2::ConstPtr /*cloud2*/)
+        {
+          PCL_WARN ("[pcl::registration::%s::setSourceNormals] This class does not require input source normals", getClassName ().c_str ());
+        }
+        
+        /** \brief See if this rejector requires target normals */
+        virtual bool
+        requiresTargetNormals () const
+        { return (false); }
+
+        /** \brief Abstract method for setting the target normals */
+        virtual void
+        setTargetNormals (pcl::PCLPointCloud2::ConstPtr /*cloud2*/)
+        {
+          PCL_WARN ("[pcl::registration::%s::setTargetNormals] This class does not require input target normals", getClassName ().c_str ());
+        }
+
         /** \brief Provide a pointer to the vector of indices that represent the 
           * input source point cloud.
           * \param[in] indices a pointer to the vector of indices 
@@ -163,19 +192,75 @@ namespace pcl
         inline IndicesPtr const 
         getIndicesSource () { return (indices_); }
 
-        /** \brief Provide a pointer to the vector of indices that represent the 
-          * input target point cloud.
+        /** \brief Provide a pointer to the vector of indices that represent the input target point cloud.
           * \param[in] indices a pointer to the vector of indices 
           */
         inline void
         setIndicesTarget (const IndicesPtr &indices)
         {
+          target_cloud_updated_ = true;
           target_indices_ = indices;
         }
 
         /** \brief Get a pointer to the vector of indices used for the target dataset. */
         inline IndicesPtr const 
         getIndicesTarget () { return (target_indices_); }
+
+        /** \brief Provide a pointer to the search object used to find correspondences in
+          * the target cloud.
+          * \param[in] tree a pointer to the spatial search object.
+          * \param[in] force_no_recompute If set to true, this tree will NEVER be 
+          * recomputed, regardless of calls to setInputTarget. Only use if you are 
+          * confident that the tree will be set correctly.
+          */
+        inline void
+        setSearchMethodTarget (const KdTreePtr &tree, 
+                               bool force_no_recompute = false) 
+        { 
+          tree_ = tree; 
+          if (force_no_recompute)
+          {
+            force_no_recompute_ = true;
+          }
+          // Since we just set a new tree, we need to check for updates
+          target_cloud_updated_ = true;
+        }
+
+        /** \brief Get a pointer to the search method used to find correspondences in the
+          * target cloud. */
+        inline KdTreePtr
+        getSearchMethodTarget () const
+        {
+          return (tree_);
+        }
+
+        /** \brief Provide a pointer to the search object used to find correspondences in
+          * the source cloud (usually used by reciprocal correspondence finding).
+          * \param[in] tree a pointer to the spatial search object.
+          * \param[in] force_no_recompute If set to true, this tree will NEVER be 
+          * recomputed, regardless of calls to setInputSource. Only use if you are 
+          * extremely confident that the tree will be set correctly.
+          */
+        inline void
+        setSearchMethodSource (const KdTreeReciprocalPtr &tree, 
+                               bool force_no_recompute = false) 
+        { 
+          tree_reciprocal_ = tree; 
+          if ( force_no_recompute )
+          {
+            force_no_recompute_reciprocal_ = true;
+          }
+          // Since we just set a new tree, we need to check for updates
+          source_cloud_updated_ = true;
+        }
+
+        /** \brief Get a pointer to the search method used to find correspondences in the
+          * source cloud. */
+        inline KdTreeReciprocalPtr
+        getSearchMethodSource () const
+        {
+          return (tree_reciprocal_);
+        }
 
         /** \brief Determine the correspondences between input and target cloud.
           * \param[out] correspondences the found correspondences (index of query point, index of target point, distance)
@@ -208,20 +293,21 @@ namespace pcl
           point_representation_ = point_representation;
         }
 
-        /** \brief Provide a simple mechanism to update the internal source cloud
-          * using a given transformation. Used in registration loops.
-          * \param[in] transform the transform to apply over the source cloud
-          */
-        virtual bool
-        updateSource (const Eigen::Matrix<Scalar, 4, 4> &transform) = 0;
+        /** \brief Clone and cast to CorrespondenceEstimationBase */
+        virtual boost::shared_ptr< CorrespondenceEstimationBase<PointSource, PointTarget, Scalar> > clone () const = 0;
 
       protected:
         /** \brief The correspondence estimation method name. */
         std::string corr_name_;
 
-        /** \brief A pointer to the spatial search object. */
+        /** \brief A pointer to the spatial search object used for the target dataset. */
         KdTreePtr tree_;
 
+        /** \brief A pointer to the spatial search object used for the source dataset. */
+        KdTreeReciprocalPtr tree_reciprocal_;
+
+
+        
         /** \brief The input point cloud dataset target. */
         PointCloudTargetConstPtr target_;
 
@@ -235,7 +321,7 @@ namespace pcl
         PointCloudTargetPtr input_transformed_;
 
         /** \brief The types of input point fields available. */
-        std::vector<sensor_msgs::PointField> input_fields_;
+        std::vector<pcl::PCLPointField> input_fields_;
 
         /** \brief Abstract class get name method. */
         inline const std::string& 
@@ -244,6 +330,27 @@ namespace pcl
         /** \brief Internal computation initalization. */
         bool
         initCompute ();
+        
+        /** \brief Internal computation initalization for reciprocal correspondences. */
+        bool
+        initComputeReciprocal ();
+
+        /** \brief Variable that stores whether we have a new target cloud, meaning we need to pre-process it again.
+         * This way, we avoid rebuilding the kd-tree for the target cloud every time the determineCorrespondences () method
+         * is called. */
+        bool target_cloud_updated_;
+        /** \brief Variable that stores whether we have a new source cloud, meaning we need to pre-process it again.
+         * This way, we avoid rebuilding the reciprocal kd-tree for the source cloud every time the determineCorrespondences () method
+         * is called. */
+        bool source_cloud_updated_;
+        /** \brief A flag which, if set, means the tree operating on the target cloud 
+         * will never be recomputed*/
+        bool force_no_recompute_;
+        
+        /** \brief A flag which, if set, means the tree operating on the source cloud 
+         * will never be recomputed*/
+        bool force_no_recompute_reciprocal_;
+
      };
 
     /** \brief @b CorrespondenceEstimation represents the base class for
@@ -277,18 +384,20 @@ namespace pcl
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::point_representation_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::input_transformed_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::tree_;
+        using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::tree_reciprocal_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::target_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::corr_name_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::target_indices_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::getClassName;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::initCompute;
+        using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::initComputeReciprocal;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::input_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::indices_;
         using CorrespondenceEstimationBase<PointSource, PointTarget, Scalar>::input_fields_;
         using PCLBase<PointSource>::deinitCompute;
 
-        typedef typename pcl::KdTree<PointTarget> KdTree;
-        typedef typename pcl::KdTree<PointTarget>::Ptr KdTreePtr;
+        typedef pcl::search::KdTree<PointTarget> KdTree;
+        typedef typename pcl::search::KdTree<PointTarget>::Ptr KdTreePtr;
 
         typedef pcl::PointCloud<PointSource> PointCloudSource;
         typedef typename PointCloudSource::Ptr PointCloudSourcePtr;
@@ -305,6 +414,9 @@ namespace pcl
         {
           corr_name_  = "CorrespondenceEstimation";
         }
+      
+        /** \brief Empty destructor */
+        virtual ~CorrespondenceEstimation () {}
 
         /** \brief Determine the correspondences between input and target cloud.
           * \param[out] correspondences the found correspondences (index of query point, index of target point, distance)
@@ -325,99 +437,13 @@ namespace pcl
         determineReciprocalCorrespondences (pcl::Correspondences &correspondences,
                                             double max_distance = std::numeric_limits<double>::max ());
 
-        /** \brief Provide a simple mechanism to update the internal source cloud
-          * using a given transformation. Used in registration loops.
-          * \param[in] transform the transform to apply over the source cloud
-          */
-        virtual bool
-        updateSource (const Eigen::Matrix<Scalar, 4, 4> &transform)
+        
+        /** \brief Clone and cast to CorrespondenceEstimationBase */
+        virtual boost::shared_ptr< CorrespondenceEstimationBase<PointSource, PointTarget, Scalar> > 
+        clone () const
         {
-          if (!input_)
-          {
-            PCL_ERROR ("[pcl::registration::%s::updateSource] No input dataset given. Please specify the input source cloud using setInputSource.\n", getClassName ().c_str ());
-            return (false);
-          }
-
-          // Check if XYZ or normal data is available
-          int x_idx = -1, nx_idx = -1;
-
-          for (int i = 0; i < int (input_fields_.size ()); ++i)
-          {
-            if (input_fields_[i].name == "x")
-              x_idx = i;
-            if (input_fields_[i].name == "normal_x")
-              nx_idx = i;
-          }
-
-          // If no XYZ available, then return
-          if (x_idx == -1)
-            return (true);
-
-          input_transformed_.reset (new PointCloudSource (*input_));
-         
-          int y_idx = x_idx + 1, z_idx = x_idx + 2, ny_idx = nx_idx + 1, nz_idx = nx_idx + 2;
-          Eigen::Vector4f pt (0.0f, 0.0f, 0.0f, 1.0f), pt_t;
-          Eigen::Matrix4f tr = transform.template cast<float> ();
-
-          if (nx_idx != -1)
-          {
-            Eigen::Vector3f nt, nt_t;
-            Eigen::Matrix3f rot = tr.block<3, 3> (0, 0);
-
-            //pcl::transformPointCloudWithNormals<PointSource, Scalar> (*input_, *input_transformed_, transform);
-            for (size_t i = 0; i < input_transformed_->size (); ++i)
-            {
-              uint8_t* pt_data = reinterpret_cast<uint8_t*> (&input_transformed_->points[i]);
-              memcpy (&pt[0], pt_data + input_fields_[x_idx].offset, sizeof (float));
-              memcpy (&pt[1], pt_data + input_fields_[y_idx].offset, sizeof (float));
-              memcpy (&pt[2], pt_data + input_fields_[z_idx].offset, sizeof (float));
-
-              if (!pcl_isfinite (pt[0]) || !pcl_isfinite (pt[1]) || !pcl_isfinite (pt[2])) 
-                continue;
-
-              pt_t = tr * pt;
-
-              memcpy (pt_data + input_fields_[x_idx].offset, &pt_t[0], sizeof (float));
-              memcpy (pt_data + input_fields_[y_idx].offset, &pt_t[1], sizeof (float));
-              memcpy (pt_data + input_fields_[z_idx].offset, &pt_t[2], sizeof (float));
-
-              memcpy (&nt[0], pt_data + input_fields_[nx_idx].offset, sizeof (float));
-              memcpy (&nt[1], pt_data + input_fields_[ny_idx].offset, sizeof (float));
-              memcpy (&nt[2], pt_data + input_fields_[nz_idx].offset, sizeof (float));
-
-              if (!pcl_isfinite (nt[0]) || !pcl_isfinite (nt[1]) || !pcl_isfinite (nt[2])) 
-                continue;
-
-              nt_t = rot * nt;
-
-              memcpy (pt_data + input_fields_[nx_idx].offset, &nt_t[0], sizeof (float));
-              memcpy (pt_data + input_fields_[ny_idx].offset, &nt_t[1], sizeof (float));
-              memcpy (pt_data + input_fields_[nz_idx].offset, &nt_t[2], sizeof (float));
-            }
-          }
-          else
-          {
-            //pcl::transformPointCloud<PointSource, Scalar> (*input_, *input_transformed_, transform);
-            for (size_t i = 0; i < input_transformed_->size (); ++i)
-            {
-              uint8_t* pt_data = reinterpret_cast<uint8_t*> (&input_transformed_->points[i]);
-              memcpy (&pt[0], pt_data + input_fields_[x_idx].offset, sizeof (float));
-              memcpy (&pt[1], pt_data + input_fields_[y_idx].offset, sizeof (float));
-              memcpy (&pt[2], pt_data + input_fields_[z_idx].offset, sizeof (float));
-
-              if (!pcl_isfinite (pt[0]) || !pcl_isfinite (pt[1]) || !pcl_isfinite (pt[2])) 
-                continue;
-
-              pt_t = tr * pt;
-
-              memcpy (pt_data + input_fields_[x_idx].offset, &pt_t[0], sizeof (float));
-              memcpy (pt_data + input_fields_[y_idx].offset, &pt_t[1], sizeof (float));
-              memcpy (pt_data + input_fields_[z_idx].offset, &pt_t[2], sizeof (float));
-            }
-          }
-          
-          input_ = input_transformed_;
-          return (true);
+          Ptr copy (new CorrespondenceEstimation<PointSource, PointTarget, Scalar> (*this));
+          return (copy);
         }
      };
   }

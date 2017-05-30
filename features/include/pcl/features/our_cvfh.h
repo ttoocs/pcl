@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -41,8 +42,6 @@
 #define PCL_FEATURES_OURCVFH_H_
 
 #include <pcl/features/feature.h>
-#include <pcl/features/normal_3d.h>
-#include <pcl/features/vfh.h>
 #include <pcl/search/pcl_search.h>
 #include <pcl/common/common.h>
 
@@ -75,8 +74,6 @@ namespace pcl
 
       typedef typename Feature<PointInT, PointOutT>::PointCloudOut PointCloudOut;
       typedef typename pcl::search::Search<PointNormal>::Ptr KdTreePtr;
-      typedef typename pcl::NormalEstimation<PointNormal, PointNormal> NormalEstimator;
-      typedef typename pcl::VFHEstimation<PointInT, PointNT, pcl::VFHSignature308> VFHEstimator;
       typedef typename pcl::PointCloud<PointInT>::Ptr PointInTPtr;
       /** \brief Empty constructor. */
       OURCVFHEstimation () :
@@ -95,7 +92,7 @@ namespace pcl
 
       /** \brief Creates an affine transformation from the RF axes
        * \param[in] evx the x-axis
-       * \param[in] evy the z-axis
+       * \param[in] evy the y-axis
        * \param[in] evz the z-axis
        * \param[out] transformPC the resulting transformation
        * \param[in] center_mat 4x4 matrix concatenated to the resulting transformation
@@ -147,6 +144,7 @@ namespace pcl
 
       /** \brief Removes normals with high curvature caused by real edges or noisy data
        * \param[in] cloud pointcloud to be filtered
+       * \param[in] indices_to_use
        * \param[out] indices_out the indices of the points with higher curvature than threshold
        * \param[out] indices_in the indices of the remaining points after filtering
        * \param[in] threshold threshold value for curvature
@@ -194,7 +192,7 @@ namespace pcl
        * \param[out] centroids vector to hold the centroids
        */
       inline void
-      getCentroidClusters (std::vector<Eigen::Vector3f> & centroids)
+      getCentroidClusters (std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f> > & centroids)
       {
         for (size_t i = 0; i < centroids_dominant_orientations_.size (); ++i)
           centroids.push_back (centroids_dominant_orientations_[i]);
@@ -204,7 +202,7 @@ namespace pcl
        * \param[out] centroids vector to hold the normal centroids
        */
       inline void
-      getCentroidNormalClusters (std::vector<Eigen::Vector3f> & centroids)
+      getCentroidNormalClusters (std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f> > & centroids)
       {
         for (size_t i = 0; i < dominant_normals_.size (); ++i)
           centroids.push_back (dominant_normals_[i]);
@@ -263,6 +261,15 @@ namespace pcl
       getClusterIndices (std::vector<pcl::PointIndices> & indices)
       {
         indices = clusters_;
+      }
+    
+      /** \brief Gets the number of non-disambiguable axes that correspond to each centroid
+       * \param[out] cluster_axes vector mapping each centroid to the number of signatures
+       */
+      inline void
+      getClusterAxes (std::vector<short> & cluster_axes)
+      {
+        cluster_axes = cluster_axes_;
       }
 
       /** \brief Sets the refinement factor for the clusters
@@ -388,20 +395,13 @@ namespace pcl
 
     protected:
       /** \brief Centroids that were used to compute different OUR-CVFH descriptors */
-      std::vector<Eigen::Vector3f> centroids_dominant_orientations_;
+      std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f> > centroids_dominant_orientations_;
       /** \brief Normal centroids that were used to compute different OUR-CVFH descriptors */
-      std::vector<Eigen::Vector3f> dominant_normals_;
+      std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f> > dominant_normals_;
       /** \brief Indices to the points representing the stable clusters */
       std::vector<pcl::PointIndices> clusters_;
-
-    private:
-      /** \brief Make the computeFeature (&Eigen::MatrixXf); inaccessible from outside the class
-       * \param[out] output the output point cloud
-       */
-      void
-      computeFeatureEigen (pcl::PointCloud<Eigen::MatrixXf> &)
-      {
-      }
+      /** \brief Mapping from clusters to OUR-CVFH descriptors */
+      std::vector<short> cluster_axes_;
   };
 }
 

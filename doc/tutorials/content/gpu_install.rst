@@ -17,7 +17,7 @@ In order to run the code you'll need a decent Nvidia GPU with Fermi or Kepler ar
 
 This should indicate which GPU you have on your system, if you don't have an Nvidia GPU, we're sorry, but you
 won't be able to use PCL GPU.
-The output of this you can compare with `this link <http://www.nvidia.co.uk/object/cuda_gpus_uk.html>`_  
+The output of this you can compare with `this link <http://www.nvidia.co.uk/object/cuda-parallel-computing-uk.html>`_  
 on the Nvidia website, your card should mention compute capability of 2.x (Fermi) or 3.x (Kepler) or higher.
 If you want to run with a GUI, you can also run::
 
@@ -62,7 +62,27 @@ Once you have installed you GPU device driver you will also need to install the 
 You can get the SDK, but for PCL this is not needed, this provides you with general CUDA examples
 and some scripts to test the performance of your CPU as well as your hardware specifications.
 
-Now you can get the latest trunk version (or another one) of PCL and configure your
+CUDA only compiles with gcc 4.4 and lower, so if your default installed gcc is 4.5 or higher you'll need to install gcc 4.4:
+
+ $ sudo apt-get install gcc-4.4
+
+Now you need to force your gcc to use this version, you can remove the older version, the other option is to create a symlink in your home folder and include that in the beginning of your path:
+
+ $ cd
+ $ mkdir bin
+
+Add 'export PATH=$HOME/bin:$PATH as the last line to your ~/.bashrc file.
+Now create the symlinks in your bin folder:
+
+ $ cd ~/bin
+ $ ln -s <your_gcc_installation> c++
+ $ ln -s <your_gcc_installation> cc
+ $ ln -s <your_gcc_installation> g++
+ $ ln -s <your_gcc_installation> gcc
+
+If you use colorgcc these links all need to point to /usr/bin/colorgcc.
+
+Now you can get the latest git master (or another one) of PCL and configure your
 installation to use the CUDA functions.
 
 Go to your PCL root folder and do::
@@ -93,16 +113,18 @@ Tested Hardware
 ---------------
 Please report us the hardware you have tested the following methods with.
 
-+-----------------------+---------------------+----------------+
-| Method                | Hardware            | Reported FPS   |
-+=======================+=====================+================+
-| Kinfu                 | GTX680              | 20-27          |
-+-----------------------+---------------------+----------------+
-|                       | C2070               | 29             |
-+-----------------------+---------------------+----------------+
-| People Pose Detection | GTX680              | 20-23          |
-+-----------------------+---------------------+----------------+
-|                       | C2070               | 10-20          |
-+-----------------------+---------------------+----------------+
++-----------------------+----------------------------------------------------------------------+----------------+
+| Method                | Hardware                                                             | Reported FPS   |
++=======================+======================================================================+================+
+| Kinfu                 | GTX680, Intel Xeon CPU E5620 @ 2.40Ghz x 8, 24Gb RAM                 | 20-27          |
++-----------------------+----------------------------------------------------------------------+----------------+
+|                       | GTX480, Intel Xeon CPU W3550 @ 3.07GHz × 4, 7.8Gb RAM                | 40             |
++-----------------------+----------------------------------------------------------------------+----------------+
+|                       | C2070, Intel Xeon CPU E5620 @ 2.40Ghz x 8, 24Gb RAM                  | 29             |
++-----------------------+----------------------------------------------------------------------+----------------+
+| People Pose Detection | GTX680, Intel Xeon CPU E5620 @ 2.40Ghz x 8, 24Gb RAM                 | 20-23          |
++-----------------------+----------------------------------------------------------------------+----------------+
+|                       | C2070, Intel Xeon CPU E5620 @ 2.40Ghz x 8, 24Gb RAM                  | 10-20          |
++-----------------------+----------------------------------------------------------------------+----------------+
 
 

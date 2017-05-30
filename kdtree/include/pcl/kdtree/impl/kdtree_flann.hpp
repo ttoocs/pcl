@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2009-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -38,10 +39,55 @@
 #ifndef PCL_KDTREE_KDTREE_IMPL_FLANN_H_
 #define PCL_KDTREE_KDTREE_IMPL_FLANN_H_
 
+#include <cstdio>
 #include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/kdtree/flann.h>
 #include <pcl/console/print.h>
 
-////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT, typename Dist>
+pcl::KdTreeFLANN<PointT, Dist>::KdTreeFLANN (bool sorted)
+  : pcl::KdTree<PointT> (sorted)
+  , flann_index_ (), cloud_ ()
+  , index_mapping_ (), identity_mapping_ (false)
+  , dim_ (0), total_nr_points_ (0)
+  , param_k_ (::flann::SearchParams (-1 , epsilon_))
+  , param_radius_ (::flann::SearchParams (-1, epsilon_, sorted))
+{
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT, typename Dist>
+pcl::KdTreeFLANN<PointT, Dist>::KdTreeFLANN (const KdTreeFLANN<PointT> &k) 
+  : pcl::KdTree<PointT> (false)
+  , flann_index_ (), cloud_ ()
+  , index_mapping_ (), identity_mapping_ (false)
+  , dim_ (0), total_nr_points_ (0)
+  , param_k_ (::flann::SearchParams (-1 , epsilon_))
+  , param_radius_ (::flann::SearchParams (-1, epsilon_, false))
+{
+  *this = k;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT, typename Dist> void 
+pcl::KdTreeFLANN<PointT, Dist>::setEpsilon (float eps)
+{
+  epsilon_ = eps;
+  param_k_ =  ::flann::SearchParams (-1 , epsilon_);
+  param_radius_ = ::flann::SearchParams (-1 , epsilon_, sorted_);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT, typename Dist> void 
+pcl::KdTreeFLANN<PointT, Dist>::setSortedResults (bool sorted)
+{
+  sorted_ = sorted;
+  param_k_ = ::flann::SearchParams (-1, epsilon_);
+  param_radius_ = ::flann::SearchParams (-1, epsilon_, sorted_);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT, typename Dist> void 
 pcl::KdTreeFLANN<PointT, Dist>::setInputCloud (const PointCloudConstPtr &cloud, const IndicesConstPtr &indices)
 {
@@ -68,13 +114,20 @@ pcl::KdTreeFLANN<PointT, Dist>::setInputCloud (const PointCloudConstPtr &cloud, 
     convertCloudToArray (*input_);
   }
   total_nr_points_ = static_cast<int> (index_mapping_.size ());
+  if (total_nr_points_ == 0)
+  {
+    PCL_ERROR ("[pcl::KdTreeFLANN::setInputCloud] Cannot create a KDTree with an empty input cloud!\n");
+    return;
+  }
 
-  flann_index_ = new FLANNIndex (::flann::Matrix<float> (cloud_, index_mapping_.size (), dim_),
-                                 ::flann::KDTreeSingleIndexParams (15)); // max 15 points/leaf
+  flann_index_.reset (new FLANNIndex (::flann::Matrix<float> (cloud_.get (), 
+                                                              index_mapping_.size (), 
+                                                              dim_),
+                                      ::flann::KDTreeSingleIndexParams (15))); // max 15 points/leaf
   flann_index_->buildIndex ();
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT, typename Dist> int 
 pcl::KdTreeFLANN<PointT, Dist>::nearestKSearch (const PointT &point, int k, 
                                                 std::vector<int> &k_indices, 
@@ -111,7 +164,7 @@ pcl::KdTreeFLANN<PointT, Dist>::nearestKSearch (const PointT &point, int k,
   return (k);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT, typename Dist> int 
 pcl::KdTreeFLANN<PointT, Dist>::radiusSearch (const PointT &point, double radius, std::vector<int> &k_indices,
                                               std::vector<float> &k_sqr_dists, unsigned int max_nn) const
@@ -128,7 +181,7 @@ pcl::KdTreeFLANN<PointT, Dist>::radiusSearch (const PointT &point, double radius
   std::vector<std::vector<int> > indices(1);
   std::vector<std::vector<float> > dists(1);
 
-  ::flann::SearchParams params(param_radius_);
+  ::flann::SearchParams params (param_radius_);
   if (max_nn == static_cast<unsigned int>(total_nr_points_))
     params.max_neighbors = -1;  // return all neighbors in radius
   else
@@ -156,40 +209,32 @@ pcl::KdTreeFLANN<PointT, Dist>::radiusSearch (const PointT &point, double radius
   return (neighbors_in_radius);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT, typename Dist> void 
 pcl::KdTreeFLANN<PointT, Dist>::cleanup ()
 {
-  if (flann_index_)
-    delete flann_index_;
-
   // Data array cleanup
-  if (cloud_)
-  {
-    free (cloud_);
-    cloud_ = NULL;
-  }
   index_mapping_.clear ();
 
   if (indices_)
     indices_.reset ();
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT, typename Dist> void 
 pcl::KdTreeFLANN<PointT, Dist>::convertCloudToArray (const PointCloud &cloud)
 {
   // No point in doing anything if the array is empty
   if (cloud.points.empty ())
   {
-    cloud_ = NULL;
+    cloud_.reset ();
     return;
   }
 
   int original_no_of_points = static_cast<int> (cloud.points.size ());
 
-  cloud_ = static_cast<float*> (malloc (original_no_of_points * dim_ * sizeof (float)));
-  float* cloud_ptr = cloud_;
+  cloud_.reset (new float[original_no_of_points * dim_]);
+  float* cloud_ptr = cloud_.get ();
   index_mapping_.reserve (original_no_of_points);
   identity_mapping_ = true;
 
@@ -209,21 +254,21 @@ pcl::KdTreeFLANN<PointT, Dist>::convertCloudToArray (const PointCloud &cloud)
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT, typename Dist> void 
 pcl::KdTreeFLANN<PointT, Dist>::convertCloudToArray (const PointCloud &cloud, const std::vector<int> &indices)
 {
   // No point in doing anything if the array is empty
   if (cloud.points.empty ())
   {
-    cloud_ = NULL;
+    cloud_.reset ();
     return;
   }
 
   int original_no_of_points = static_cast<int> (indices.size ());
 
-  cloud_ = static_cast<float*> (malloc (original_no_of_points * dim_ * sizeof (float)));
-  float* cloud_ptr = cloud_;
+  cloud_.reset (new float[original_no_of_points * dim_]);
+  float* cloud_ptr = cloud_.get ();
   index_mapping_.reserve (original_no_of_points);
   // its a subcloud -> false
   // true only identity: 

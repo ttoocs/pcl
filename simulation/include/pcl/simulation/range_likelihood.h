@@ -2,8 +2,15 @@
 #define PCL_RANGE_LIKELIHOOD
 
 #include <GL/glew.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
+
+#include <pcl/pcl_config.h>
+#ifdef OPENGL_IS_A_FRAMEWORK
+# include <OpenGL/gl.h>
+# include <OpenGL/glu.h>
+#else
+# include <GL/gl.h>
+# include <GL/glu.h>
+#endif
 
 #include <boost/random/linear_congruential.hpp>
 #include <boost/random/normal_distribution.hpp>
@@ -218,7 +225,7 @@ namespace pcl
 
         gllib::Program::Ptr likelihood_program_;
         GLuint quad_vbo_;
-        std::vector<Eigen::Vector3f> vertices_;
+        std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f> > vertices_;
         float* score_buffer_;
         Quad quad_;
         SumReduce sum_reduce_;

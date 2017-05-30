@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -110,6 +110,7 @@ pcl::isXYPointIn2DXYPolygon (const PointT &point, const pcl::PointCloud<PointT> 
   double x1, x2, y1, y2;
 
   int nr_poly_points = static_cast<int> (polygon.points.size ());
+  // start with the last point to make the check last point<->first point the first one
   double xold = polygon.points[nr_poly_points - 1].x;
   double yold = polygon.points[nr_poly_points - 1].y;
   for (int i = 0; i < nr_poly_points; i++)
@@ -138,6 +139,7 @@ pcl::isXYPointIn2DXYPolygon (const PointT &point, const pcl::PointCloud<PointT> 
     xold = xnew;
     yold = ynew;
   }
+
   return (in_poly);
 }
 
@@ -155,7 +157,7 @@ pcl::ExtractPolygonalPrismData<PointT>::segment (pcl::PointIndices &output)
 
   if (static_cast<int> (planar_hull_->points.size ()) < min_pts_hull_)
   {
-    PCL_ERROR ("[pcl::%s::segment] Not enough points (%zu) in the hull!\n", getClassName ().c_str (), planar_hull_->points.size ());
+    PCL_ERROR ("[pcl::%s::segment] Not enough points (%lu) in the hull!\n", getClassName ().c_str (), planar_hull_->points.size ());
     output.indices.clear ();
     return;
   }

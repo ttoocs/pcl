@@ -43,6 +43,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/obj_io.h>
 #include <vtkDataArray.h>
+#include <vtkCellArray.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 pcl::modeler::CloudMesh::CloudMesh()
@@ -95,7 +96,7 @@ pcl::modeler::CloudMesh::save(const std::string& filename) const
   if (filename.rfind(".obj") == (filename.length()-4))
   {
     pcl::PolygonMesh polygon_mesh;
-    pcl::toROSMsg(*cloud_, polygon_mesh.cloud);
+    pcl::toPCLPointCloud2(*cloud_, polygon_mesh.cloud);
     polygon_mesh.polygons = polygons_;
     return (pcl::io::saveOBJFile(filename, polygon_mesh, true) == 0);
   }

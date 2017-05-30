@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -47,7 +47,7 @@
 namespace pcl
 {
   /** \brief Obtain the maximum and minimum points in 3D from a given point cloud.
-    * \param[in] cloud the pointer to a sensor_msgs::PointCloud2 dataset
+    * \param[in] cloud the pointer to a pcl::PCLPointCloud2 dataset
     * \param[in] x_idx the index of the X channel
     * \param[in] y_idx the index of the Y channel
     * \param[in] z_idx the index of the Z channel
@@ -55,12 +55,12 @@ namespace pcl
     * \param[out] max_pt the maximum data point
     */
   PCL_EXPORTS void 
-  getMinMax3D (const sensor_msgs::PointCloud2ConstPtr &cloud, int x_idx, int y_idx, int z_idx, 
+  getMinMax3D (const pcl::PCLPointCloud2ConstPtr &cloud, int x_idx, int y_idx, int z_idx,
                Eigen::Vector4f &min_pt, Eigen::Vector4f &max_pt);
 
   /** \brief Obtain the maximum and minimum points in 3D from a given point cloud. 
     * \note Performs internal data filtering as well.
-    * \param[in] cloud the pointer to a sensor_msgs::PointCloud2 dataset
+    * \param[in] cloud the pointer to a pcl::PCLPointCloud2 dataset
     * \param[in] x_idx the index of the X channel
     * \param[in] y_idx the index of the Y channel
     * \param[in] z_idx the index of the Z channel
@@ -73,7 +73,7 @@ namespace pcl
     * considered, \b true otherwise.
     */
   PCL_EXPORTS void 
-  getMinMax3D (const sensor_msgs::PointCloud2ConstPtr &cloud, int x_idx, int y_idx, int z_idx, 
+  getMinMax3D (const pcl::PCLPointCloud2ConstPtr &cloud, int x_idx, int y_idx, int z_idx,
                const std::string &distance_field_name, float min_distance, float max_distance, 
                Eigen::Vector4f &min_pt, Eigen::Vector4f &max_pt, bool limit_negative = false);
 
@@ -144,6 +144,24 @@ namespace pcl
                const std::string &distance_field_name, float min_distance, float max_distance,
                Eigen::Vector4f &min_pt, Eigen::Vector4f &max_pt, bool limit_negative = false);
 
+  /** \brief Get the minimum and maximum values on each of the 3 (x-y-z) dimensions
+    * in a given pointcloud, without considering points outside of a distance threshold from the laser origin
+    * \param[in] cloud the point cloud data message
+    * \param[in] indices the vector of indices to use
+    * \param[in] distance_field_name the field name that contains the distance values
+    * \param[in] min_distance the minimum distance a point will be considered from
+    * \param[in] max_distance the maximum distance a point will be considered to
+    * \param[out] min_pt the resultant minimum bounds
+    * \param[out] max_pt the resultant maximum bounds
+    * \param[in] limit_negative if set to true, then all points outside of the interval (min_distance;max_distace) are considered
+    * \ingroup filters
+    */
+  template <typename PointT> void 
+  getMinMax3D (const typename pcl::PointCloud<PointT>::ConstPtr &cloud, 
+               const std::vector<int> &indices,
+               const std::string &distance_field_name, float min_distance, float max_distance,
+               Eigen::Vector4f &min_pt, Eigen::Vector4f &max_pt, bool limit_negative = false);
+
   /** \brief VoxelGrid assembles a local 3D grid over a given PointCloud, and downsamples + filters the data.
     *
     * The VoxelGrid class creates a *3D voxel grid* (think about a voxel
@@ -168,6 +186,9 @@ namespace pcl
       typedef typename Filter<PointT>::PointCloud PointCloud;
       typedef typename PointCloud::Ptr PointCloudPtr;
       typedef typename PointCloud::ConstPtr PointCloudConstPtr;
+      typedef boost::shared_ptr< VoxelGrid<PointT> > Ptr;
+      typedef boost::shared_ptr< const VoxelGrid<PointT> > ConstPtr;
+ 
 
     public:
       /** \brief Empty constructor. */
@@ -184,7 +205,8 @@ namespace pcl
         filter_field_name_ (""), 
         filter_limit_min_ (-FLT_MAX), 
         filter_limit_max_ (FLT_MAX),
-        filter_limit_negative_ (false)
+        filter_limit_negative_ (false),
+        min_points_per_voxel_ (0)
       {
         filter_name_ = "VoxelGrid";
       }
@@ -239,6 +261,17 @@ namespace pcl
         */
       inline bool 
       getDownsampleAllData () { return (downsample_all_data_); }
+
+      /** \brief Set the minimum number of points required for a voxel to be used.
+        * \param[in] min_points_per_voxel the minimum number of points for required for a voxel to be used
+        */
+      inline void 
+      setMinimumPointsNumberPerVoxel (unsigned int min_points_per_voxel) { min_points_per_voxel_ = min_points_per_voxel; }
+
+      /** \brief Return the minimum number of points required for a voxel to be used.
+       */
+      inline unsigned int
+      getMinimumPointsNumberPerVoxel () { return min_points_per_voxel_; }
 
       /** \brief Set to true if leaf layout information needs to be saved for later access.
         * \param[in] save_leaf_layout the new value (true/false)
@@ -450,6 +483,9 @@ namespace pcl
       /** \brief Set to true if we want to return the data outside (\a filter_limit_min_;\a filter_limit_max_). Default: false. */
       bool filter_limit_negative_;
 
+      /** \brief Minimum number of points per voxel for the centroid to be computed */
+      unsigned int min_points_per_voxel_;
+
       typedef typename pcl::traits::fieldList<PointT>::type FieldList;
 
       /** \brief Downsample a Point Cloud using a voxelized grid approach
@@ -472,14 +508,14 @@ namespace pcl
     * \ingroup filters
     */
   template <>
-  class PCL_EXPORTS VoxelGrid<sensor_msgs::PointCloud2> : public Filter<sensor_msgs::PointCloud2>
+  class PCL_EXPORTS VoxelGrid<pcl::PCLPointCloud2> : public Filter<pcl::PCLPointCloud2>
   {
-    using Filter<sensor_msgs::PointCloud2>::filter_name_;
-    using Filter<sensor_msgs::PointCloud2>::getClassName;
+    using Filter<pcl::PCLPointCloud2>::filter_name_;
+    using Filter<pcl::PCLPointCloud2>::getClassName;
 
-    typedef sensor_msgs::PointCloud2 PointCloud2;
-    typedef PointCloud2::Ptr PointCloud2Ptr;
-    typedef PointCloud2::ConstPtr PointCloud2ConstPtr;
+    typedef pcl::PCLPointCloud2 PCLPointCloud2;
+    typedef PCLPointCloud2::Ptr PCLPointCloud2Ptr;
+    typedef PCLPointCloud2::ConstPtr PCLPointCloud2ConstPtr;
 
     public:
       /** \brief Empty constructor. */
@@ -496,7 +532,8 @@ namespace pcl
         filter_field_name_ (""), 
         filter_limit_min_ (-FLT_MAX), 
         filter_limit_max_ (FLT_MAX),
-        filter_limit_negative_ (false)
+        filter_limit_negative_ (false),
+        min_points_per_voxel_ (0)
       {
         filter_name_ = "VoxelGrid";
       }
@@ -551,6 +588,17 @@ namespace pcl
         */
       inline bool 
       getDownsampleAllData () { return (downsample_all_data_); }
+
+      /** \brief Set the minimum number of points required for a voxel to be used.
+        * \param[in] min_points_per_voxel the minimum number of points for required for a voxel to be used
+        */
+      inline void 
+      setMinimumPointsNumberPerVoxel (unsigned int min_points_per_voxel) { min_points_per_voxel_ = min_points_per_voxel; }
+
+	  /** \brief Return the minimum number of points required for a voxel to be used.
+       */
+	  inline unsigned int
+	  getMinimumPointsNumberPerVoxel () { return min_points_per_voxel_; }
 
       /** \brief Set to true if leaf layout information needs to be saved for later access.
         * \param[in] save_leaf_layout the new value (true/false)
@@ -641,12 +689,12 @@ namespace pcl
         * \note for efficiency, user must make sure that the saving of the leaf layout is enabled and filtering performed
         */
       inline std::vector<int> 
-      getNeighborCentroidIndices (float x, float y, float z, const std::vector<Eigen::Vector3i> &relative_coordinates)
+      getNeighborCentroidIndices (float x, float y, float z, const std::vector<Eigen::Vector3i, Eigen::aligned_allocator<Eigen::Vector3i> > &relative_coordinates)
       {
         Eigen::Vector4i ijk (static_cast<int> (floorf (x * inverse_leaf_size_[0])), static_cast<int> (floorf (y * inverse_leaf_size_[1])), static_cast<int> (floorf (z * inverse_leaf_size_[2])), 0);
         std::vector<int> neighbors;
         neighbors.reserve (relative_coordinates.size ());
-        for (std::vector<Eigen::Vector3i>::const_iterator it = relative_coordinates.begin (); it != relative_coordinates.end (); it++)
+        for (std::vector<Eigen::Vector3i, Eigen::aligned_allocator<Eigen::Vector3i> >::const_iterator it = relative_coordinates.begin (); it != relative_coordinates.end (); it++)
           neighbors.push_back (leaf_layout_[(ijk + (Eigen::Vector4i() << *it, 0).finished() - min_b_).dot (divb_mul_)]);
         return (neighbors);
       }
@@ -790,11 +838,14 @@ namespace pcl
       /** \brief Set to true if we want to return the data outside (\a filter_limit_min_;\a filter_limit_max_). Default: false. */
       bool filter_limit_negative_;
 
+      /** \brief Minimum number of points per voxel for the centroid to be computed */
+      unsigned int min_points_per_voxel_;
+
       /** \brief Downsample a Point Cloud using a voxelized grid approach
         * \param[out] output the resultant point cloud
         */
       void 
-      applyFilter (PointCloud2 &output);
+      applyFilter (PCLPointCloud2 &output);
   };
 }
 

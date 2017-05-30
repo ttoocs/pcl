@@ -76,11 +76,13 @@ namespace pcl
   class SampleConsensusModelNormalPlane : public SampleConsensusModelPlane<PointT>, public SampleConsensusModelFromNormals<PointT, PointNT>
   {
     public:
+      using SampleConsensusModel<PointT>::model_name_;
       using SampleConsensusModel<PointT>::input_;
       using SampleConsensusModel<PointT>::indices_;
       using SampleConsensusModelFromNormals<PointT, PointNT>::normals_;
       using SampleConsensusModelFromNormals<PointT, PointNT>::normal_distance_weight_;
       using SampleConsensusModel<PointT>::error_sqr_dists_;
+      using SampleConsensusModel<PointT>::isModelValid;
 
       typedef typename SampleConsensusModel<PointT>::PointCloud PointCloud;
       typedef typename SampleConsensusModel<PointT>::PointCloudPtr PointCloudPtr;
@@ -93,22 +95,36 @@ namespace pcl
 
       /** \brief Constructor for base SampleConsensusModelNormalPlane.
         * \param[in] cloud the input point cloud dataset
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelNormalPlane (const PointCloudConstPtr &cloud) 
-        : SampleConsensusModelPlane<PointT> (cloud)
+      SampleConsensusModelNormalPlane (const PointCloudConstPtr &cloud, 
+                                       bool random = false) 
+        : SampleConsensusModelPlane<PointT> (cloud, random)
         , SampleConsensusModelFromNormals<PointT, PointNT> ()
       {
+        model_name_ = "SampleConsensusModelNormalPlane";
+        sample_size_ = 3;
+        model_size_ = 4;
       }
 
       /** \brief Constructor for base SampleConsensusModelNormalPlane.
         * \param[in] cloud the input point cloud dataset
         * \param[in] indices a vector of point indices to be used from \a cloud
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelNormalPlane (const PointCloudConstPtr &cloud, const std::vector<int> &indices) 
-        : SampleConsensusModelPlane<PointT> (cloud, indices)
+      SampleConsensusModelNormalPlane (const PointCloudConstPtr &cloud, 
+                                       const std::vector<int> &indices,
+                                       bool random = false) 
+        : SampleConsensusModelPlane<PointT> (cloud, indices, random)
         , SampleConsensusModelFromNormals<PointT, PointNT> ()
       {
+        model_name_ = "SampleConsensusModelNormalPlane";
+        sample_size_ = 3;
+        model_size_ = 4;
       }
+      
+      /** \brief Empty destructor */
+      virtual ~SampleConsensusModelNormalPlane () {}
 
       /** \brief Select all the points which respect the given model coefficients as inliers.
         * \param[in] model_coefficients the coefficients of a plane model that we need to compute distances to
@@ -145,12 +161,8 @@ namespace pcl
     	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     protected:
-      /** \brief Check whether a model is valid given the user constraints.
-        * \param[in] model_coefficients the set of model coefficients
-        */
-      bool 
-      isModelValid (const Eigen::VectorXf &model_coefficients);
-
+      using SampleConsensusModel<PointT>::sample_size_;
+      using SampleConsensusModel<PointT>::model_size_;
   };
 }
 

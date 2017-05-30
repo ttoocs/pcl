@@ -1,7 +1,10 @@
 /*
  * Software License Agreement (BSD License)
  *
+ *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
+ *
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -31,11 +34,18 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
- *
  */
 #include <pcl/visualization/common/shapes.h>
 #include <pcl/common/angles.h>
+#include <vtkLineSource.h>
+#include <vtkTubeFilter.h>
+#include <vtkConeSource.h>
+#include <vtkTransformPolyDataFilter.h>
+#include <vtkTransform.h>
+#include <vtkSphereSource.h>
+#include <vtkDiskSource.h>
+#include <vtkPlaneSource.h>
+#include <vtkCubeSource.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 vtkSmartPointer<vtkDataSet> 
@@ -49,6 +59,7 @@ pcl::visualization::createCylinder (const pcl::ModelCoefficients &coefficients, 
   tuber->SetInputConnection (line->GetOutputPort ());
   tuber->SetRadius (coefficients.values[6]);
   tuber->SetNumberOfSides (numsides);
+  tuber->Update ();
 
   return (tuber->GetOutput ());
 }
@@ -70,6 +81,7 @@ pcl::visualization::createSphere (const pcl::ModelCoefficients &coefficients, in
   vtkSmartPointer<vtkTransformPolyDataFilter> tf = vtkSmartPointer<vtkTransformPolyDataFilter>::New ();
   tf->SetTransform (t);
   tf->SetInputConnection (s_sphere->GetOutputPort ());
+  tf->Update ();
 
   return (tf->GetOutput ());
 }
@@ -95,6 +107,7 @@ pcl::visualization::createCube (const pcl::ModelCoefficients &coefficients)
   vtkSmartPointer<vtkTransformPolyDataFilter> tf = vtkSmartPointer<vtkTransformPolyDataFilter>::New ();
   tf->SetTransform (t);
   tf->SetInputConnection (cube->GetOutputPort ());
+  tf->Update ();
   
   return (tf->GetOutput ());
 }
@@ -120,6 +133,7 @@ pcl::visualization::createCube (const Eigen::Vector3f &translation, const Eigen:
   vtkSmartPointer<vtkTransformPolyDataFilter> tf = vtkSmartPointer<vtkTransformPolyDataFilter>::New ();
   tf->SetTransform (t);
   tf->SetInputConnection (cube->GetOutputPort ());
+  tf->Update ();
   
   return (tf->GetOutput ());
 }
@@ -134,7 +148,7 @@ pcl::visualization::createCube (double x_min, double x_max,
   
   vtkSmartPointer<vtkCubeSource> cube = vtkSmartPointer<vtkCubeSource>::New ();
   cube->SetBounds (x_min, x_max, y_min, y_max, z_min, z_max);
-
+  cube->Update ();
   return (cube->GetOutput ());
 }
 
@@ -164,8 +178,39 @@ pcl::visualization::createPlane (const pcl::ModelCoefficients &coefficients)
                   + coefficients.values[2] * coefficients.values[2];
 
   plane->Push (-coefficients.values[3] / sqrt(norm_sqr));
+  plane->Update ();
   return (plane->GetOutput ());
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////
+vtkSmartPointer<vtkDataSet> 
+pcl::visualization::createPlane (const pcl::ModelCoefficients &coefficients, double x, double y, double z)
+{
+  vtkSmartPointer<vtkPlaneSource> plane = vtkSmartPointer<vtkPlaneSource>::New ();
+  
+
+  double norm_sqr = 1.0 / (coefficients.values[0] * coefficients.values[0] +
+                           coefficients.values[1] * coefficients.values[1] +
+                           coefficients.values[2] * coefficients.values[2] );
+
+//  double nx = coefficients.values [0] * norm;
+//  double ny = coefficients.values [1] * norm;
+//  double nz = coefficients.values [2] * norm;
+//  double d  = coefficients.values [3] * norm;
+  
+//  plane->SetNormal (nx, ny, nz);
+  plane->SetNormal (coefficients.values[0], coefficients.values[1], coefficients.values[2]);
+
+  double t = x * coefficients.values[0] + y * coefficients.values[1] + z * coefficients.values[2] + coefficients.values[3];
+  x -= coefficients.values[0] * t * norm_sqr;
+  y -= coefficients.values[1] * t * norm_sqr;
+  z -= coefficients.values[2] * t * norm_sqr;
+  plane->SetCenter (x, y, z);
+  plane->Update ();
+  
+  return (plane->GetOutput ());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 vtkSmartPointer<vtkDataSet> 
@@ -198,6 +243,7 @@ pcl::visualization::create2DCircle (const pcl::ModelCoefficients &coefficients, 
   vtkSmartPointer<vtkTransformPolyDataFilter> tf = vtkSmartPointer<vtkTransformPolyDataFilter>::New ();
   tf->SetTransform (t);
   tf->SetInputConnection (disk->GetOutputPort ());
+  tf->Update ();
   /*
   tf->SetInputConnection (tube->GetOutputPort ());
   */
@@ -210,14 +256,16 @@ vtkSmartPointer<vtkDataSet>
 pcl::visualization::createCone (const pcl::ModelCoefficients &coefficients)
 {
   vtkSmartPointer<vtkConeSource> cone = vtkSmartPointer<vtkConeSource>::New ();
-  cone->SetHeight (1.0);
-  cone->SetCenter (coefficients.values[0] + coefficients.values[3] * 0.5, 
-                   coefficients.values[1] + coefficients.values[1] * 0.5,
-                   coefficients.values[2] + coefficients.values[2] * 0.5);
+  cone->SetHeight (std::sqrt (coefficients.values[3] * coefficients.values[3] +
+                              coefficients.values[4] * coefficients.values[4] +
+                              coefficients.values[5] * coefficients.values[5]));
+  cone->SetCenter (coefficients.values[0] + coefficients.values[3] * 0.5,
+                   coefficients.values[1] + coefficients.values[4] * 0.5,
+                   coefficients.values[2] + coefficients.values[5] * 0.5);
   cone->SetDirection (-coefficients.values[3], -coefficients.values[4], -coefficients.values[5]);
   cone->SetResolution (100);
   cone->SetAngle (coefficients.values[6]);
-
+  cone->Update ();
   return (cone->GetOutput ());
 }
 

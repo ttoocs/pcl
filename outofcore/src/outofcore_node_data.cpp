@@ -33,7 +33,7 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- *  $Id: outofcore_node_data.cpp 6913 2012-08-22 09:37:26Z stfox88 $
+ *  $Id$
  *
  */
 
@@ -242,7 +242,7 @@ namespace pcl
 
       char* idx_txt = cJSON_Print (idx.get ());
 
-      std::ofstream f (metadata_filename_.c_str (), std::ios::out | std::ios::trunc);
+      std::ofstream f (metadata_filename_.string ().c_str (), std::ios::out | std::ios::trunc);
       f << idx_txt;
       f.close ();
 
@@ -276,7 +276,7 @@ namespace pcl
       boost::uintmax_t len = boost::filesystem::file_size (metadata_filename_);
       idx_input.resize (len + 1);
       
-      std::ifstream f (metadata_filename_.c_str (), std::ios::in);
+      std::ifstream f (metadata_filename_.string ().c_str (), std::ios::in);
       f.read (&(idx_input.front ()), len);
       idx_input.back () = '\0';
       
@@ -343,7 +343,7 @@ namespace pcl
     ////////////////////////////////////////////////////////////////////////////////    
 
     std::ostream& 
-    operator<<(std::ostream& os, const OutofcoreOctreeNodeMetadata& metadata_arg)
+    operator<<(std::ostream&, const OutofcoreOctreeNodeMetadata&)
     {
       //todo: implement me
       PCL_THROW_EXCEPTION (PCLException, "Not implemented\n");

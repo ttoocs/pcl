@@ -154,8 +154,7 @@ pcl::StereoMatching::medianFilter (int radius)
 void 
 pcl::StereoMatching::getVisualMap (pcl::PointCloud<pcl::RGB>::Ptr vMap)
 {
-
-  if ( vMap->width != width_ || vMap->height != height_)
+  if ( static_cast<int> (vMap->width) != width_ || static_cast<int> (vMap->height) != height_)
   {
     vMap->resize(width_*height_);
     vMap->width = width_;
@@ -234,14 +233,14 @@ pcl::StereoMatching::getPointCloud (
     return (false);
   }
 
-  if (texture->width != width_ || texture->height != height_)
+  if (static_cast<int> (texture->width) != width_ || static_cast<int> (texture->height) != height_)
   {
     PCL_ERROR("[pcl::StereoMatching::getPointCloud] Error: the size of the texture cloud does not match that of the computed range map. The resulting cloud can not be computed..\n");
     return (false);
   }
 
   //cloud needs to be re-allocated
-  if (cloud->width != width_ || cloud->height != height_)
+  if (static_cast<int> (cloud->width) != width_ || static_cast<int> (cloud->height) != height_)
   {
     //cloud.reset(new pcl::PointCloud<pcl::PointXYZRGBA>(width_, height_) );
     cloud->resize (width_ * height_);
@@ -318,7 +317,7 @@ pcl::StereoMatching::getPointCloud (
   }
 
   //cloud needs to be re-allocated
-  if (cloud->width != width_ || cloud->height != height_)
+  if (static_cast<int> (cloud->width) != width_ || static_cast<int> (cloud->height) != height_)
   {
     cloud->resize(width_*height_);
     cloud->width = width_;
@@ -479,7 +478,7 @@ pcl::GrayStereoMatching::compute (pcl::PointCloud<pcl::RGB> &ref, pcl::PointClou
     return;
   }
 
-  if ( (ref_img_ != NULL) && (width_ != ref.width || height_ != ref.height) )
+  if ( (ref_img_ != NULL) && (width_ != static_cast<int> (ref.width) || height_ != static_cast<int> (ref.height)) )
   {
     delete [] ref_img_;
     delete [] trg_img_;
@@ -632,7 +631,7 @@ pcl::GrayStereoMatching::compute (unsigned char* ref_img, unsigned char* trg_img
   for (int j = 0; j < height_; j++)
     for (int i = 0; i < width_; i++)
       if ( disp_map_[j * width_ + i] > 0)
-	    disp_map_[j * width_ + i] += x_off_ * 16;
+	    disp_map_[j * width_ + i] += static_cast<short int> (x_off_ * 16);
 
 }
 

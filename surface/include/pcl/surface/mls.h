@@ -48,6 +48,7 @@
 #include <pcl/surface/boost.h>
 #include <pcl/surface/eigen.h>
 #include <pcl/surface/processing.h>
+#include <map>
 
 namespace pcl
 {
@@ -64,6 +65,9 @@ namespace pcl
   class MovingLeastSquares: public CloudSurfaceProcessing<PointInT, PointOutT>
   {
     public:
+      typedef boost::shared_ptr<MovingLeastSquares<PointInT, PointOutT> > Ptr;
+      typedef boost::shared_ptr<const MovingLeastSquares<PointInT, PointOutT> > ConstPtr;
+
       using PCLBase<PointInT>::input_;
       using PCLBase<PointInT>::indices_;
       using PCLBase<PointInT>::fake_indices_;
@@ -101,13 +105,18 @@ namespace pcl
                               upsample_method_ (NONE),
                               upsampling_radius_ (0.0),
                               upsampling_step_ (0.0),
-                              rng_uniform_distribution_ (),
                               desired_num_points_in_radius_ (0),
                               mls_results_ (),
                               voxel_size_ (1.0),
                               dilation_iteration_num_ (0),
-                              nr_coeff_ ()
+                              nr_coeff_ (),
+                              corresponding_input_indices_ (),
+                              rng_alg_ (),
+                              rng_uniform_distribution_ ()
                               {};
+      
+      /** \brief Empty destructor */
+      virtual ~MovingLeastSquares () {}
 
 
       /** \brief Set whether the algorithm should also store the normals computed
@@ -175,6 +184,7 @@ namespace pcl
       getSqrGaussParam () const { return (sqr_gauss_param_); }
 
       /** \brief Set the upsampling method to be used
+        * \param method
         * \note Options are: * NONE - no upsampling will be done, only the input points will be projected to their own
         *                             MLS surfaces
         *                    * DISTINCT_CLOUD - will project the points of the distinct cloud to the closest point on
@@ -184,7 +194,7 @@ namespace pcl
         *                                           parameters
         *                    * RANDOM_UNIFORM_DENSITY - the local plane of each input point will be sampled using an
         *                                               uniform random distribution such that the density of points is
-        *                                               constant throughout the cloud - given by the \ref \ref desired_num_points_in_radius_
+        *                                               constant throughout the cloud - given by the \ref desired_num_points_in_radius_
         *                                               parameter
         *                    * VOXEL_GRID_DILATION - the input cloud will be inserted into a voxel grid with voxels of
         *                                            size \ref voxel_size_; this voxel grid will be dilated \ref dilation_iteration_num_
@@ -279,6 +289,12 @@ namespace pcl
       void 
       process (PointCloudOut &output);
 
+
+      /** \brief Get the set of indices with each point in output having the 
+        * corresponding point in input */
+      inline PointIndicesPtr
+      getCorrespondingIndices () { return (corresponding_input_indices_); }
+
     protected:
       /** \brief The point cloud that will hold the estimated normals, if set. */
       NormalCloudPtr normals_;
@@ -320,11 +336,6 @@ namespace pcl
         */
       double upsampling_step_;
 
-      /** \brief Random number generator using an uniform distribution of floats
-        * \note Used only in the case of RANDOM_UNIFORM_DENSITY upsampling
-        */
-      boost::variate_generator<boost::mt19937, boost::uniform_real<float> > *rng_uniform_distribution_;
-
       /** \brief Parameter that specifies the desired number of points within the search radius
         * \note Used only in the case of RANDOM_UNIFORM_DENSITY upsampling
         */
@@ -332,7 +343,7 @@ namespace pcl
 
       
       /** \brief Data structure used to store the results of the MLS fitting
-        * \note Used only in the case of VOXEL_GRID_DILATION upsampling
+        * \note Used only in the case of VOXEL_GRID_DILATION or DISTINCT_CLOUD upsampling
         */
       struct MLSResult
       {
@@ -354,7 +365,7 @@ namespace pcl
       };
 
       /** \brief Stores the MLS result for each point in the input cloud
-        * \note Used only in the case of VOXEL_GRID_DILATION upsampling
+        * \note Used only in the case of VOXEL_GRID_DILATION or DISTINCT_CLOUD upsampling
         */
       std::vector<MLSResult> mls_results_;
 
@@ -424,42 +435,50 @@ namespace pcl
       /** \brief Number of coefficients, to be computed from the requested order.*/
       int nr_coeff_;
 
+      /** \brief Collects for each point in output the corrseponding point in the input. */
+      PointIndicesPtr corresponding_input_indices_;
+
       /** \brief Search for the closest nearest neighbors of a given point using a radius search
         * \param[in] index the index of the query point
         * \param[out] indices the resultant vector of indices representing the k-nearest neighbors
         * \param[out] sqr_distances the resultant squared distances from the query point to the k-nearest neighbors
         */
       inline int
-      searchForNeighbors (int index, std::vector<int> &indices, std::vector<float> &sqr_distances)
+      searchForNeighbors (int index, std::vector<int> &indices, std::vector<float> &sqr_distances) const
       {
         return (search_method_ (index, search_radius_, indices, sqr_distances));
       }
 
       /** \brief Smooth a given point and its neighborghood using Moving Least Squares.
-        * \param[in] index the inex of the query point in the \ref input cloud
-        * \param[in] nn_indices the set of nearest neighbors indices for \ref pt
-        * \param[in] nn_sqr_dists the set of nearest neighbors squared distances for \ref pt
+        * \param[in] index the inex of the query point in the input cloud
+        * \param[in] nn_indices the set of nearest neighbors indices for pt
+        * \param[in] nn_sqr_dists the set of nearest neighbors squared distances for pt
         * \param[out] projected_points the set of points projected points around the query point
         * (in the case of upsampling method NONE, only the query point projected to its own fitted surface will be returned,
         * in the case of the other upsampling methods, multiple points will be returned)
         * \param[out] projected_points_normals the normals corresponding to the projected points
+        * \param[out] corresponding_input_indices the set of indices with each point in output having the corresponding point in input
+        * \param[out] mls_result stores the MLS result for each point in the input cloud
+        * (used only in the case of VOXEL_GRID_DILATION or DISTINCT_CLOUD upsampling)
         */
       void
       computeMLSPointNormal (int index,
                              const std::vector<int> &nn_indices,
                              std::vector<float> &nn_sqr_dists,
                              PointCloudOut &projected_points,
-                             NormalCloud &projected_points_normals);
+                             NormalCloud &projected_points_normals,
+                             PointIndices &corresponding_input_indices,
+                             MLSResult &mls_result) const;
 
       /** \brief Fits a point (sample point) given in the local plane coordinates of an input point (query point) to
         * the MLS surface of the input point
         * \param[in] u_disp the u coordinate of the sample point in the local plane of the query point
         * \param[in] v_disp the v coordinate of the sample point in the local plane of the query point
-        * \param[in] u the axis corresponding to the u-coordinates of the local plane of the query point
-        * \param[in] v the axis corresponding to the v-coordinates of the local plane of the query point
-        * \param[in] plane_normal the normal to the local plane of the query point
+        * \param[in] u_axis the axis corresponding to the u-coordinates of the local plane of the query point
+        * \param[in] v_axis the axis corresponding to the v-coordinates of the local plane of the query point
+        * \param[in] n_axis
+        * \param mean
         * \param[in] curvature the curvature of the surface at the query point
-        * \param[in] query_point the absolute 3D position of the query point
         * \param[in] c_vec the coefficients of the polynomial fit on the MLS surface of the query point
         * \param[in] num_neighbors the number of neighbors of the query point in the input cloud
         * \param[out] result_point the absolute 3D position of the resulting projected point
@@ -474,17 +493,32 @@ namespace pcl
                                 Eigen::VectorXd &c_vec,
                                 int num_neighbors,
                                 PointOutT &result_point,
-                                pcl::Normal &result_normal);
+                                pcl::Normal &result_normal) const;
 
       void
       copyMissingFields (const PointInT &point_in,
                          PointOutT &point_out) const;
 
-    private:
       /** \brief Abstract surface reconstruction method. 
         * \param[out] output the result of the reconstruction 
         */
       virtual void performProcessing (PointCloudOut &output);
+
+      /** \brief Perform upsampling for the distinct-cloud and voxel-grid methods
+        * \param[out] output the result of the reconstruction
+       */
+      void performUpsampling (PointCloudOut &output);
+
+    private:
+      /** \brief Boost-based random number generator algorithm. */
+      boost::mt19937 rng_alg_;
+
+      /** \brief Random number generator using an uniform distribution of floats
+        * \note Used only in the case of RANDOM_UNIFORM_DENSITY upsampling
+        */
+      boost::shared_ptr<boost::variate_generator<boost::mt19937&, 
+                                                 boost::uniform_real<float> > 
+                       > rng_uniform_distribution_;
 
       /** \brief Abstract class get name method. */
       std::string getClassName () const { return ("MovingLeastSquares"); }
@@ -492,6 +526,66 @@ namespace pcl
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
+
+#ifdef _OPENMP
+  /** \brief MovingLeastSquaresOMP is a parallelized version of MovingLeastSquares, using the OpenMP standard.
+   * \note Compared to MovingLeastSquares, an overhead is incurred in terms of runtime and memory usage.
+   * \note The upsampling methods DISTINCT_CLOUD and VOXEL_GRID_DILATION are not parallelized completely, i.e. parts of the algorithm run on a single thread only.
+   * \author Robert Huitl
+   * \ingroup surface
+   */
+  template <typename PointInT, typename PointOutT>
+  class MovingLeastSquaresOMP: public MovingLeastSquares<PointInT, PointOutT>
+  {
+    public:
+      typedef boost::shared_ptr<MovingLeastSquares<PointInT, PointOutT> > Ptr;
+      typedef boost::shared_ptr<const MovingLeastSquares<PointInT, PointOutT> > ConstPtr;
+
+      using PCLBase<PointInT>::input_;
+      using PCLBase<PointInT>::indices_;
+      using MovingLeastSquares<PointInT, PointOutT>::normals_;
+      using MovingLeastSquares<PointInT, PointOutT>::corresponding_input_indices_;
+      using MovingLeastSquares<PointInT, PointOutT>::nr_coeff_;
+      using MovingLeastSquares<PointInT, PointOutT>::order_;
+      using MovingLeastSquares<PointInT, PointOutT>::compute_normals_;
+      using MovingLeastSquares<PointInT, PointOutT>::upsample_method_;
+      using MovingLeastSquares<PointInT, PointOutT>::VOXEL_GRID_DILATION;
+      using MovingLeastSquares<PointInT, PointOutT>::DISTINCT_CLOUD;
+
+      typedef pcl::PointCloud<pcl::Normal> NormalCloud;
+      typedef pcl::PointCloud<pcl::Normal>::Ptr NormalCloudPtr;
+
+      typedef pcl::PointCloud<PointOutT> PointCloudOut;
+      typedef typename PointCloudOut::Ptr PointCloudOutPtr;
+      typedef typename PointCloudOut::ConstPtr PointCloudOutConstPtr;
+
+      /** \brief Constructor for parallelized Moving Least Squares
+        * \param threads the maximum number of hardware threads to use (0 sets the value to 1)
+        */
+      MovingLeastSquaresOMP (unsigned int threads = 0) : threads_ (threads)
+      {
+
+      }
+
+      /** \brief Set the maximum number of threads to use
+        * \param threads the maximum number of hardware threads to use (0 sets the value to 1)
+        */
+      inline void
+      setNumberOfThreads (unsigned int threads = 0)
+      {
+        threads_ = threads;
+      }
+
+    protected:
+      /** \brief Abstract surface reconstruction method.
+        * \param[out] output the result of the reconstruction
+        */
+      virtual void performProcessing (PointCloudOut &output);
+
+      /** \brief The maximum number of threads the scheduler should use. */
+      unsigned int threads_;
+  };
+#endif
 }
 
 #ifdef PCL_NO_PRECOMPILE

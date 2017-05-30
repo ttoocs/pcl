@@ -35,7 +35,7 @@
  *
  */
 
-#include <sensor_msgs/PointCloud2.h>
+#include <pcl/PCLPointCloud2.h>
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/console/print.h>
@@ -59,7 +59,7 @@ printHelp (int, char **argv)
 {
   print_error ("Syntax is: %s input.pcd output.pcd <options>\n", argv[0]);
   print_info ("  where options are:\n");
-  print_info ("                     -search_radius X = sphere radius to be used for finding the k-nearest neighbors used for fitting (default: ");
+  print_info ("                     -radius X          = sphere radius to be used for finding the k-nearest neighbors used for fitting (default: ");
   print_value ("%f", default_search_radius); print_info (")\n");
   print_info ("                     -sqr_gauss_param X = parameter used for the distance based weighting of neighbors (recommended = search_radius^2) (default: ");
   print_value ("%f", default_sqr_gauss_param); print_info (")\n");
@@ -70,7 +70,7 @@ printHelp (int, char **argv)
 }
 
 bool
-loadCloud (const std::string &filename, sensor_msgs::PointCloud2 &cloud)
+loadCloud (const std::string &filename, pcl::PCLPointCloud2 &cloud)
 {
   TicToc tt;
   print_highlight ("Loading "); print_value ("%s ", filename.c_str ());
@@ -85,14 +85,14 @@ loadCloud (const std::string &filename, sensor_msgs::PointCloud2 &cloud)
 }
 
 void
-compute (const sensor_msgs::PointCloud2::ConstPtr &input, sensor_msgs::PointCloud2 &output,
+compute (const pcl::PCLPointCloud2::ConstPtr &input, pcl::PCLPointCloud2 &output,
          double search_radius, bool sqr_gauss_param_set, double sqr_gauss_param,
          bool use_polynomial_fit, int polynomial_order)
 {
 
   PointCloud<PointXYZ>::Ptr xyz_cloud_pre (new pcl::PointCloud<PointXYZ> ()),
       xyz_cloud (new pcl::PointCloud<PointXYZ> ());
-  fromROSMsg (*input, *xyz_cloud_pre);
+  fromPCLPointCloud2 (*input, *xyz_cloud_pre);
 
   // Filter the NaNs from the cloud
   for (size_t i = 0; i < xyz_cloud_pre->size (); ++i)
@@ -135,11 +135,11 @@ compute (const sensor_msgs::PointCloud2::ConstPtr &input, sensor_msgs::PointClou
   mls.process (*xyz_cloud_smoothed);
   print_info ("[done, "); print_value ("%g", tt.toc ()); print_info (" ms : "); print_value ("%d", xyz_cloud_smoothed->width * xyz_cloud_smoothed->height); print_info (" points]\n");
 
-  toROSMsg (*xyz_cloud_smoothed, output);
+  toPCLPointCloud2 (*xyz_cloud_smoothed, output);
 }
 
 void
-saveCloud (const std::string &filename, const sensor_msgs::PointCloud2 &output)
+saveCloud (const std::string &filename, const pcl::PCLPointCloud2 &output)
 {
   TicToc tt;
   tt.tic ();
@@ -180,7 +180,7 @@ main (int argc, char** argv)
   int polynomial_order = default_polynomial_order;
   bool use_polynomial_fit = default_use_polynomial_fit;
 
-  parse_argument (argc, argv, "-search_radius", search_radius);
+  parse_argument (argc, argv, "-radius", search_radius);
   if (parse_argument (argc, argv, "-sqr_gauss_param", sqr_gauss_param) == -1)
     sqr_gauss_param_set = false;
   if (parse_argument (argc, argv, "-polynomial_order", polynomial_order) != -1 )
@@ -188,12 +188,12 @@ main (int argc, char** argv)
   parse_argument (argc, argv, "-use_polynomial_fit", use_polynomial_fit);
 
   // Load the first file
-  sensor_msgs::PointCloud2::Ptr cloud (new sensor_msgs::PointCloud2);
+  pcl::PCLPointCloud2::Ptr cloud (new pcl::PCLPointCloud2);
   if (!loadCloud (argv[p_file_indices[0]], *cloud))
     return (-1);
 
   // Do the smoothing
-  sensor_msgs::PointCloud2 output;
+  pcl::PCLPointCloud2 output;
   compute (cloud, output, search_radius, sqr_gauss_param_set, sqr_gauss_param,
            use_polynomial_fit, polynomial_order);
 

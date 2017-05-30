@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -40,6 +41,7 @@
 #include <pcl/filters/voxel_grid_label.h>
 #include <pcl/filters/impl/voxel_grid.hpp>
 
+//////////////////////////////////////////////////////////////////////////////
 void
 pcl::VoxelGridLabel::applyFilter (PointCloud &output)
 {
@@ -95,7 +97,7 @@ pcl::VoxelGridLabel::applyFilter (PointCloud &output)
     centroid_size = boost::mpl::size<FieldList>::value;
 
   // ---[ RGB special case
-  std::vector<sensor_msgs::PointField> fields;
+  std::vector<pcl::PCLPointField> fields;
   int rgba_index = -1;
   rgba_index = pcl::getFieldIndex (*input_, "rgb", fields);
   if (rgba_index == -1)
@@ -117,7 +119,7 @@ pcl::VoxelGridLabel::applyFilter (PointCloud &output)
   if (!filter_field_name_.empty ())
   {
     // Get the distance field index
-    std::vector<sensor_msgs::PointField> fields;
+    std::vector<pcl::PCLPointField> fields;
     int distance_idx = pcl::getFieldIndex (*input_, filter_field_name_, fields);
     if (distance_idx == -1)
       PCL_WARN ("[pcl::%s::applyFilter] Invalid filter field name. Index is %d.\n", getClassName ().c_str (), distance_idx);
@@ -335,7 +337,7 @@ pcl::VoxelGridLabel::applyFilter (PointCloud &output)
         int label = it->first;
         if (it != labels.end ())
         {
-          for (it = labels.begin (); it != labels.end (); it++)
+          for (it = labels.begin (); it != labels.end (); ++it)
           {
             if (n_occurrence < it->second)
             {
@@ -352,3 +354,4 @@ pcl::VoxelGridLabel::applyFilter (PointCloud &output)
   }
   output.width = static_cast<uint32_t> (output.points.size ());
 }
+

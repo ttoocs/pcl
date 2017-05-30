@@ -414,7 +414,24 @@ namespace pcl
   template <>
   class DefaultPointRepresentation <VFHSignature308> : public DefaultFeatureRepresentation <VFHSignature308>
   {};
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  template <>
+  class DefaultPointRepresentation <Narf36> : public PointRepresentation <Narf36>
+  {
+    public:
+      DefaultPointRepresentation ()
+      {
+        nr_dimensions_ = 36;
+        trivial_=false;
+      }
 
+      virtual void
+      copyToFloatArray (const Narf36 &p, float * out) const
+      {
+        for (int i = 0; i < nr_dimensions_; ++i)
+          out[i] = p.descriptor[i];
+      }
+  };
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   template <>
   class DefaultPointRepresentation<NormalBasedSignature12> : public DefaultFeatureRepresentation <NormalBasedSignature12>
@@ -432,6 +449,24 @@ namespace pcl
 
       virtual void
       copyToFloatArray (const ShapeContext1980 &p, float * out) const
+      {
+        for (int i = 0; i < nr_dimensions_; ++i)
+          out[i] = p.descriptor[i];
+      }
+  };
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  template <>
+  class DefaultPointRepresentation<UniqueShapeContext1960> : public PointRepresentation<UniqueShapeContext1960>
+  {
+    public:
+      DefaultPointRepresentation ()
+      {
+        nr_dimensions_ = 1960;
+      }
+
+      virtual void
+      copyToFloatArray (const UniqueShapeContext1960 &p, float * out) const
       {
         for (int i = 0; i < nr_dimensions_; ++i)
           out[i] = p.descriptor[i];

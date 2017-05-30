@@ -39,6 +39,12 @@
 #include <pcl/apps/modeler/cloud_mesh.h>
 #include <pcl/filters/filter_indices.h>
 
+#include <vtkLODActor.h>
+#include <vtkPolyData.h>
+#include <vtkCellArray.h>
+#include <vtkDataSetMapper.h>
+#include <vtkPointData.h>
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 pcl::modeler::NormalsActorItem::NormalsActorItem(QTreeWidgetItem* parent,
                                                const boost::shared_ptr<CloudMesh>& cloud_mesh,
@@ -131,7 +137,11 @@ pcl::modeler::NormalsActorItem::initImpl()
   createNormalLines();
 
   vtkSmartPointer<vtkDataSetMapper> mapper = vtkSmartPointer<vtkDataSetMapper>::New();
+#if VTK_MAJOR_VERSION < 6
   mapper->SetInput(poly_data_);
+#else
+  mapper->SetInputData (poly_data_);
+#endif
 
   vtkSmartPointer<vtkDataArray> scalars;
   cloud_mesh_->getColorScalarsFromField(scalars, color_scheme_);
@@ -159,8 +169,6 @@ pcl::modeler::NormalsActorItem::updateImpl()
   double minmax[2];
   scalars->GetRange(minmax);
   actor_->GetMapper()->SetScalarRange(minmax);
-
-  poly_data_->Update();
 
   return;
 }

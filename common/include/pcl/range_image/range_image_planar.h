@@ -1,7 +1,10 @@
 /*
  * Software License Agreement (BSD License)
  *
+ *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
+ *
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -58,7 +61,7 @@ namespace pcl
       /** Constructor */
       PCL_EXPORTS RangeImagePlanar ();
       /** Destructor */
-      PCL_EXPORTS ~RangeImagePlanar ();
+      PCL_EXPORTS virtual ~RangeImagePlanar ();
 
       /** Return a newly created RangeImagePlanar.
        *  Reimplmentation to return an image of the same type. */

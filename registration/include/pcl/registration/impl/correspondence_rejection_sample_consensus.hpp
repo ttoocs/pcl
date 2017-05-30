@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -39,9 +40,47 @@
 #ifndef PCL_REGISTRATION_IMPL_CORRESPONDENCE_REJECTION_SAMPLE_CONSENSUS_HPP_
 #define PCL_REGISTRATION_IMPL_CORRESPONDENCE_REJECTION_SAMPLE_CONSENSUS_HPP_
 
-#include <pcl/registration/boost.h>
+#include <boost/unordered_map.hpp>
 
-//////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT> void
+pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::setInputCloud (
+    const typename pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::PointCloudConstPtr &cloud)
+{
+  setInputSource (cloud);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT> typename pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::PointCloudConstPtr const
+pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::getInputCloud ()
+{
+  return (getInputSource ()); 
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT> void
+pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::setTargetCloud (
+    const typename pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::PointCloudConstPtr &cloud)
+{
+  setInputTarget (cloud);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT> void
+pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::setMaxIterations (
+    int max_iterations)
+{
+  setMaximumIterations (max_iterations);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT> int
+pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::getMaxIterations ()
+{
+  return (getMaximumIterations ());
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT> void 
 pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::getRemainingCorrespondences (
     const pcl::Correspondences& original_correspondences, 
@@ -58,6 +97,9 @@ pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::getRemainingCo
     PCL_ERROR ("[pcl::registration::%s::getRemainingCorrespondences] No input target dataset was given!\n", getClassName ().c_str ());
     return;
   }
+
+  if (save_inliers_)
+     inlier_indices_.clear ();
 
   int nr_correspondences = static_cast<int> (original_correspondences.size ());
   std::vector<int> source_indices (nr_correspondences);
@@ -116,6 +158,13 @@ pcl::registration::CorrespondenceRejectorSampleConsensus<PointT>::getRemainingCo
        remaining_correspondences.resize (inliers.size ());
        for (size_t i = 0; i < inliers.size (); ++i)
          remaining_correspondences[i] = original_correspondences[index_to_correspondence[inliers[i]]];
+
+       if (save_inliers_)
+       {
+         inlier_indices_.reserve (inliers.size ());
+         for (size_t i = 0; i < inliers.size (); ++i)
+           inlier_indices_.push_back (index_to_correspondence[inliers[i]]);
+       }
 
        // get best transformation
        Eigen::VectorXf model_coefficients;

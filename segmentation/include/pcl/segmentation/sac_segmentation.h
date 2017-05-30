@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -79,15 +79,26 @@ namespace pcl
       typedef typename SampleConsensus<PointT>::Ptr SampleConsensusPtr;
       typedef typename SampleConsensusModel<PointT>::Ptr SampleConsensusModelPtr;
 
-      /** \brief Empty constructor. */
-      SACSegmentation () :  model_ (), sac_ (), model_type_ (-1), method_type_ (0), 
-                            threshold_ (0), optimize_coefficients_ (true), 
-                            radius_min_ (-std::numeric_limits<double>::max()), radius_max_ (std::numeric_limits<double>::max()), 
-                            samples_radius_ (0.0), samples_radius_search_ (),
-                            eps_angle_ (0.0),
-                            axis_ (Eigen::Vector3f::Zero ()), max_iterations_ (50), probability_ (0.99)
+      /** \brief Empty constructor. 
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
+        */
+      SACSegmentation (bool random = false) 
+        : model_ ()
+        , sac_ ()
+        , model_type_ (-1)
+        , method_type_ (0)
+        , threshold_ (0)
+        , optimize_coefficients_ (true)
+        , radius_min_ (-std::numeric_limits<double>::max ())
+        , radius_max_ (std::numeric_limits<double>::max ())
+        , samples_radius_ (0.0)
+        , samples_radius_search_ ()
+        , eps_angle_ (0.0)
+        , axis_ (Eigen::Vector3f::Zero ())
+        , max_iterations_ (50)
+        , probability_ (0.99)
+        , random_ (random)
       {
-        //srand ((unsigned)time (0)); // set a random seed
       }
 
       /** \brief Empty destructor. */
@@ -186,6 +197,7 @@ namespace pcl
 
       /** \brief Set the maximum distance allowed when drawing random samples
         * \param[in] radius the maximum distance (L2 norm)
+        * \param search
         */
       inline void
       setSamplesMaxDist (const double &radius, SearchPtr search)
@@ -225,7 +237,7 @@ namespace pcl
       getEpsAngle () const { return (eps_angle_); }
 
       /** \brief Base method for segmentation of a model in a PointCloud given by <setInputCloud (), setIndices ()>
-        * \param[in] inliers the resultant point indices that support the model found (inliers)
+        * \param[out] inliers the resultant point indices that support the model found (inliers)
         * \param[out] model_coefficients the resultant model coefficients
         */
       virtual void 
@@ -283,6 +295,9 @@ namespace pcl
       /** \brief Desired probability of choosing at least one sample free from outliers (user given parameter). */
       double probability_;
 
+      /** \brief Set to true if we need a random seed. */
+      bool random_;
+
       /** \brief Class get name method. */
       virtual std::string 
       getClassName () const { return ("SACSegmentation"); }
@@ -301,6 +316,7 @@ namespace pcl
     using SACSegmentation<PointT>::radius_max_;
     using SACSegmentation<PointT>::eps_angle_;
     using SACSegmentation<PointT>::axis_;
+    using SACSegmentation<PointT>::random_;
 
     public:
       using PCLBase<PointT>::input_;
@@ -318,13 +334,16 @@ namespace pcl
       typedef typename SampleConsensusModel<PointT>::Ptr SampleConsensusModelPtr;
       typedef typename SampleConsensusModelFromNormals<PointT, PointNT>::Ptr SampleConsensusModelFromNormalsPtr;
 
-      /** \brief Empty constructor. */
-      SACSegmentationFromNormals () : 
-        normals_ (), 
-        distance_weight_ (0.1), 
-        distance_from_origin_ (0), 
-        min_angle_ (), 
-        max_angle_ ()
+      /** \brief Empty constructor.
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
+        */
+      SACSegmentationFromNormals (bool random = false) 
+        : SACSegmentation<PointT> (random)
+        , normals_ ()
+        , distance_weight_ (0.1)
+        , distance_from_origin_ (0)
+        , min_angle_ ()
+        , max_angle_ ()
       {};
 
       /** \brief Provide a pointer to the input dataset that contains the point normals of 
@@ -351,7 +370,8 @@ namespace pcl
       getNormalDistanceWeight () const { return (distance_weight_); }
 
       /** \brief Set the minimum opning angle for a cone model.
-        * \param oa the opening angle which we need minumum to validate a cone model.
+        * \param min_angle the opening angle which we need minumum to validate a cone model.
+        * \param max_angle the opening angle which we need maximum to validate a cone model.
         */
       inline void
       setMinMaxOpeningAngle (const double &min_angle, const double &max_angle)

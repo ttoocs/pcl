@@ -55,6 +55,9 @@ namespace pcl
     * BRISK: Binary Robust Invariant Scalable Keypoints, 
     * in Proceedings of the IEEE International Conference on Computer Vision (ICCV2011).
     *
+    * \warning The input keypoints cloud is not const, and it will be modified: keypoints for which descriptors can not
+    * be computed will be deleted from the cloud.
+    *
     * \author Radu B. Rusu, Stefan Holzer
     * \ingroup features
     */
@@ -114,16 +117,17 @@ namespace pcl
         * \param[in] keypoints the input cloud containing the keypoints.
         */
       inline void
-      setKeypoints (const KeypointPointCloudTConstPtr &keypoints)
+      setKeypoints (const KeypointPointCloudTPtr &keypoints)
       {
         // Make a copy as we will have to erase keypoints that we don't use
         // TO DO: change this later
-        keypoints_.reset (new KeypointPointCloudT (*keypoints));
+        //keypoints_.reset (new KeypointPointCloudT (*keypoints));
+        keypoints_ = keypoints;
       }
 
       /** \brief Computes the descriptors for the previously specified 
-        *        points and input data.
-        * \param[out] descriptors the destination for the computed descriptors.
+        * points and input data.
+        * \param[out] output descriptors the destination for the computed descriptors.
         */
       void
       compute (PointCloudOutT &output);

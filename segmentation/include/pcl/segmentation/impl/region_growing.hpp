@@ -15,7 +15,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -285,19 +285,20 @@ pcl::RegionGrowing<PointT, NormalT>::extract (std::vector <pcl::PointIndices>& c
   applySmoothRegionGrowingAlgorithm ();
   assembleRegions ();
 
-  std::vector<pcl::PointIndices>::iterator cluster_iter = clusters_.begin ();
-  while (cluster_iter != clusters_.end ())
+  clusters.resize (clusters_.size ());
+  std::vector<pcl::PointIndices>::iterator cluster_iter_input = clusters.begin ();
+  for (std::vector<pcl::PointIndices>::const_iterator cluster_iter = clusters_.begin (); cluster_iter != clusters_.end (); cluster_iter++)
   {
-    if (cluster_iter->indices.size () < min_pts_per_cluster_ || cluster_iter->indices.size () > max_pts_per_cluster_)
+    if ((static_cast<int> (cluster_iter->indices.size ()) >= min_pts_per_cluster_) &&
+        (static_cast<int> (cluster_iter->indices.size ()) <= max_pts_per_cluster_))
     {
-      cluster_iter = clusters_.erase (cluster_iter);
+      *cluster_iter_input = *cluster_iter;
+      cluster_iter_input++;
     }
-	else
-      cluster_iter++;
   }
 
-  clusters.reserve (clusters_.size ());
-  std::copy (clusters_.begin (), clusters_.end (), std::back_inserter (clusters));
+  clusters_ = std::vector<pcl::PointIndices> (clusters.begin (), cluster_iter_input);
+  clusters.resize(clusters_.size());
 
   deinitCompute ();
 }
@@ -357,13 +358,27 @@ pcl::RegionGrowing<PointT, NormalT>::findPointNeighbours ()
   std::vector<float> distances;
 
   point_neighbours_.resize (input_->points.size (), neighbours);
-
-  for (int i_point = 0; i_point < point_number; i_point++)
+  if (input_->is_dense)
   {
-    int point_index = (*indices_)[i_point];
-    neighbours.clear ();
-    search_->nearestKSearch (i_point, neighbour_number_, neighbours, distances);
-    point_neighbours_[point_index].swap (neighbours);
+    for (int i_point = 0; i_point < point_number; i_point++)
+    {
+      int point_index = (*indices_)[i_point];
+      neighbours.clear ();
+      search_->nearestKSearch (i_point, neighbour_number_, neighbours, distances);
+      point_neighbours_[point_index].swap (neighbours);
+    }
+  }
+  else
+  {
+    for (int i_point = 0; i_point < point_number; i_point++)
+    {
+      neighbours.clear ();
+      int point_index = (*indices_)[i_point];
+      if (!pcl::isFinite (input_->points[point_index]))
+        continue;
+      search_->nearestKSearch (i_point, neighbour_number_, neighbours, distances);
+      point_neighbours_[point_index].swap (neighbours);
+    }
   }
 }
 
@@ -515,11 +530,13 @@ pcl::RegionGrowing<PointT, NormalT>::validatePoint (int initial_seed, int point,
   }
 
   // check the residual if needed
-  data[0] = input_->points[nghbr].data[0];
-  data[1] = input_->points[nghbr].data[1];
-  data[2] = input_->points[nghbr].data[2];
-  data[3] = input_->points[nghbr].data[3];
-  Eigen::Map<Eigen::Vector3f> nghbr_point (static_cast<float*> (data));
+  float data_1[4];
+  
+  data_1[0] = input_->points[nghbr].data[0];
+  data_1[1] = input_->points[nghbr].data[1];
+  data_1[2] = input_->points[nghbr].data[2];
+  data_1[3] = input_->points[nghbr].data[3];
+  Eigen::Map<Eigen::Vector3f> nghbr_point (static_cast<float*> (data_1));
   float residual = fabsf (initial_normal.dot (initial_point - nghbr_point));
   if (residual_flag_ && residual > residual_threshold_)
     is_a_seed = false;
@@ -537,7 +554,7 @@ pcl::RegionGrowing<PointT, NormalT>::assembleRegions ()
   pcl::PointIndices segment;
   clusters_.resize (number_of_segments, segment);
 
-  for(int i_seg = 0; i_seg < number_of_segments; i_seg++)
+  for (int i_seg = 0; i_seg < number_of_segments; i_seg++)
   {
     clusters_[i_seg].indices.resize ( num_pts_in_segment_[i_seg], 0);
   }
@@ -575,7 +592,7 @@ pcl::RegionGrowing<PointT, NormalT>::getSegmentFromPoint (int index, pcl::PointI
   // first of all we need to find out if this point belongs to cloud
   bool point_was_found = false;
   int number_of_points = static_cast <int> (indices_->size ());
-  for (size_t point = 0; point < number_of_points; point++)
+  for (int point = 0; point < number_of_points; point++)
     if ( (*indices_)[point] == index)
     {
       point_was_found = true;
@@ -660,6 +677,61 @@ pcl::RegionGrowing<PointT, NormalT>::getColoredCloud ()
       point.r = 255;
       point.g = 0;
       point.b = 0;
+      colored_cloud->points.push_back (point);
+    }
+
+    std::vector< pcl::PointIndices >::iterator i_segment;
+    int next_color = 0;
+    for (i_segment = clusters_.begin (); i_segment != clusters_.end (); i_segment++)
+    {
+      std::vector<int>::iterator i_point;
+      for (i_point = i_segment->indices.begin (); i_point != i_segment->indices.end (); i_point++)
+      {
+        int index;
+        index = *i_point;
+        colored_cloud->points[index].r = colors[3 * next_color];
+        colored_cloud->points[index].g = colors[3 * next_color + 1];
+        colored_cloud->points[index].b = colors[3 * next_color + 2];
+      }
+      next_color++;
+    }
+  }
+
+  return (colored_cloud);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT, typename NormalT> pcl::PointCloud<pcl::PointXYZRGBA>::Ptr
+pcl::RegionGrowing<PointT, NormalT>::getColoredCloudRGBA ()
+{
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr colored_cloud;
+
+  if (!clusters_.empty ())
+  {
+    colored_cloud = (new pcl::PointCloud<pcl::PointXYZRGBA>)->makeShared ();
+
+    srand (static_cast<unsigned int> (time (0)));
+    std::vector<unsigned char> colors;
+    for (size_t i_segment = 0; i_segment < clusters_.size (); i_segment++)
+    {
+      colors.push_back (static_cast<unsigned char> (rand () % 256));
+      colors.push_back (static_cast<unsigned char> (rand () % 256));
+      colors.push_back (static_cast<unsigned char> (rand () % 256));
+    }
+
+    colored_cloud->width = input_->width;
+    colored_cloud->height = input_->height;
+    colored_cloud->is_dense = input_->is_dense;
+    for (size_t i_point = 0; i_point < input_->points.size (); i_point++)
+    {
+      pcl::PointXYZRGBA point;
+      point.x = *(input_->points[i_point].data);
+      point.y = *(input_->points[i_point].data + 1);
+      point.z = *(input_->points[i_point].data + 2);
+      point.r = 255;
+      point.g = 0;
+      point.b = 0;
+      point.a = 0;
       colored_cloud->points.push_back (point);
     }
 

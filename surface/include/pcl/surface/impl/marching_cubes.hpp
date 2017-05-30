@@ -122,7 +122,7 @@ pcl::MarchingCubes<PointNT>::createSurface (std::vector<float> &leaf_node,
   center[1] = min_p_[1] + (max_p_[1] - min_p_[1]) * float (index_3d[1]) / float (res_y_);
   center[2] = min_p_[2] + (max_p_[2] - min_p_[2]) * float (index_3d[2]) / float (res_z_);
 
-  std::vector<Eigen::Vector3f> p;
+  std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f> > p;
   p.resize (8);
   for (int i = 0; i < 8; ++i)
   {
@@ -260,7 +260,7 @@ pcl::MarchingCubes<PointNT>::performReconstruction (pcl::PolygonMesh &output)
         getNeighborList1D (leaf_node, index_3d);
         createSurface (leaf_node, index_3d, cloud);
       }
-  pcl::toROSMsg (cloud, output.cloud);
+  pcl::toPCLPointCloud2 (cloud, output.cloud);
 
   output.polygons.resize (cloud.size () / 3);
   for (size_t i = 0; i < output.polygons.size (); ++i)

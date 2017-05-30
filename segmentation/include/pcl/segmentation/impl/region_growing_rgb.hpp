@@ -15,7 +15,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -197,11 +197,12 @@ pcl::RegionGrowingRGB<PointT, NormalT>::extract (std::vector <pcl::PointIndices>
   std::vector<pcl::PointIndices>::iterator cluster_iter = clusters_.begin ();
   while (cluster_iter != clusters_.end ())
   {
-    if (cluster_iter->indices.size () < min_pts_per_cluster_ || cluster_iter->indices.size () > max_pts_per_cluster_)
+    if (static_cast<int> (cluster_iter->indices.size ()) < min_pts_per_cluster_ ||
+        static_cast<int> (cluster_iter->indices.size ()) > max_pts_per_cluster_)
     {
       cluster_iter = clusters_.erase (cluster_iter);
     }
-	else
+    else
       cluster_iter++;
   }
 
@@ -343,7 +344,7 @@ pcl::RegionGrowingRGB<PointT, NormalT>::findRegionsKNN (int index, int nghbr_num
   {
     if (distances[i_seg] < max_dist)
     {
-      segment_neighbours.push (std::make_pair<float, int> (distances[i_seg], i_seg) );
+      segment_neighbours.push (std::make_pair (distances[i_seg], i_seg) );
       if (int (segment_neighbours.size ()) > nghbr_number)
         segment_neighbours.pop ();
     }
@@ -462,7 +463,7 @@ pcl::RegionGrowingRGB<PointT, NormalT>::applyRegionMergingAlgorithm ()
   int final_segment_number = homogeneous_region_number;
   for (int i_reg = 0; i_reg < homogeneous_region_number; i_reg++)
   {
-    if (num_pts_in_homogeneous_region[i_reg] < min_pts_per_cluster_)
+    if (static_cast<int> (num_pts_in_homogeneous_region[i_reg]) < min_pts_per_cluster_)
     {
       if ( region_neighbours[i_reg].empty () )
         continue;
@@ -584,15 +585,26 @@ pcl::RegionGrowingRGB<PointT, NormalT>::assembleRegions (std::vector<unsigned in
   }
 
   // now we need to erase empty regions
-  std::vector< pcl::PointIndices >::iterator i_region;
-  i_region = clusters_.begin ();
-  while(i_region != clusters_.end ())
+  if (clusters_.empty ()) 
+    return;
+
+  std::vector<pcl::PointIndices>::iterator itr1, itr2;
+  itr1 = clusters_.begin ();
+  itr2 = clusters_.end () - 1;
+
+  while (itr1 < itr2)
   {
-    if ( i_region->indices.empty () )
-      i_region = clusters_.erase (i_region);
-    else
-      i_region++;
+    while (!(itr1->indices.empty ()) && itr1 < itr2) 
+      itr1++;
+    while (  itr2->indices.empty ()  && itr1 < itr2) 
+      itr2--;
+	  
+    if (itr1 != itr2)
+      itr1->indices.swap (itr2->indices);
   }
+
+  if (itr2->indices.empty ())
+    clusters_.erase (itr2, clusters_.end ());
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -690,7 +702,7 @@ pcl::RegionGrowingRGB<PointT, NormalT>::getSegmentFromPoint (int index, pcl::Poi
   // first of all we need to find out if this point belongs to cloud
   bool point_was_found = false;
   int number_of_points = static_cast <int> (indices_->size ());
-  for (size_t point = 0; point < number_of_points; point++)
+  for (int point = 0; point < number_of_points; point++)
     if ( (*indices_)[point] == index)
     {
       point_was_found = true;

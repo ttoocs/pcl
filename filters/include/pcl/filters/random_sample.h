@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -59,6 +59,11 @@ namespace pcl
     using FilterIndices<PointT>::getClassName;
     using FilterIndices<PointT>::indices_;
     using FilterIndices<PointT>::input_;
+    using FilterIndices<PointT>::negative_;
+    using FilterIndices<PointT>::keep_organized_;
+    using FilterIndices<PointT>::user_filter_value_;
+    using FilterIndices<PointT>::extract_removed_indices_;
+    using FilterIndices<PointT>::removed_indices_;
 
     typedef typename FilterIndices<PointT>::PointCloud PointCloud;
     typedef typename PointCloud::Ptr PointCloudPtr;
@@ -66,11 +71,14 @@ namespace pcl
 
     public:
 
-      typedef boost::shared_ptr<RandomSample<PointT> > Ptr;
-      typedef boost::shared_ptr<const RandomSample<PointT> > ConstPtr;
+      typedef boost::shared_ptr< RandomSample<PointT> > Ptr;
+      typedef boost::shared_ptr< const RandomSample<PointT> > ConstPtr;
 
       /** \brief Empty constructor. */
-      RandomSample () : sample_ (UINT_MAX), seed_ (static_cast<unsigned int> (time (NULL)))
+      RandomSample (bool extract_removed_indices = false) : 
+        FilterIndices<PointT> (extract_removed_indices),
+        sample_ (UINT_MAX), 
+        seed_ (static_cast<unsigned int> (time (NULL)))
       {
         filter_name_ = "RandomSample";
       }
@@ -144,19 +152,19 @@ namespace pcl
     * \ingroup filters
     */
   template<>
-  class PCL_EXPORTS RandomSample<sensor_msgs::PointCloud2> : public FilterIndices<sensor_msgs::PointCloud2>
+  class PCL_EXPORTS RandomSample<pcl::PCLPointCloud2> : public FilterIndices<pcl::PCLPointCloud2>
   {
-    using FilterIndices<sensor_msgs::PointCloud2>::filter_name_;
-    using FilterIndices<sensor_msgs::PointCloud2>::getClassName;
+    using FilterIndices<pcl::PCLPointCloud2>::filter_name_;
+    using FilterIndices<pcl::PCLPointCloud2>::getClassName;
 
-    typedef sensor_msgs::PointCloud2 PointCloud2;
-    typedef PointCloud2::Ptr PointCloud2Ptr;
-    typedef PointCloud2::ConstPtr PointCloud2ConstPtr;
+    typedef pcl::PCLPointCloud2 PCLPointCloud2;
+    typedef PCLPointCloud2::Ptr PCLPointCloud2Ptr;
+    typedef PCLPointCloud2::ConstPtr PCLPointCloud2ConstPtr;
 
     public:
   
-      typedef boost::shared_ptr<RandomSample<sensor_msgs::PointCloud2> > Ptr;
-      typedef boost::shared_ptr<const RandomSample<sensor_msgs::PointCloud2> > ConstPtr;
+      typedef boost::shared_ptr<RandomSample<pcl::PCLPointCloud2> > Ptr;
+      typedef boost::shared_ptr<const RandomSample<pcl::PCLPointCloud2> > ConstPtr;
   
       /** \brief Empty constructor. */
       RandomSample () : sample_ (UINT_MAX), seed_ (static_cast<unsigned int> (time (NULL)))
@@ -209,7 +217,7 @@ namespace pcl
         * \param output the resultant point cloud
         */
       void
-      applyFilter (PointCloud2 &output);
+      applyFilter (PCLPointCloud2 &output);
 
       /** \brief Sample of point indices
         * \param indices the resultant point cloud indices

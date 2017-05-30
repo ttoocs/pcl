@@ -34,6 +34,9 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef PCL_RECOGNITION_IMPL_HV_GO_HPP_
+#define PCL_RECOGNITION_IMPL_HV_GO_HPP_
+
 #include <pcl/recognition/hv/hv_go.h>
 #include <numeric>
 #include <pcl/common/time.h>
@@ -667,7 +670,7 @@ void pcl::GlobalHypothesesVerification<ModelT, SceneT>::computeClutterCue(boost:
         for (size_t k = 0; k < nn_distances.size (); k++)
         {
           if (nn_indices[k] != i)
-            neighborhood_indices.push_back (std::make_pair<int, int> (nn_indices[k], i));
+            neighborhood_indices.push_back (std::make_pair (nn_indices[k], i));
         }
       }
     }
@@ -738,3 +741,6 @@ void pcl::GlobalHypothesesVerification<ModelT, SceneT>::computeClutterCue(boost:
 }
 
 #define PCL_INSTANTIATE_GoHV(T1,T2) template class PCL_EXPORTS pcl::GlobalHypothesesVerification<T1,T2>;
+
+#endif /* PCL_RECOGNITION_IMPL_HV_GO_HPP_ */
+

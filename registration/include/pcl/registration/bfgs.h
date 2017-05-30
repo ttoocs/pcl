@@ -36,7 +36,7 @@ namespace Eigen
         Scalar discriminant ((poly[1] * poly[1]) - (4 * poly[0] * poly[2]));
         if (ZERO < discriminant)
         {
-          Scalar discriminant_root (sqrt (discriminant));
+          Scalar discriminant_root (std::sqrt (discriminant));
           m_roots[0] = (-poly[1] - discriminant_root) / (a2) ;
           m_roots[1] = (-poly[1] + discriminant_root) / (a2) ;
           hasRealRoot = true;
@@ -50,7 +50,7 @@ namespace Eigen
           }
           else
           {
-            Scalar discriminant_root (sqrt (-discriminant));
+            Scalar discriminant_root (std::sqrt (-discriminant));
             m_roots[0] = RootType (-poly[1] / a2, -discriminant_root / a2);
             m_roots[1] = RootType (-poly[1] / a2,  discriminant_root / a2);
             hasRealRoot = false;
@@ -437,7 +437,7 @@ BFGS<FunctorType>::interpolate (Scalar a, Scalar fa, Scalar fpa,
   // Ensure ymin <= ymax
   if (ymin > ymax) { Scalar tmp = ymin; ymin = ymax; ymax = tmp; };
 
-  if (order > 2 && !(fpb != fpb) && fpb != std::numeric_limits<Scalar>::infinity ()) 
+  if (order > 2 && !(fpb != fpa) && fpb != std::numeric_limits<Scalar>::infinity ())
   {
     fpa = fpa * (b - a);
     fpb = fpb * (b - a);

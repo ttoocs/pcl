@@ -50,12 +50,26 @@ namespace pcl
   namespace texture_mapping
   {
         
-    /** \brief Structure to store camera pose and focal length. */
+    /** \brief Structure to store camera pose and focal length. 
+      *
+      * One can assign a value to focal_length, to be used along 
+      * both camera axes or, optionally, axis-specific values 
+      * (focal_length_w and focal_length_h). Optionally, one can 
+      * also specify center-of-focus using parameters
+      * center_w and center_h. If the center-of-focus is not 
+      * specified, it will be set to the geometric center of 
+      * the camera, as defined by the width and height parameters.
+      */
     struct Camera
     {
-      Camera () : pose (), focal_length (), height (), width (), texture_file () {}
+      Camera () : pose (), focal_length (), focal_length_w (-1), focal_length_h (-1),
+        center_w (-1), center_h (-1), height (), width (), texture_file () {}
       Eigen::Affine3f pose;
       double focal_length;
+      double focal_length_w;  // optional
+      double focal_length_h;  // optinoal
+      double center_w;  // optional
+      double center_h;  // optional
       double height;
       double width;
       std::string texture_file;
@@ -85,8 +99,8 @@ namespace pcl
   {
     public:
      
-      typedef boost::shared_ptr< PointInT > Ptr;
-      typedef boost::shared_ptr< const PointInT > ConstPtr;
+      typedef boost::shared_ptr< TextureMapping < PointInT > > Ptr;
+      typedef boost::shared_ptr< const TextureMapping < PointInT > > ConstPtr;
 
       typedef pcl::PointCloud<PointInT> PointCloud;
       typedef typename PointCloud::Ptr PointCloudPtr;
@@ -156,13 +170,13 @@ namespace pcl
       void
       mapTexture2Mesh (pcl::TextureMesh &tex_mesh);
 
-      /** \brief map texture to a mesh UV mapping
+      /** \brief Map texture to a mesh UV mapping
         * \param[in] tex_mesh texture mesh
         */
       void
       mapTexture2MeshUV (pcl::TextureMesh &tex_mesh);
 
-      /** \brief map textures aquired from a set of cameras onto a mesh.
+      /** \brief Map textures acquired from a set of cameras onto a mesh.
         * \details With UV mapping, the mesh must be divided into NbCamera + 1 sub-meshes.
         * Each sub-mesh corresponding to the faces visible by one camera. The last submesh containing all non-visible faces
         * \param[in] tex_mesh texture mesh
@@ -179,7 +193,7 @@ namespace pcl
         * \returns false if the point is not visible by the camera
         */
       inline bool
-      getPointUVCoordinates (const pcl::PointXYZ &pt, const Camera &cam, Eigen::Vector2f &UV_coordinates)
+      getPointUVCoordinates (const PointInT &pt, const Camera &cam, Eigen::Vector2f &UV_coordinates)
       {
         // if the point is in front of the camera
         if (pt.z > 0)
@@ -187,11 +201,25 @@ namespace pcl
           // compute image center and dimension
           double sizeX = cam.width;
           double sizeY = cam.height;
-          double cx = (sizeX) / 2.0;
-          double cy = (sizeY) / 2.0;
+          double cx, cy;
+          if (cam.center_w > 0)
+            cx = cam.center_w;
+          else
+            cx = (sizeX) / 2.0;
+          if (cam.center_h > 0)
+            cy = cam.center_h;
+          else
+            cy = (sizeY) / 2.0;
 
-          double focal_x = cam.focal_length;
-          double focal_y = cam.focal_length;
+          double focal_x, focal_y;
+          if (cam.focal_length_w > 0)
+            focal_x = cam.focal_length_w;
+          else
+            focal_x = cam.focal_length;
+          if (cam.focal_length_h>0)
+            focal_y = cam.focal_length_h;
+          else
+            focal_y = cam.focal_length;
 
           // project point on image frame
           UV_coordinates[0] = static_cast<float> ((focal_x * (pt.x / pt.z) + cx) / sizeX); //horizontal
@@ -215,7 +243,7 @@ namespace pcl
         * \returns true if the point is occluded.
         */
       inline bool
-      isPointOccluded (const pcl::PointXYZ &pt, const OctreePtr octree);
+      isPointOccluded (const PointInT &pt, const OctreePtr octree);
 
       /** \brief Remove occluded points from a point cloud
         * \param[in] input_cloud the cloud on which to perform occlusion detection
@@ -298,7 +326,7 @@ namespace pcl
       /** \brief Segment and texture faces by camera visibility. Face-based segmentation.
         * \details With N camera, faces will be arranged into N+1 groups: 1 for each camera, plus 1 for faces not visible from any camera.
         * The mesh will also contain uv coordinates for each face
-        * \param[in/out] tex_mesh input mesh that needs sorting. Should contain only 1 sub-mesh.
+        * \param mesh input mesh that needs sorting. Should contain only 1 sub-mesh.
         * \param[in] cameras vector containing the cameras used for texture mapping.
         */
       void 
@@ -323,7 +351,7 @@ namespace pcl
         * \param[in] p2 the second point
         * \param[in] p3 the third point
         */
-      std::vector<Eigen::Vector2f>
+      std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f> >
       mapTexture2Face (const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3);
 
       /** \brief Returns the circumcenter of a triangle and the circle's radius.
@@ -335,7 +363,20 @@ namespace pcl
         * \param[out] radius the radius of the circumscribed circle.
         */
       inline void
-      getTriangleCircumcenterAndSize (const pcl::PointXY &p1, const pcl::PointXY &p2, const pcl::PointXY &p3, pcl::PointXY &circomcenter, double &radius);
+      getTriangleCircumcenterAndSize (const pcl::PointXY &p1, const pcl::PointXY &p2, const pcl::PointXY &p3, pcl::PointXY &circumcenter, double &radius);
+ 
+      
+      /** \brief Returns the centroid of a triangle and the corresponding circumscribed circle's radius.
+        * \details yield a tighter circle than getTriangleCircumcenterAndSize.
+        * \param[in] p1 first point of the triangle.
+        * \param[in] p2 second point of the triangle.
+        * \param[in] p3 third point of the triangle.
+        * \param[out] circumcenter resulting circumcenter
+        * \param[out] radius the radius of the circumscribed circle.
+        */
+      inline void 
+      getTriangleCircumcscribedCircleCentroid ( const pcl::PointXY &p1, const pcl::PointXY &p2, const pcl::PointXY &p3, pcl::PointXY &circumcenter, double &radius);
+ 
 
       /** \brief computes UV coordinates of point, observed by one particular camera
         * \param[in] pt XYZ point to project on camera plane
@@ -344,7 +385,7 @@ namespace pcl
         * \returns false if the point is not visible by the camera
         */
       inline bool
-      getPointUVCoordinates (const pcl::PointXYZ &pt, const Camera &cam, pcl::PointXY &UV_coordinates);
+      getPointUVCoordinates (const PointInT &pt, const Camera &cam, pcl::PointXY &UV_coordinates);
 
       /** \brief Returns true if all the vertices of one face are projected on the camera's image plane.
         * \param[in] camera camera on which to project the face.
@@ -357,7 +398,7 @@ namespace pcl
         */
       inline bool
       isFaceProjected (const Camera &camera, 
-                       const pcl::PointXYZ &p1, const pcl::PointXYZ &p2, const pcl::PointXYZ &p3, 
+                       const PointInT &p1, const PointInT &p2, const PointInT &p3, 
                        pcl::PointXY &proj1, pcl::PointXY &proj2, pcl::PointXY &proj3);
 
       /** \brief Returns True if a point lays within a triangle

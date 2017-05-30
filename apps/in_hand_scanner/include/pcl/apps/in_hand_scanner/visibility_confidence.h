@@ -38,68 +38,53 @@
  *
  */
 
-#ifndef PCL_IN_HAND_SCANNER_VISIBILITY_CONFIDENCE_H
-#define PCL_IN_HAND_SCANNER_VISIBILITY_CONFIDENCE_H
+#ifndef PCL_APPS_IN_HAND_SCANNER_VISIBILITY_CONFIDENCE_H
+#define PCL_APPS_IN_HAND_SCANNER_VISIBILITY_CONFIDENCE_H
 
+#include <stdint.h>
+
+#include <pcl/pcl_exports.h>
 #include <pcl/apps/in_hand_scanner/eigen.h>
 
 namespace pcl
 {
   namespace ihs
   {
-
-    class VisibilityConfidence
+    // - Frequency 3 Icosahedron where each vertex corresponds to a viewing direction
+    // - First vertex aligned to z-axis
+    // - Removed vertices with z < 0.3
+    // -> 31 directions, fitting nicely into a 32 bit integer
+    // -> Very oblique angles are not considered
+    class PCL_EXPORTS Dome
     {
       public:
 
-        // - Frequency 3 Icosahedron where each vertex corresponds to a viewing direction
-        // - First vertex aligned to z-axis
-        // - Removed vertexes with z < 0.3
-        // -> 31 directions, fitting nicely into a 32 bit integer
-        // -> Very oblique angles are not considered
-        class Dome
-        {
-          public:
+        static const int num_directions = 31;
+        typedef Eigen::Matrix <float, 4, num_directions> Vertices;
 
-            static const int                                NumDirections = 31;
-            typedef Eigen::Matrix <float, 4, NumDirections> Directions;
+        Dome ();
 
-          public:
-
-            Dome ();
-
-            const Directions&
-            directions () const;
-
-          private:
-
-            Directions directions_;
-        };
-
-        typedef unsigned int Directions;
-        static const int     NumDirections = Dome::NumDirections;
-
-      public:
-
-        VisibilityConfidence ();
-
-        void
-        addDirection (const Eigen::Vector4f& normal,
-                      const Eigen::Vector4f& direction,
-                      const float            weight);
-
-        float
-        getValue () const; // [0 1]
+        Vertices
+        getVertices () const;
 
       private:
 
-        static const Dome dome_;
-        Directions        directions_;
-        float             weight_;
-        unsigned int      num_weights_;
+        Vertices vertices_;
+
+      public:
+
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     };
+
+    PCL_EXPORTS void
+    addDirection (const Eigen::Vector4f& normal,
+                  const Eigen::Vector4f& direction,
+                  uint32_t&              directions);
+
+    PCL_EXPORTS unsigned int
+    countDirections (const uint32_t directions);
 
   } // End namespace ihs
 } // End namespace pcl
 
-#endif // PCL_IN_HAND_SCANNER_VISIBILITY_CONFIDENCE_H
+#endif // PCL_APPS_IN_HAND_SCANNER_VISIBILITY_CONFIDENCE_H

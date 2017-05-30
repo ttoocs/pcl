@@ -38,13 +38,15 @@
  *
  */
 
-#include <cstdlib> // EXIT_SUCCESS, EXIT_FAILURE
-#include <pcl/apps/in_hand_scanner/in_hand_scanner.h>
+#include <QApplication>
 
-int main (int argc, char** argv)
+#include <pcl/apps/in_hand_scanner/main_window.h>
+
+int
+main (int argc, char** argv)
 {
-  pcl::ihs::InHandScanner scanner (argc, argv);
-  scanner.run ();
-
-  return (EXIT_SUCCESS);
+  QApplication app (argc, argv);
+  pcl::ihs::MainWindow mw;
+  mw.show ();
+  return (app.exec ());
 }

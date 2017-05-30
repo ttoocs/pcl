@@ -7,8 +7,10 @@ set(ON_NURBS_INCLUDES
 	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_curve_2d_pdm.h
 	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_curve_2d_sdm.h
 	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_curve_2d_tdm.h
+	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_curve_2d.h
 	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_curve_pdm.h
 	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_cylinder_pdm.h
+	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_sphere_pdm.h
 	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_surface_im.h
 	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_surface_pdm.h
 	include/pcl/${SUBSYS_NAME}/on_nurbs/fitting_surface_tdm.h
@@ -29,8 +31,10 @@ set(ON_NURBS_SOURCES
 	src/on_nurbs/fitting_curve_2d_pdm.cpp
 	src/on_nurbs/fitting_curve_2d_sdm.cpp
 	src/on_nurbs/fitting_curve_2d_tdm.cpp
+	src/on_nurbs/fitting_curve_2d.cpp
 	src/on_nurbs/fitting_curve_pdm.cpp
 	src/on_nurbs/fitting_cylinder_pdm.cpp
+	src/on_nurbs/fitting_sphere_pdm.cpp
 	src/on_nurbs/fitting_surface_im.cpp
 	src/on_nurbs/fitting_surface_pdm.cpp
 	src/on_nurbs/fitting_surface_tdm.cpp

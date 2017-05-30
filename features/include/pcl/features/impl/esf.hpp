@@ -43,6 +43,7 @@
 
 #include <pcl/features/esf.h>
 #include <pcl/common/common.h>
+#include <pcl/common/distances.h>
 #include <pcl/common/transforms.h>
 #include <vector>
 
@@ -73,7 +74,6 @@ pcl::ESFEstimation<PointInT, PointOutT>::computeESF (
   float h_a3_in[binsize] = {0};
   float h_a3_out[binsize] = {0};
   float h_a3_mix[binsize] = {0};
-  float h_d1[binsize] = {0};
 
   float h_d3_in[binsize] = {0};
   float h_d3_out[binsize] = {0};
@@ -108,7 +108,10 @@ pcl::ESFEstimation<PointInT, PointOutT>::computeESF (
     Eigen::Vector4f v23 (p2 - p3);
     a = v21.norm (); b = v31.norm (); c = v23.norm (); s = (a+b+c) * 0.5f;
     if (s * (s-a) * (s-b) * (s-c) <= 0.001f)
-      continue;
+    {
+        nn_idx--;
+        continue;
+    }
 
     v21.normalize ();
     v31.normalize ();
@@ -133,10 +136,6 @@ pcl::ESFEstimation<PointInT, PointOutT>::computeESF (
       nn_idx--;
       continue;
     }
-
-    //pcl::PointXYZ cog(((rand()%100)-50.0f) / 100.0f,((rand()%100)-50.0f) / 100.0f,((rand()%100)-50.0f) / 100.0f);
-    // D1
-    //                      d1v.push_back( pcl::euclideanDistance(cog, pc.points[index1]) );
 
     // D2
     d2v.push_back (pcl::euclideanDistance (pc.points[index1], pc.points[index2]));
@@ -214,15 +213,12 @@ pcl::ESFEstimation<PointInT, PointOutT>::computeESF (
       }
   }
   // Normalizing, get max
-  float maxd1 = 0;
   float maxd2 = 0;
   float maxd3 = 0;
 
   for (size_t nn_idx = 0; nn_idx < sample_size; ++nn_idx)
   {
     // get max of Dx
-    if (d1v[nn_idx] > maxd1)
-      maxd1 = d1v[nn_idx];
     if (d2v[nn_idx] > maxd2)
       maxd2 = d2v[nn_idx];
     if (d2v[sample_size + nn_idx] > maxd2)
@@ -237,8 +233,6 @@ pcl::ESFEstimation<PointInT, PointOutT>::computeESF (
   int index;
   for (size_t nn_idx = 0; nn_idx < sample_size; ++nn_idx)
   {
-    h_d1[static_cast<int>(pcl_round (d1v[nn_idx] / maxd1 * (binsize-1)))]++ ;
-
     if (wt_d3[nn_idx] >= 0.999) // IN
     {
       index = static_cast<int>(pcl_round (d3v[nn_idx] / maxd3 * (binsize-1)));

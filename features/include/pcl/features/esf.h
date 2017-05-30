@@ -129,17 +129,10 @@ namespace pcl
     private:
 
       /** \brief ... */
-      //boost::multi_array<int, 3> lut_;
       std::vector<std::vector<std::vector<int> > > lut_;
       
       /** \brief ... */
       PointCloudIn local_cloud_;
-
-      /** \brief Make the computeFeature (&Eigen::MatrixXf); inaccessible from outside the class
-        * \param[out] output the output point cloud
-        */
-      void
-      computeFeatureEigen (pcl::PointCloud<Eigen::MatrixXf> &) {}
   };
 }
 

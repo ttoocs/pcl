@@ -44,18 +44,14 @@
 #include <pcl/surface/reconstruction.h>
 #include <pcl/surface/boost.h>
 
-#include <pcl/ros/conversions.h>
+#include <pcl/conversions.h>
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/PolygonMesh.h>
-#include <pcl/TextureMesh.h>
 
 #include <fstream>
 #include <iostream>
 
-// add by ktran to export update function
-#include <pcl/pcl_macros.h>
-#include <pcl/point_types.h>
 
 
 namespace pcl
@@ -142,6 +138,9 @@ namespace pcl
   class GreedyProjectionTriangulation : public MeshConstruction<PointInT>
   {
     public:
+      typedef boost::shared_ptr<GreedyProjectionTriangulation<PointInT> > Ptr;
+      typedef boost::shared_ptr<const GreedyProjectionTriangulation<PointInT> > ConstPtr;
+
       using MeshConstruction<PointInT>::tree_;
       using MeshConstruction<PointInT>::input_;
       using MeshConstruction<PointInT>::indices_;
@@ -359,7 +358,7 @@ namespace pcl
       /** \brief Temporary variable to store a triangle (as a set of point indices) **/
       pcl::Vertices triangle_;
       /** \brief Temporary variable to store point coordinates **/
-      std::vector<Eigen::Vector3f> coords_;
+      std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f> > coords_;
 
       /** \brief A list of angles to neighbors **/
       std::vector<nnAngle> angles_;

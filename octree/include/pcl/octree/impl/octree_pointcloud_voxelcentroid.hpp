@@ -48,20 +48,16 @@ pcl::octree::OctreePointCloudVoxelCentroid<PointT, LeafContainerT, BranchContain
     const PointT& point_arg, PointT& voxel_centroid_arg) const
 {
   OctreeKey key;
-  LeafNode* leaf = 0;
+  LeafContainerT* leaf = NULL;
 
   // generate key
   genOctreeKeyforPoint (point_arg, key);
 
   leaf = this->findLeaf (key);
-
   if (leaf)
-  {
-    LeafContainerT* container = leaf;
-    container->getCentroid (voxel_centroid_arg);
-  }
+    leaf->getCentroid (voxel_centroid_arg);
 
-  return (leaf != 0);
+  return (leaf != NULL);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,9 +69,9 @@ pcl::octree::OctreePointCloudVoxelCentroid<PointT, LeafContainerT, BranchContain
 
   // reset output vector
   voxel_centroid_list_arg.clear ();
-  voxel_centroid_list_arg.reserve (this->leafCount_);
+  voxel_centroid_list_arg.reserve (this->leaf_count_);
 
-  getVoxelCentroidsRecursive (this->rootNode_, new_key, voxel_centroid_list_arg );
+  getVoxelCentroidsRecursive (this->root_node_, new_key, voxel_centroid_list_arg );
 
   // return size of centroid vector
   return (voxel_centroid_list_arg.size ());
@@ -99,22 +95,23 @@ pcl::octree::OctreePointCloudVoxelCentroid<PointT, LeafContainerT, BranchContain
       // add current branch voxel to key
       key_arg.pushBranch (child_idx);
 
-      const OctreeNode *childNode = branch_arg->getChildPtr (child_idx);
+      OctreeNode *child_node = branch_arg->getChildPtr (child_idx);
 
-      switch (childNode->getNodeType ())
+      switch (child_node->getNodeType ())
       {
         case BRANCH_NODE:
         {
           // recursively proceed with indexed child branch
-          getVoxelCentroidsRecursive (static_cast<const BranchNode*> (childNode), key_arg, voxel_centroid_list_arg);
+          getVoxelCentroidsRecursive (static_cast<const BranchNode*> (child_node), key_arg, voxel_centroid_list_arg);
           break;
         }
         case LEAF_NODE:
         {
-          const LeafContainerT* container = static_cast<const LeafNode*> (childNode);
-
           PointT new_centroid;
-          container->getCentroid (new_centroid);
+
+          LeafNode* container = static_cast<LeafNode*> (child_node);
+
+          container->getContainer().getCentroid (new_centroid);
 
           voxel_centroid_list_arg.push_back (new_centroid);
           break;

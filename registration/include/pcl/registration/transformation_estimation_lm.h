@@ -72,6 +72,7 @@ namespace pcl
         typedef boost::shared_ptr<const TransformationEstimationLM<PointSource, PointTarget, MatScalar> > ConstPtr;
 
         typedef Eigen::Matrix<MatScalar, Eigen::Dynamic, 1> VectorX;
+        typedef Eigen::Matrix<MatScalar, 4, 1> Vector4;
         typedef typename TransformationEstimation<PointSource, PointTarget, MatScalar>::Matrix4 Matrix4;
         
         /** \brief Constructor. */
@@ -81,7 +82,6 @@ namespace pcl
           * \param[in] src the TransformationEstimationLM object to copy into this 
           */
         TransformationEstimationLM (const TransformationEstimationLM &src) : 
-          weights_ (src.weights_), 
           tmp_src_ (src.tmp_src_), 
           tmp_tgt_ (src.tmp_tgt_), 
           tmp_idx_src_ (src.tmp_idx_src_), 
@@ -95,7 +95,6 @@ namespace pcl
         TransformationEstimationLM&
         operator = (const TransformationEstimationLM &src)
         {
-          weights_ = src.weights_;
           tmp_src_ = src.tmp_src_; 
           tmp_tgt_ = src.tmp_tgt_; 
           tmp_idx_src_ = src.tmp_idx_src_;
@@ -174,19 +173,34 @@ namespace pcl
           * \param[in] p_tgt The target point
           * \return The distance between \a p_src and \a p_tgt
           *
-         * \note A different distance function can be defined by creating a subclass of TransformationEstimationLM and 
-          * overriding this method. (See \a TransformationEstimationPointToPlane)
+          * \note Older versions of PCL used this method internally for calculating the
+          * optimization gradient. Since PCL 1.7, a switch has been made to the 
+          * computeDistance method using Vector4 types instead. This method is only 
+          * kept for API compatibility reasons.
           */
-        virtual double 
+        virtual MatScalar
         computeDistance (const PointSource &p_src, const PointTarget &p_tgt) const
         {
-          Eigen::Vector4f s (p_src.x, p_src.y, p_src.z, 0);
-          Eigen::Vector4f t (p_tgt.x, p_tgt.y, p_tgt.z, 0);
-          return (pcl::distances::l2 (s, t));
+          Vector4 s (p_src.x, p_src.y, p_src.z, 0);
+          Vector4 t (p_tgt.x, p_tgt.y, p_tgt.z, 0);
+          return ((s - t).norm ());
         }
 
-        /** \brief The vector of residual weights. Used internall in the LM loop. */
-        std::vector<double> weights_;
+        /** \brief Compute the distance between a source point and its corresponding target point
+          * \param[in] p_src The source point
+          * \param[in] p_tgt The target point
+          * \return The distance between \a p_src and \a p_tgt
+          *
+          * \note A different distance function can be defined by creating a subclass of 
+          * TransformationEstimationLM and overriding this method. 
+          * (See \a TransformationEstimationPointToPlane)
+          */
+        virtual MatScalar
+        computeDistance (const Vector4 &p_src, const PointTarget &p_tgt) const
+        {
+          Vector4 t (p_tgt.x, p_tgt.y, p_tgt.z, 0);
+          return ((p_src - t).norm ());
+        }
 
         /** \brief Temporary pointer to the source dataset. */
         mutable const PointCloudSource *tmp_src_;
@@ -239,33 +253,35 @@ namespace pcl
             int m_data_points_;
         };
 
-        struct OptimizationFunctor : public Functor<double>
+        struct OptimizationFunctor : public Functor<MatScalar>
         {
-          using Functor<double>::values;
+          using Functor<MatScalar>::values;
 
           /** Functor constructor
             * \param[in] m_data_points the number of data points to evaluate
             * \param[in,out] estimator pointer to the estimator object
             */
-          OptimizationFunctor (int m_data_points, const TransformationEstimationLM *estimator) : 
-            Functor<double> (m_data_points), estimator_ (estimator) {}
+          OptimizationFunctor (int m_data_points, 
+                               const TransformationEstimationLM *estimator) 
+            :  Functor<MatScalar> (m_data_points), estimator_ (estimator) 
+          {}
 
           /** Copy constructor
-            * \param[in] the optimization functor to copy into this
+            * \param[in] src the optimization functor to copy into this
             */
           inline OptimizationFunctor (const OptimizationFunctor &src) : 
-            Functor<double> (src.m_data_points_), estimator_ ()
+            Functor<MatScalar> (src.m_data_points_), estimator_ ()
           {
             *this = src;
           }
 
           /** Copy operator
-            * \param[in] the optimization functor to copy into this
+            * \param[in] src the optimization functor to copy into this
             */
           inline OptimizationFunctor& 
           operator = (const OptimizationFunctor &src) 
           { 
-            Functor<double>::operator=(src);
+            Functor<MatScalar>::operator=(src);
             estimator_ = src.estimator_; 
             return (*this); 
           }
@@ -278,38 +294,40 @@ namespace pcl
             * \param[out] fvec f values vector
             */
           int 
-          operator () (const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const;
+          operator () (const VectorX &x, VectorX &fvec) const;
 
           const TransformationEstimationLM<PointSource, PointTarget, MatScalar> *estimator_;
         };
 
-        struct OptimizationFunctorWithIndices : public Functor<double>
+        struct OptimizationFunctorWithIndices : public Functor<MatScalar>
         {
-          using Functor<double>::values;
+          using Functor<MatScalar>::values;
 
           /** Functor constructor
             * \param[in] m_data_points the number of data points to evaluate
             * \param[in,out] estimator pointer to the estimator object
             */
-          OptimizationFunctorWithIndices (int m_data_points, const TransformationEstimationLM *estimator) :
-            Functor<double> (m_data_points), estimator_ (estimator) {}
+          OptimizationFunctorWithIndices (int m_data_points, 
+                                          const TransformationEstimationLM *estimator) 
+            : Functor<MatScalar> (m_data_points), estimator_ (estimator) 
+          {}
 
           /** Copy constructor
-            * \param[in] the optimization functor to copy into this
+            * \param[in] src the optimization functor to copy into this
             */
-          inline OptimizationFunctorWithIndices (const OptimizationFunctorWithIndices &src) : 
-            Functor<double> (src.m_data_points_), estimator_ ()
+          inline OptimizationFunctorWithIndices (const OptimizationFunctorWithIndices &src)
+            : Functor<MatScalar> (src.m_data_points_), estimator_ ()
           {
             *this = src;
           }
 
           /** Copy operator
-            * \param[in] the optimization functor to copy into this
+            * \param[in] src the optimization functor to copy into this
             */
           inline OptimizationFunctorWithIndices& 
           operator = (const OptimizationFunctorWithIndices &src) 
           { 
-            Functor<double>::operator=(src);
+            Functor<MatScalar>::operator=(src);
             estimator_ = src.estimator_; 
             return (*this); 
           }
@@ -322,7 +340,7 @@ namespace pcl
             * \param[out] fvec f values vector
             */
           int 
-          operator () (const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const;
+          operator () (const VectorX &x, VectorX &fvec) const;
 
           const TransformationEstimationLM<PointSource, PointTarget, MatScalar> *estimator_;
         };

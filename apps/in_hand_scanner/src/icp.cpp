@@ -41,12 +41,15 @@
 #include <pcl/apps/in_hand_scanner/icp.h>
 
 #include <limits>
-#include <cstdlib> // EXIT_SUCCESS, EXIT_FAILURE
-
-// #include <iomanip>
+#include <cstdlib>
+#include <iomanip>
+#include <cmath>
 
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/common/centroid.h>
+#include <pcl/common/time.h>
+
+#include <pcl/apps/in_hand_scanner/utils.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -58,28 +61,120 @@ pcl::ihs::ICP::ICP ()
     min_overlap_    (.75f),
     max_fitness_    (.1f),
 
-    squared_distance_threshold_factor_ (9.f),
-    normals_threshold_                 (.7f)
+    factor_ (9.f),
+    max_angle_ (45.f)
 {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
+void
+pcl::ihs::ICP::setEpsilon (const float epsilon)
+{
+  if (epsilon > 0) epsilon_ = epsilon;
+}
+
+float
+pcl::ihs::ICP::getEpsilon () const
+{
+  return (epsilon_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::ICP::setMaxIterations (const unsigned int max_iter)
+{
+  max_iterations_ = max_iter < 1 ? 1 : max_iter;
+}
+
+unsigned int
+pcl::ihs::ICP::getMaxIterations () const
+{
+  return (max_iterations_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::ICP::setMinOverlap (const float overlap)
+{
+  min_overlap_ = pcl::ihs::clamp (overlap, 0.f, 1.f);
+}
+
+float
+pcl::ihs::ICP::getMinOverlap () const
+{
+  return (min_overlap_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::ICP::setMaxFitness (const float fitness)
+{
+  if (fitness > 0) max_fitness_ = fitness;
+}
+
+float
+pcl::ihs::ICP::getMaxFitness () const
+{
+  return (max_fitness_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::ICP::setCorrespondenceRejectionFactor (const float factor)
+{
+  factor_ = factor < 1.f ? 1.f : factor;
+}
+
+float
+pcl::ihs::ICP::getCorrespondenceRejectionFactor () const
+{
+  return (factor_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+pcl::ihs::ICP::setMaxAngle (const float angle)
+{
+  max_angle_ = pcl::ihs::clamp (angle, 0.f, 180.f);
+}
+
+float
+pcl::ihs::ICP::getMaxAngle () const
+{
+  return (max_angle_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 bool
-pcl::ihs::ICP::findTransformation (const MeshConstPtr&           mesh_model,
-                                   const CloudProcessedConstPtr& cloud_data,
-                                   const Transformation&         T_init,
-                                   Transformation&               T_final)
+pcl::ihs::ICP::findTransformation (const MeshConstPtr&              mesh_model,
+                                   const CloudXYZRGBNormalConstPtr& cloud_data,
+                                   const Eigen::Matrix4f&           T_init,
+                                   Eigen::Matrix4f&                 T_final)
 {
   // Check the input
   // TODO: Double check the minimum number of points necessary for icp
   const size_t n_min = 4;
 
-  if(mesh_model->sizeVertexes () < n_min || cloud_data->size () < n_min)
+  if(mesh_model->sizeVertices () < n_min || cloud_data->size () < n_min)
   {
     std::cerr << "ERROR in icp.cpp: Not enough input points!\n";
     return (false);
   }
+
+  // Time measurements
+  pcl::StopWatch sw;
+  pcl::StopWatch sw_total;
+  double t_select     = 0.;
+  double t_build      = 0.;
+  double t_nn_search  = 0.;
+  double t_calc_trafo = 0.;
 
   // Convergence and registration failure
   float current_fitness  = 0.f;
@@ -91,11 +186,13 @@ pcl::ihs::ICP::findTransformation (const MeshConstPtr&           mesh_model,
   float squared_distance_threshold = std::numeric_limits<float>::max();
 
   // Transformation
-  Transformation T_cur = T_init;
+  Eigen::Matrix4f T_cur = T_init;
 
   // Point selection
+  sw.reset ();
   const CloudNormalConstPtr cloud_model_selected = this->selectModelPoints (mesh_model, T_init.inverse ());
   const CloudNormalConstPtr cloud_data_selected  = this->selectDataPoints (cloud_data);
+  t_select = sw.getTime ();
 
   const size_t n_model = cloud_model_selected->size ();
   const size_t n_data  = cloud_data_selected->size ();
@@ -103,31 +200,37 @@ pcl::ihs::ICP::findTransformation (const MeshConstPtr&           mesh_model,
   if(n_data < n_min)  {std::cerr << "ERROR in icp.cpp: Not enough data points after selection!\n"; return (false);}
 
   // Build a kd-tree
+  sw.reset ();
   kd_tree_->setInputCloud (cloud_model_selected);
+  t_build = sw.getTime ();
+
+  std::vector <int>   index (1);
+  std::vector <float> squared_distance (1);
+
+  // Clouds with one to one correspondences
+  CloudNormal cloud_model_corr;
+  CloudNormal cloud_data_corr;
+
+  cloud_model_corr.reserve (n_data);
+  cloud_data_corr.reserve (n_data);
 
   // ICP main loop
   unsigned int iter = 1;
+  PointNormal pt_d;
+  const float dot_min = std::cos (max_angle_ * 17.45329252e-3); // deg to rad
   while (true)
   {
-    // Clouds with one to one correspondences
-    CloudNormalPtr cloud_model_corr (new CloudNormal ());
-    CloudNormalPtr cloud_data_corr (new CloudNormal ());
-
-    cloud_model_corr->reserve (n_data);
-    cloud_data_corr->reserve (n_data);
-
     // Accumulated error
     float squared_distance_sum = 0.f;
 
     // NN search
-    std::vector <int>   index (1);
-    std::vector <float> squared_distance (1);
-
-    CloudNormal::const_iterator it_d = cloud_data_selected->begin ();
-    for (; it_d!=cloud_data_selected->end (); ++it_d)
+    cloud_model_corr.clear ();
+    cloud_data_corr.clear ();
+    sw.reset ();
+    for (CloudNormal::const_iterator it_d = cloud_data_selected->begin (); it_d!=cloud_data_selected->end (); ++it_d)
     {
       // Transform the data point
-      PointNormal pt_d = *it_d;
+      pt_d = *it_d;
       pt_d.getVector4fMap ()       = T_cur * pt_d.getVector4fMap ();
       pt_d.getNormalVector4fMap () = T_cur * pt_d.getNormalVector4fMap ();
 
@@ -139,33 +242,31 @@ pcl::ihs::ICP::findTransformation (const MeshConstPtr&           mesh_model,
       }
 
       // Check the distance threshold
-      if (squared_distance[0] < squared_distance_threshold)
+      if (squared_distance [0] < squared_distance_threshold)
       {
-        if (index[0] >= cloud_model_selected->size ())
+        if (index [0] >= cloud_model_selected->size ())
         {
           std::cerr << "ERROR in icp.cpp: Segfault!\n";
-          std::cerr << "  Trying to access index " << index[0] << " >= " << cloud_model_selected->size () << std::endl;
+          std::cerr << "  Trying to access index " << index [0] << " >= " << cloud_model_selected->size () << std::endl;
           exit (EXIT_FAILURE);
         }
 
-        const PointNormal& pt_m = cloud_model_selected->operator [] (index[0]);
+        const PointNormal& pt_m = cloud_model_selected->operator [] (index [0]);
 
         // Check the normals threshold
-        if (pt_m.getNormalVector4fMap ().dot (pt_d.getNormalVector4fMap ()) > normals_threshold_)
+        if (pt_m.getNormalVector4fMap ().dot (pt_d.getNormalVector4fMap ()) > dot_min)
         {
-          squared_distance_sum += squared_distance[0];
+          squared_distance_sum += squared_distance [0];
 
-          cloud_model_corr->push_back (pt_m);
-          cloud_data_corr->push_back (pt_d);
+          cloud_model_corr.push_back (pt_m);
+          cloud_data_corr.push_back (pt_d);
         }
       }
     }
 
-    // Shrink to fit ("Scott Meyers swap trick")
-    CloudNormal (*cloud_model_corr).swap (*cloud_model_corr);
-    CloudNormal (*cloud_data_corr).swap (*cloud_data_corr);
+    t_nn_search += sw.getTime ();
 
-    const size_t n_corr = cloud_data_corr->size ();
+    const size_t n_corr = cloud_data_corr.size ();
     if (n_corr < n_min)
     {
       std::cerr << "ERROR in icp.cpp: Not enough correspondences: " << n_corr << " < " << n_min << std::endl;
@@ -176,7 +277,7 @@ pcl::ihs::ICP::findTransformation (const MeshConstPtr&           mesh_model,
     previous_fitness           = current_fitness;
     current_fitness            = squared_distance_sum / static_cast <float> (n_corr);
     delta_fitness              = std::abs (previous_fitness - current_fitness);
-    squared_distance_threshold = squared_distance_threshold_factor_ * current_fitness;
+    squared_distance_threshold = factor_ * current_fitness;
     overlap                    = static_cast <float> (n_corr) / static_cast <float> (n_data);
 
     //    std::cerr << "Iter: " << std::left << std::setw(3) << iter
@@ -185,12 +286,14 @@ pcl::ihs::ICP::findTransformation (const MeshConstPtr&           mesh_model,
     //              << " | delta fitness: " << std::setprecision(5) << std::setw(10) << delta_fitness << std::endl;
 
     // Minimize the point to plane distance
-    Transformation T_delta = Transformation::Identity ();
+    sw.reset ();
+    Eigen::Matrix4f T_delta = Eigen::Matrix4f::Identity ();
     if (!this->minimizePointPlane (cloud_data_corr, cloud_model_corr, T_delta))
     {
       std::cerr << "ERROR in icp.cpp: minimizePointPlane failed!\n";
       return (false);
     }
+    t_calc_trafo += sw.getTime ();
 
     T_cur = T_delta * T_cur;
 
@@ -202,22 +305,58 @@ pcl::ihs::ICP::findTransformation (const MeshConstPtr&           mesh_model,
   } // End ICP main loop
 
   // Some output
-  std::cerr << "\nRegistration:\n"
-            << "  - num model     / num data   : " << n_model         << " / " << n_data << "\n"
-            << "  - delta fitness / epsilon    : " << delta_fitness   << " / " << epsilon_
-            << (delta_fitness   < epsilon_        ? " <-- :-)\n" : "\n")
-            << "  - fitness       / max fitness: " << current_fitness << " / " << max_fitness_
-            << (current_fitness > max_fitness_    ? " <-- :-(\n" : "\n")
-            << "  - iter          / max iter   : " << iter            << " / " << max_iterations_
-            << (iter            > max_iterations_ ? " <-- :-(\n" : "\n")
-            << "  - overlap       / min overlap: " << overlap         << " / " << min_overlap_
-            << (overlap         < min_overlap_    ? " <-- :-(\n" : "\n");
+  std::cerr << "Registration:\n"
+
+            << "  - num model     / num data       : "
+            << std::setw (8) << std::right << n_model << " / "
+            << std::setw (8) << std::left  << n_data << "\n"
+
+            << std::scientific << std::setprecision (1)
+
+            << "  - delta fitness / epsilon        : "
+            << std::setw (8) << std::right << delta_fitness << " / "
+            << std::setw (8) << std::left  << epsilon_
+            << (delta_fitness < epsilon_ ? " <-- :-)\n" : "\n")
+
+            << "  - fitness       / max fitness    : "
+            << std::setw (8) << std::right << current_fitness << " / "
+            << std::setw (8) << std::left  << max_fitness_
+            << (current_fitness > max_fitness_ ? " <-- :-(\n" : "\n")
+
+            << std::fixed << std::setprecision (2)
+
+            << "  - iter          / max iter       : "
+            << std::setw (8) << std::right << iter << " / "
+            << std::setw (8) << std::left  << max_iterations_
+            << (iter > max_iterations_ ? " <-- :-(\n" : "\n")
+
+            << "  - overlap       / min overlap    : "
+            << std::setw (8) << std::right << overlap << " / "
+            << std::setw (8) << std::left  << min_overlap_
+            << (overlap < min_overlap_ ? " <-- :-(\n" : "\n")
+
+            << std::fixed << std::setprecision (0)
+
+            << "  - time select                    : "
+            << std::setw (8) << std::right << t_select << " ms\n"
+
+            << "  - time build kd-tree             : "
+            << std::setw (8) << std::right << t_build << " ms\n"
+
+            << "  - time nn-search / trafo / reject: "
+            << std::setw (8) << std::right << t_nn_search << " ms\n"
+
+            << "  - time minimize                  : "
+            << std::setw (8) << std::right << t_calc_trafo << " ms\n"
+
+            << "  - total time                     : "
+            << std::setw (8) << std::right << sw_total.getTime () << " ms\n";
 
   if (iter > max_iterations_ || overlap <  min_overlap_ || current_fitness > max_fitness_)
   {
     return (false);
   }
-  else if (delta_fitness <=epsilon_)
+  else if (delta_fitness <= epsilon_)
   {
     T_final = T_cur;
     return (true);
@@ -232,29 +371,27 @@ pcl::ihs::ICP::findTransformation (const MeshConstPtr&           mesh_model,
 ////////////////////////////////////////////////////////////////////////////////
 
 pcl::ihs::ICP::CloudNormalConstPtr
-pcl::ihs::ICP::selectModelPoints (const MeshConstPtr&   mesh_model,
-                                  const Transformation& T_init_inv) const
+pcl::ihs::ICP::selectModelPoints (const MeshConstPtr&    mesh_model,
+                                  const Eigen::Matrix4f& T_inv) const
 {
   const CloudNormalPtr cloud_model_out (new CloudNormal ());
-  cloud_model_out->reserve (mesh_model->sizeVertexes ());
+  cloud_model_out->reserve (mesh_model->sizeVertices ());
 
-  Mesh::VertexConstIterator it_in = mesh_model->beginVertexes ();
-  for (; it_in!=mesh_model->endVertexes (); ++it_in)
+  const Mesh::VertexDataCloud& cloud = mesh_model->getVertexDataCloud ();
+
+  for (Mesh::VertexDataCloud::const_iterator it=cloud.begin (); it!=cloud.end (); ++it)
   {
-    // Don't consider points that are facing away from the cameara.
-    if ((T_init_inv * it_in->getNormalVector4fMap ()).z () < 0.f)
+    // Don't consider points that are facing away from the camera.
+    if ((T_inv.lazyProduct (it->getNormalVector4fMap ())).z () < 0.f)
     {
       PointNormal pt;
-      pt.getVector4fMap ()       = it_in->getVector4fMap ();
-      pt.getNormalVector4fMap () = it_in->getNormalVector4fMap ();
+      pt.getVector4fMap ()       = it->getVector4fMap ();
+      pt.getNormalVector4fMap () = it->getNormalVector4fMap ();
 
       // NOTE: Not the transformed points!!
       cloud_model_out->push_back (pt);
     }
   }
-
-  // Shrink to fit ("Scott Meyers swap trick")
-  CloudNormal (*cloud_model_out).swap (*cloud_model_out);
 
   return (cloud_model_out);
 }
@@ -262,15 +399,15 @@ pcl::ihs::ICP::selectModelPoints (const MeshConstPtr&   mesh_model,
 ////////////////////////////////////////////////////////////////////////////////
 
 pcl::ihs::ICP::CloudNormalConstPtr
-pcl::ihs::ICP::selectDataPoints (const CloudProcessedConstPtr& cloud_data) const
+pcl::ihs::ICP::selectDataPoints (const CloudXYZRGBNormalConstPtr& cloud_data) const
 {
   const CloudNormalPtr cloud_data_out (new CloudNormal ());
   cloud_data_out->reserve (cloud_data->size ());
 
-  CloudProcessed::const_iterator it_in = cloud_data->begin ();
+  CloudXYZRGBNormal::const_iterator it_in = cloud_data->begin ();
   for (; it_in!=cloud_data->end (); ++it_in)
   {
-    if (pcl::isFinite (*it_in))
+    if (!boost::math::isnan (it_in->x))
     {
       PointNormal pt;
       pt.getVector4fMap ()       = it_in->getVector4fMap ();
@@ -280,23 +417,20 @@ pcl::ihs::ICP::selectDataPoints (const CloudProcessedConstPtr& cloud_data) const
     }
   }
 
-  // Shrink to fit ("Scott Meyers swap trick")
-  CloudNormal (*cloud_data_out).swap (*cloud_data_out);
-
   return (cloud_data_out);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 bool
-pcl::ihs::ICP::minimizePointPlane (const CloudNormalConstPtr& cloud_source,
-                                   const CloudNormalConstPtr& cloud_target,
-                                   Transformation&            T) const
+pcl::ihs::ICP::minimizePointPlane (const CloudNormal& cloud_source,
+                                   const CloudNormal& cloud_target,
+                                   Eigen::Matrix4f&   T) const
 {
   // Check the input
   // n < n_min already checked in the icp main loop
-  const size_t n = cloud_source->size ();
-  if (cloud_target->size () != n)
+  const size_t n = cloud_source.size ();
+  if (cloud_target.size () != n)
   {
     std::cerr << "ERROR in icp.cpp: Input must have the same size!\n";
     return (false);
@@ -311,8 +445,8 @@ pcl::ihs::ICP::minimizePointPlane (const CloudNormalConstPtr& cloud_source,
   // Subtract the centroid and calculate the scaling factor
   Eigen::Vector4f c_s (0.f, 0.f, 0.f, 1.f);
   Eigen::Vector4f c_t (0.f, 0.f, 0.f, 1.f);
-  pcl::compute3DCentroid (*cloud_source, c_s); c_s.w () = 1.f;
-  pcl::compute3DCentroid (*cloud_target, c_t); c_t.w () = 1.f;
+  pcl::compute3DCentroid (cloud_source, c_s); c_s.w () = 1.f;
+  pcl::compute3DCentroid (cloud_target, c_t); c_t.w () = 1.f;
 
   // The normals are only needed for the target
   typedef std::vector <Eigen::Vector4f, Eigen::aligned_allocator <Eigen::Vector4f> > Vec4Xf;
@@ -321,15 +455,16 @@ pcl::ihs::ICP::minimizePointPlane (const CloudNormalConstPtr& cloud_source,
   xyz_t.reserve (n);
   nor_t.reserve (n);
 
-  CloudNormal::const_iterator it_s = cloud_source->begin ();
-  CloudNormal::const_iterator it_t = cloud_target->begin ();
+  CloudNormal::const_iterator it_s = cloud_source.begin ();
+  CloudNormal::const_iterator it_t = cloud_target.begin ();
 
   float accum = 0.f;
-  for (; it_s!=cloud_source->end (); ++it_s, ++it_t)
+  Eigen::Vector4f pt_s, pt_t;
+  for (; it_s!=cloud_source.end (); ++it_s, ++it_t)
   {
     // Subtract the centroid
-    const Eigen::Vector4f pt_s = it_s->getVector4fMap () - c_s;
-    const Eigen::Vector4f pt_t = it_t->getVector4fMap () - c_t;
+    pt_s = it_s->getVector4fMap () - c_s;
+    pt_t = it_t->getVector4fMap () - c_t;
 
     xyz_s.push_back (pt_s);
     xyz_t.push_back (pt_t);
@@ -364,18 +499,20 @@ pcl::ihs::ICP::minimizePointPlane (const CloudNormalConstPtr& cloud_source,
   Vec4Xf::const_iterator it_xyz_t = xyz_t.begin ();
   Vec4Xf::const_iterator it_nor_t = nor_t.begin ();
 
+  Eigen::Vector4f cross;
+  float dot;
   for (; it_xyz_s!=xyz_s.end (); ++it_xyz_s, ++it_xyz_t, ++it_nor_t)
   {
-    const Eigen::Vector4f cross = it_xyz_s->cross3 (*it_nor_t);
+    cross    = it_xyz_s->cross3 (*it_nor_t);
 
-    C_tl           += cross     * cross.    transpose ();
-    C_tr_bl        += cross     * it_nor_t->transpose ();
-    C_br           += *it_nor_t * it_nor_t->transpose ();
+    C_tl    += cross     * cross.    transpose ();
+    C_tr_bl += cross     * it_nor_t->transpose ();
+    C_br    += *it_nor_t * it_nor_t->transpose ();
 
-    const float dot = (*it_xyz_t-*it_xyz_s).dot (*it_nor_t);
+    dot      = (*it_xyz_t-*it_xyz_s).dot (*it_nor_t);
 
-    b_t            += cross     * dot;
-    b_b            += *it_nor_t * dot;
+    b_t     += cross     * dot;
+    b_b     += *it_nor_t * dot;
   }
 
   // Scale with the factor and copy the 3x3 submatrixes into C and b

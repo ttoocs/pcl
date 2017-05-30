@@ -40,6 +40,7 @@
 #include <pcl/apps/modeler/cloud_mesh.h>
 #include <pcl/apps/modeler/cloud_mesh_item.h>
 #include <pcl/registration/icp.h>
+#include <pcl/common/common.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 pcl::modeler::ICPRegistrationWorker::ICPRegistrationWorker(CloudMesh::PointCloudPtr cloud, const QList<CloudMeshItem*>& cloud_mesh_items, QWidget* parent)
@@ -137,7 +138,7 @@ pcl::modeler::ICPRegistrationWorker::processImpl(CloudMeshItem* cloud_mesh_item)
   // Set the euclidean distance difference epsilon (criterion 3)
   icp.setEuclideanFitnessEpsilon (*euclidean_fitness_epsilon_);
 
-  icp.setInputCloud(cloud_mesh_item->getCloudMesh()->getCloud());
+  icp.setInputSource(cloud_mesh_item->getCloudMesh()->getCloud());
   icp.setInputTarget(cloud_);
   pcl::PointCloud<CloudMesh::PointT> result;
   icp.align(result);

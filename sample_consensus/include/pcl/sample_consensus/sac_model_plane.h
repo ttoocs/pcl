@@ -136,9 +136,11 @@ namespace pcl
   class SampleConsensusModelPlane : public SampleConsensusModel<PointT>
   {
     public:
+      using SampleConsensusModel<PointT>::model_name_;
       using SampleConsensusModel<PointT>::input_;
       using SampleConsensusModel<PointT>::indices_;
       using SampleConsensusModel<PointT>::error_sqr_dists_;
+      using SampleConsensusModel<PointT>::isModelValid;
 
       typedef typename SampleConsensusModel<PointT>::PointCloud PointCloud;
       typedef typename SampleConsensusModel<PointT>::PointCloudPtr PointCloudPtr;
@@ -148,14 +150,33 @@ namespace pcl
 
       /** \brief Constructor for base SampleConsensusModelPlane.
         * \param[in] cloud the input point cloud dataset
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelPlane (const PointCloudConstPtr &cloud) : SampleConsensusModel<PointT> (cloud) {};
+      SampleConsensusModelPlane (const PointCloudConstPtr &cloud, bool random = false) 
+        : SampleConsensusModel<PointT> (cloud, random)
+      {
+        model_name_ = "SampleConsensusModelPlane";
+        sample_size_ = 3;
+        model_size_ = 4;
+      }
 
       /** \brief Constructor for base SampleConsensusModelPlane.
         * \param[in] cloud the input point cloud dataset
         * \param[in] indices a vector of point indices to be used from \a cloud
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelPlane (const PointCloudConstPtr &cloud, const std::vector<int> &indices) : SampleConsensusModel<PointT> (cloud, indices) {};
+      SampleConsensusModelPlane (const PointCloudConstPtr &cloud, 
+                                 const std::vector<int> &indices,
+                                 bool random = false) 
+        : SampleConsensusModel<PointT> (cloud, indices, random)
+      {
+        model_name_ = "SampleConsensusModelPlane";
+        sample_size_ = 3;
+        model_size_ = 4;
+      }
+      
+      /** \brief Empty destructor */
+      virtual ~SampleConsensusModelPlane () {}
 
       /** \brief Check whether the given index samples can form a valid plane model, compute the model coefficients from
         * these samples and store them internally in model_coefficients_. The plane coefficients are:
@@ -196,7 +217,7 @@ namespace pcl
                            const double threshold);
 
       /** \brief Recompute the plane coefficients using the given inlier set and return them to the user.
-        * @note: these are the coefficients of the plane model after refinement (eg. after SVD)
+        * @note: these are the coefficients of the plane model after refinement (e.g. after SVD)
         * \param[in] inliers the data inliers found as supporting the model
         * \param[in] model_coefficients the initial guess for the model coefficients
         * \param[out] optimized_coefficients the resultant recomputed coefficients after non-linear optimization
@@ -233,20 +254,8 @@ namespace pcl
       getModelType () const { return (SACMODEL_PLANE); }
 
     protected:
-      /** \brief Check whether a model is valid given the user constraints.
-        * \param[in] model_coefficients the set of model coefficients
-        */
-      inline bool 
-      isModelValid (const Eigen::VectorXf &model_coefficients)
-      {
-        // Needs a valid model coefficients
-        if (model_coefficients.size () != 4)
-        {
-          PCL_ERROR ("[pcl::SampleConsensusModelPlane::isModelValid] Invalid number of model coefficients given (%zu)!\n", model_coefficients.size ());
-          return (false);
-        }
-        return (true);
-      }
+      using SampleConsensusModel<PointT>::sample_size_;
+      using SampleConsensusModel<PointT>::model_size_;
 
     private:
       /** \brief Check if a sample of indices results in a good sample of points

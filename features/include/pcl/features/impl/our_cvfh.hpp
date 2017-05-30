@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -41,9 +42,12 @@
 #define PCL_FEATURES_IMPL_OURCVFH_H_
 
 #include <pcl/features/our_cvfh.h>
-#include <pcl/features/pfh.h>
+#include <pcl/features/vfh.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/features/pfh_tools.h>
 #include <pcl/common/transforms.h>
 
+//////////////////////////////////////////////////////////////////////////////////////////////
 template<typename PointInT, typename PointNT, typename PointOutT> void
 pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::compute (PointCloudOut &output)
 {
@@ -78,12 +82,12 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::extractEuclideanClustersSm
 {
   if (tree->getInputCloud ()->points.size () != cloud.points.size ())
   {
-    PCL_ERROR ("[pcl::extractEuclideanClusters] Tree built for a different point cloud dataset (%zu) than the input cloud (%zu)!\n", tree->getInputCloud ()->points.size (), cloud.points.size ());
+    PCL_ERROR ("[pcl::extractEuclideanClusters] Tree built for a different point cloud dataset (%lu) than the input cloud (%lu)!\n", tree->getInputCloud ()->points.size (), cloud.points.size ());
     return;
   }
   if (cloud.points.size () != normals.points.size ())
   {
-    PCL_ERROR ("[pcl::extractEuclideanClusters] Number of points in the input point cloud (%zu) different than normals (%zu)!\n", cloud.points.size (), normals.points.size ());
+    PCL_ERROR ("[pcl::extractEuclideanClusters] Number of points in the input point cloud (%lu) different than normals (%lu)!\n", cloud.points.size (), normals.points.size ());
     return;
   }
 
@@ -247,7 +251,7 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::sgurf (Eigen::Vector3f & c
 
   scatter /= sum_w;
 
-  Eigen::JacobiSVD < Eigen::MatrixXf > svd (scatter, Eigen::ComputeFullV);
+  Eigen::JacobiSVD <Eigen::MatrixXf> svd (scatter, Eigen::ComputeFullV);
   Eigen::Vector3f evx = svd.matrixV ().col (0);
   Eigen::Vector3f evy = svd.matrixV ().col (1);
   Eigen::Vector3f evz = svd.matrixV ().col (2);
@@ -306,7 +310,7 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::sgurf (Eigen::Vector3f & c
 
   if ((min_axis / max_axis) > axis_ratio_)
   {
-    PCL_WARN("Both axis are equally easy/difficult to disambiguate\n");
+    PCL_WARN ("Both axes are equally easy/difficult to disambiguate\n");
 
     Eigen::Vector3f evy_copy = evy;
     Eigen::Vector3f evxminus = evx * -1;
@@ -366,11 +370,16 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::sgurf (Eigen::Vector3f & c
   return true;
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////
 template<typename PointInT, typename PointNT, typename PointOutT> void
 pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::computeRFAndShapeDistribution (PointInTPtr & processed, PointCloudOut & output,
-                                                                                       std::vector<pcl::PointIndices> & cluster_indices)
+                                                                                     std::vector<pcl::PointIndices> & cluster_indices)
 {
   PointCloudOut ourcvfh_output;
+
+  cluster_axes_.clear ();
+  cluster_axes_.resize (centroids_dominant_orientations_.size ());
+
   for (size_t i = 0; i < centroids_dominant_orientations_.size (); i++)
   {
 
@@ -378,6 +387,9 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::computeRFAndShapeDistribut
     PointInTPtr grid (new pcl::PointCloud<PointInT>);
     sgurf (centroids_dominant_orientations_[i], dominant_normals_[i], processed, transformations, grid, cluster_indices[i]);
 
+    // Make a note of how many transformations correspond to each cluster
+    cluster_axes_[i] = transformations.size ();
+    
     for (size_t t = 0; t < transformations.size (); t++)
     {
 
@@ -484,7 +496,14 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::computeRFAndShapeDistribut
             weights[ii] *= 0.5f - wz * 0.5f;
         }
 
-        int h_index = static_cast<int> (std::floor (size_hists * (d / distance_normalization_factor)));
+        int h_index = (d <= 0) ? 0 : std::ceil (size_hists * (d / distance_normalization_factor)) - 1;
+        /* from http://www.pcl-users.org/OUR-CVFH-problem-td4028436.html
+           h_index will be 13 when d is computed on the farthest away point.
+
+          adding the following after computing h_index fixes the problem:
+        */
+        if(h_index > 12)
+          h_index = 12;
         for (int j = 0; j < num_hists; j++)
           quadrants[j][h_index] += hist_incr * weights[j];
 
@@ -507,11 +526,15 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::computeRFAndShapeDistribut
       }
 
       ourcvfh_output.points.push_back (vfh_signature.points[0]);
-
+      ourcvfh_output.width = ourcvfh_output.points.size ();
       delete[] weights;
     }
   }
 
+  if (ourcvfh_output.points.size ())
+  {
+    ourcvfh_output.height = 1;
+  }
   output = ourcvfh_output;
 }
 
@@ -573,7 +596,7 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::computeFeature (PointCloud
     {
       KdTreePtr normals_tree_filtered (new pcl::search::KdTree<pcl::PointNormal> (false));
       normals_tree_filtered->setInputCloud (normals_filtered_cloud);
-      NormalEstimator n3d;
+      pcl::NormalEstimation<PointNormal, PointNormal> n3d;
       n3d.setRadiusSearch (radius_normals_);
       n3d.setSearchMethod (normals_tree_filtered);
       n3d.setInputCloud (normals_filtered_cloud);
@@ -628,8 +651,8 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::computeFeature (PointCloud
       //remove last cluster if no points found...
       if (clusters_[cluster_filtered_idx].indices.size () == 0)
       {
-        clusters_.erase (clusters_.end ());
-        clusters_filtered.erase (clusters_filtered.end ());
+        clusters_.pop_back ();
+        clusters_filtered.pop_back ();
       }
       else
         cluster_filtered_idx++;
@@ -639,7 +662,7 @@ pcl::OURCVFHEstimation<PointInT, PointNT, PointOutT>::computeFeature (PointCloud
 
   }
 
-  VFHEstimator vfh;
+  pcl::VFHEstimation<PointInT, PointNT, pcl::VFHSignature308> vfh;
   vfh.setInputCloud (surface_);
   vfh.setInputNormals (normals_);
   vfh.setIndices (indices_);

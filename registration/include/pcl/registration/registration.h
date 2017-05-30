@@ -45,6 +45,7 @@
 #include <pcl/pcl_base.h>
 #include <pcl/common/transforms.h>
 #include <pcl/pcl_macros.h>
+#include <pcl/search/kdtree.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/registration/boost.h>
 #include <pcl/registration/transformation_estimation.h>
@@ -63,7 +64,7 @@ namespace pcl
     public:
       typedef Eigen::Matrix<Scalar, 4, 4> Matrix4;
 
-      using PCLBase<PointSource>::initCompute;
+      // using PCLBase<PointSource>::initCompute;
       using PCLBase<PointSource>::deinitCompute;
       using PCLBase<PointSource>::input_;
       using PCLBase<PointSource>::indices_;
@@ -72,8 +73,11 @@ namespace pcl
       typedef boost::shared_ptr< const Registration<PointSource, PointTarget, Scalar> > ConstPtr;
 
       typedef typename pcl::registration::CorrespondenceRejector::Ptr CorrespondenceRejectorPtr;
-      typedef typename pcl::KdTree<PointTarget> KdTree;
-      typedef typename pcl::KdTree<PointTarget>::Ptr KdTreePtr;
+      typedef pcl::search::KdTree<PointTarget> KdTree;
+      typedef typename pcl::search::KdTree<PointTarget>::Ptr KdTreePtr;
+
+      typedef pcl::search::KdTree<PointSource> KdTreeReciprocal;
+      typedef typename KdTreeReciprocal::Ptr KdTreeReciprocalPtr;
      
       typedef pcl::PointCloud<PointSource> PointCloudSource;
       typedef typename PointCloudSource::Ptr PointCloudSourcePtr;
@@ -91,12 +95,13 @@ namespace pcl
 
       typedef typename pcl::registration::CorrespondenceEstimationBase<PointSource, PointTarget, Scalar> CorrespondenceEstimation;
       typedef typename CorrespondenceEstimation::Ptr CorrespondenceEstimationPtr;
-      typedef typename CorrespondenceEstimation::ConstPtr CorrespondenceConstPtr;
+      typedef typename CorrespondenceEstimation::ConstPtr CorrespondenceEstimationConstPtr;
 
       /** \brief Empty constructor. */
       Registration () 
         : reg_name_ ()
-        , tree_ (new pcl::KdTreeFLANN<PointTarget>)
+        , tree_ (new KdTree)
+        , tree_reciprocal_ (new KdTreeReciprocal)
         , nr_iterations_ (0)
         , max_iterations_ (10)
         , ransac_iterations_ (0)
@@ -110,10 +115,14 @@ namespace pcl
         , inlier_threshold_ (0.05)
         , converged_ (false)
         , min_number_correspondences_ (3)
-        , correspondence_distances_ ()
+        , correspondences_ (new Correspondences)
         , transformation_estimation_ ()
         , correspondence_estimation_ ()
         , correspondence_rejectors_ ()
+        , target_cloud_updated_ (true)
+        , source_cloud_updated_ (true)
+        , force_no_recompute_ (false)
+        , force_no_recompute_reciprocal_ (false)
         , update_visualizer_ (NULL)
         , point_representation_ ()
       {
@@ -169,29 +178,24 @@ namespace pcl
         *
         * \param[in] cloud the input point cloud source
         */
-      inline void
-      setInputCloud (const PointCloudSourceConstPtr &cloud)
-      {
-        PCL_WARN ("[pcl::registration::%s::setInputCloud] setInputCloud is deprecated. Please use setInputSource instead.\n", getClassName ().c_str ());
-        PCLBase<PointSource>::setInputCloud (cloud);
-      }
+      PCL_DEPRECATED ("[pcl::registration::Registration::setInputCloud] setInputCloud is deprecated. Please use setInputSource instead.")
+      void
+      setInputCloud (const PointCloudSourceConstPtr &cloud);
 
       /** \brief Get a pointer to the input point cloud dataset target. */
-      inline PointCloudSourceConstPtr const
-      getInputCloud () 
-      { 
-        PCL_WARN ("[pcl::registration::%s::getInputCloud] getInputCloud is deprecated. Please use getInputSource instead.\n", getClassName ().c_str ());
-        return (input_ ); 
-      }
+      PCL_DEPRECATED ("[pcl::registration::Registration::getInputCloud] getInputCloud is deprecated. Please use getInputSource instead.")
+      PointCloudSourceConstPtr const
+      getInputCloud ();
 
       /** \brief Provide a pointer to the input source 
         * (e.g., the point cloud that we want to align to the target)
         *
         * \param[in] cloud the input point cloud source
         */
-      inline void
+      virtual void
       setInputSource (const PointCloudSourceConstPtr &cloud)
       {
+        source_cloud_updated_ = true;
         PCLBase<PointSource>::setInputCloud (cloud);
       }
 
@@ -203,11 +207,68 @@ namespace pcl
         * \param[in] cloud the input point cloud target
         */
       virtual inline void 
-      setInputTarget (const PointCloudTargetConstPtr &cloud);
+      setInputTarget (const PointCloudTargetConstPtr &cloud); 
 
       /** \brief Get a pointer to the input point cloud dataset target. */
       inline PointCloudTargetConstPtr const 
       getInputTarget () { return (target_ ); }
+
+
+      /** \brief Provide a pointer to the search object used to find correspondences in
+        * the target cloud.
+        * \param[in] tree a pointer to the spatial search object.
+        * \param[in] force_no_recompute If set to true, this tree will NEVER be 
+        * recomputed, regardless of calls to setInputTarget. Only use if you are 
+        * confident that the tree will be set correctly.
+        */
+      inline void
+      setSearchMethodTarget (const KdTreePtr &tree, 
+                             bool force_no_recompute = false) 
+      { 
+        tree_ = tree; 
+        if (force_no_recompute)
+        {
+          force_no_recompute_ = true;
+        }
+        // Since we just set a new tree, we need to check for updates
+        target_cloud_updated_ = true;
+      }
+
+      /** \brief Get a pointer to the search method used to find correspondences in the
+        * target cloud. */
+      inline KdTreePtr
+      getSearchMethodTarget () const
+      {
+        return (tree_);
+      }
+
+      /** \brief Provide a pointer to the search object used to find correspondences in
+        * the source cloud (usually used by reciprocal correspondence finding).
+        * \param[in] tree a pointer to the spatial search object.
+        * \param[in] force_no_recompute If set to true, this tree will NEVER be 
+        * recomputed, regardless of calls to setInputSource. Only use if you are 
+        * extremely confident that the tree will be set correctly.
+        */
+      inline void
+      setSearchMethodSource (const KdTreeReciprocalPtr &tree, 
+                             bool force_no_recompute = false) 
+      { 
+        tree_reciprocal_ = tree; 
+        if ( force_no_recompute )
+        {
+          force_no_recompute_reciprocal_ = true;
+        }
+        // Since we just set a new tree, we need to check for updates
+        source_cloud_updated_ = true;
+      }
+
+      /** \brief Get a pointer to the search method used to find correspondences in the
+        * source cloud. */
+      inline KdTreeReciprocalPtr
+      getSearchMethodSource () const
+      {
+        return (tree_reciprocal_);
+      }
 
       /** \brief Get the final transformation matrix estimated by the registration method. */
       inline Matrix4
@@ -218,7 +279,7 @@ namespace pcl
       getLastIncrementalTransformation () { return (transformation_); }
 
       /** \brief Set the maximum number of iterations the internal optimization should run for.
-        * \param nr_iterations the maximum number of iterations the internal optimization should run for
+        * \param[in] nr_iterations the maximum number of iterations the internal optimization should run for
         */
       inline void 
       setMaximumIterations (int nr_iterations) { max_iterations_ = nr_iterations; }
@@ -228,7 +289,7 @@ namespace pcl
       getMaximumIterations () { return (max_iterations_); }
 
       /** \brief Set the number of iterations RANSAC should run for.
-        * \param ransac_iterations is the number of iterations RANSAC should run for
+        * \param[in] ransac_iterations is the number of iterations RANSAC should run for
         */
       inline void 
       setRANSACIterations (int ransac_iterations) { ransac_iterations_ = ransac_iterations; }
@@ -242,7 +303,7 @@ namespace pcl
         * The method considers a point to be an inlier, if the distance between the target data index and the transformed 
         * source index is smaller than the given inlier distance threshold. 
         * The value is set by default to 0.05m.
-        * \param inlier_threshold the inlier distance threshold for the internal RANSAC outlier rejection loop
+        * \param[in] inlier_threshold the inlier distance threshold for the internal RANSAC outlier rejection loop
         */
       inline void 
       setRANSACOutlierRejectionThreshold (double inlier_threshold) { inlier_threshold_ = inlier_threshold; }
@@ -253,7 +314,7 @@ namespace pcl
 
       /** \brief Set the maximum distance threshold between two correspondent points in source <-> target. If the 
         * distance is larger than this threshold, the points will be ignored in the alignment process.
-        * \param distance_threshold the maximum distance threshold between a point and its nearest neighbor 
+        * \param[in] distance_threshold the maximum distance threshold between a point and its nearest neighbor 
         * correspondent in order to be considered in the alignment process
         */
       inline void 
@@ -268,7 +329,7 @@ namespace pcl
       /** \brief Set the transformation epsilon (maximum allowable difference between two consecutive 
         * transformations) in order for an optimization to be considered as having converged to the final 
         * solution.
-        * \param epsilon the transformation epsilon in order for an optimization to be considered as having 
+        * \param[in] epsilon the transformation epsilon in order for an optimization to be considered as having 
         * converged to the final solution.
         */
       inline void 
@@ -284,7 +345,7 @@ namespace pcl
         * the algorithm is considered to have converged. 
         * The error is estimated as the sum of the differences between correspondences in an Euclidean sense, 
         * divided by the number of correspondences.
-        * \param epsilon the maximum allowed distance error before the algorithm will be considered to have
+        * \param[in] epsilon the maximum allowed distance error before the algorithm will be considered to have
         * converged
         */
 
@@ -298,7 +359,7 @@ namespace pcl
       getEuclideanFitnessEpsilon () { return (euclidean_fitness_epsilon_); }
 
       /** \brief Provide a boost shared pointer to the PointRepresentation to be used when comparing points
-        * \param point_representation the PointRepresentation to be used by the k-D tree
+        * \param[in] point_representation the PointRepresentation to be used by the k-D tree
         */
       inline void
       setPointRepresentation (const PointRepresentationConstPtr &point_representation)
@@ -323,7 +384,7 @@ namespace pcl
       }
 
       /** \brief Obtain the Euclidean fitness score (e.g., sum of squared distances from the source to the target)
-        * \param max_range maximum allowable distance between a point and its correspondence in the target 
+        * \param[in] max_range maximum allowable distance between a point and its correspondence in the target 
         * (default: double::max)
         */
       inline double 
@@ -343,15 +404,15 @@ namespace pcl
 
       /** \brief Call the registration algorithm which estimates the transformation and returns the transformed source 
         * (input) as \a output.
-        * \param output the resultant input transfomed point cloud dataset
+        * \param[out] output the resultant input transfomed point cloud dataset
         */
-      inline void 
+      inline void
       align (PointCloudSource &output);
 
       /** \brief Call the registration algorithm which estimates the transformation and returns the transformed source 
         * (input) as \a output.
-        * \param output the resultant input transfomed point cloud dataset
-        * \param guess the initial gross estimation of the transformation
+        * \param[out] output the resultant input transfomed point cloud dataset
+        * \param[in] guess the initial gross estimation of the transformation
         */
       inline void 
       align (PointCloudSource &output, const Matrix4& guess);
@@ -359,6 +420,14 @@ namespace pcl
       /** \brief Abstract class get name method. */
       inline const std::string&
       getClassName () const { return (reg_name_); }
+        
+      /** \brief Internal computation initalization. */
+      bool
+      initCompute ();
+
+      /** \brief Internal computation when reciprocal lookup is needed */
+      bool
+      initComputeReciprocal ();
 
       /** \brief Add a new correspondence rejector to the list
         * \param[in] rejector the new correspondence rejector to concatenate
@@ -389,12 +458,34 @@ namespace pcl
         return (correspondence_rejectors_);
       }
 
+      /** \brief Remove the i-th correspondence rejector in the list
+        * \param[in] i the position of the correspondence rejector in the list to remove
+        */
+      inline bool
+      removeCorrespondenceRejector (unsigned int i)
+      {
+        if (i >= correspondence_rejectors_.size ())
+          return (false);
+        correspondence_rejectors_.erase (correspondence_rejectors_.begin () + i);
+        return (true);
+      }
+
+      /** \brief Clear the list of correspondence rejectors. */
+      inline void
+      clearCorrespondenceRejectors ()
+      {
+        correspondence_rejectors_.clear ();
+      }
+
     protected:
       /** \brief The registration method name. */
       std::string reg_name_;
 
       /** \brief A pointer to the spatial search object. */
       KdTreePtr tree_;
+      
+      /** \brief A pointer to the spatial search object of the source. */
+      KdTreeReciprocalPtr tree_reciprocal_;
 
       /** \brief The number of iterations the internal optimization ran for (used internally). */
       int nr_iterations_;
@@ -449,10 +540,8 @@ namespace pcl
         */
       int min_number_correspondences_;
 
-      /** \brief A set of distances between the points in the source cloud and their correspondences in the 
-        * target.                                                                                           
-        */                                                                                                  
-      std::vector<float> correspondence_distances_;                                                              
+      /** \brief The set of correspondences determined at this ICP step. */
+      CorrespondencesPtr correspondences_;
 
       /** \brief A TransformationEstimation object, used to calculate the 4x4 rigid transformation. */
       TransformationEstimationPtr transformation_estimation_;
@@ -462,6 +551,22 @@ namespace pcl
 
       /** \brief The list of correspondence rejectors to use. */
       std::vector<CorrespondenceRejectorPtr> correspondence_rejectors_;
+
+      /** \brief Variable that stores whether we have a new target cloud, meaning we need to pre-process it again.
+       * This way, we avoid rebuilding the kd-tree for the target cloud every time the determineCorrespondences () method
+       * is called. */
+      bool target_cloud_updated_;
+      /** \brief Variable that stores whether we have a new source cloud, meaning we need to pre-process it again.
+       * This way, we avoid rebuilding the reciprocal kd-tree for the source cloud every time the determineCorrespondences () method
+       * is called. */
+      bool source_cloud_updated_;
+      /** \brief A flag which, if set, means the tree operating on the target cloud 
+       * will never be recomputed*/
+      bool force_no_recompute_;
+      
+      /** \brief A flag which, if set, means the tree operating on the source cloud 
+       * will never be recomputed*/
+      bool force_no_recompute_reciprocal_;
 
       /** \brief Callback function to update intermediate source point cloud position during it's registration
         * to the target point cloud.
@@ -487,12 +592,11 @@ namespace pcl
         return (true);
       }
 
-    private:
- 
       /** \brief Abstract transformation computation method with initial guess */
       virtual void 
       computeTransformation (PointCloudSource &output, const Matrix4& guess) = 0;
 
+    private:
       /** \brief The point representation used (internal). */
       PointRepresentationConstPtr point_representation_;
     public:

@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -68,6 +69,10 @@ namespace pcl
     typedef PointIndices::ConstPtr PointIndicesConstPtr;
 
     public:
+
+        typedef boost::shared_ptr< NormalDistributionsTransform2D<PointSource, PointTarget> > Ptr;
+        typedef boost::shared_ptr< const NormalDistributionsTransform2D<PointSource, PointTarget> > ConstPtr;
+
       /** \brief Empty constructor. */
       NormalDistributionsTransform2D ()
         : Registration<PointSource,PointTarget> (),
@@ -75,6 +80,9 @@ namespace pcl
       {
         reg_name_ = "NormalDistributionsTransform2D";
       }
+      
+      /** \brief Empty destructor */
+      virtual ~NormalDistributionsTransform2D () {}
  
       /** \brief centre of the ndt grid (target coordinate system)
         * \param centre value to set

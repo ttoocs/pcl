@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2012, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -37,7 +38,6 @@
 #ifndef PCL_RANGE_IMAGE_H_
 #define PCL_RANGE_IMAGE_H_
 
-#include <pcl/common/eigen.h>
 #include <pcl/point_cloud.h>
 #include <pcl/pcl_macros.h>
 #include <pcl/point_types.h>
@@ -72,7 +72,7 @@ namespace pcl
       /** Constructor */
       PCL_EXPORTS RangeImage ();
       /** Destructor */
-      PCL_EXPORTS ~RangeImage ();
+      PCL_EXPORTS virtual ~RangeImage ();
       
       // =====STATIC VARIABLES=====
       /** The maximum number of openmp threads that can be used in this class */
@@ -113,11 +113,11 @@ namespace pcl
       getAverageViewPoint (const PointCloudTypeWithViewpoints& point_cloud);
       
       /** \brief Check if the provided data includes far ranges and add them to far_ranges
-        * \param point_cloud_data a PointCloud2 message containing the input cloud
+        * \param point_cloud_data a PCLPointCloud2 message containing the input cloud
         * \param far_ranges the resulting cloud containing those points with far ranges
         */
       PCL_EXPORTS static void
-      extractFarRanges (const sensor_msgs::PointCloud2& point_cloud_data, PointCloud<PointWithViewpoint>& far_ranges);
+      extractFarRanges (const pcl::PCLPointCloud2& point_cloud_data, PointCloud<PointWithViewpoint>& far_ranges);
       
       // =====METHODS=====
       /** \brief Get a boost shared pointer of a copy of this */
@@ -203,7 +203,6 @@ namespace pcl
         *                             individual pixels in the image in the x-direction
         * \param angular_resolution_y the angular difference (in radians) between the
         *                             individual pixels in the image in the y-direction
-        * \param angular_resolution the angle (in radians) between each sample in the depth image
         * \param point_cloud_center the center of bounding sphere
         * \param point_cloud_radius the radius of the bounding sphere
         * \param sensor_pose an affine matrix defining the pose of the sensor (defaults to
@@ -314,8 +313,8 @@ namespace pcl
                  float min_range, int& top, int& right, int& bottom, int& left);
       
       /** \brief Integrates the given far range measurements into the range image */
-      PCL_EXPORTS void
-      integrateFarRanges (const PointCloud<PointWithViewpoint>& far_ranges);
+      template <typename PointCloudType> void
+      integrateFarRanges (const PointCloudType& far_ranges);
       
       /** \brief Cut the range image to the minimal size so that it still contains all actual range readings.
         * \param border_size allows increase from the minimal size by the specified number of pixels (defaults to 0)

@@ -42,11 +42,11 @@
 #define PCL_SAMPLE_CONSENSUS_MODEL_REGISTRATION_H_
 
 #include <pcl/sample_consensus/eigen.h>
-#include <pcl/sample_consensus/boost.h>
 #include <pcl/sample_consensus/sac_model.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/common/eigen.h>
 #include <pcl/common/centroid.h>
+#include <map>
 
 namespace pcl
 {
@@ -58,9 +58,11 @@ namespace pcl
   class SampleConsensusModelRegistration : public SampleConsensusModel<PointT>
   {
     public:
+      using SampleConsensusModel<PointT>::model_name_;
       using SampleConsensusModel<PointT>::input_;
       using SampleConsensusModel<PointT>::indices_;
       using SampleConsensusModel<PointT>::error_sqr_dists_;
+      using SampleConsensusModel<PointT>::isModelValid;
 
       typedef typename SampleConsensusModel<PointT>::PointCloud PointCloud;
       typedef typename SampleConsensusModel<PointT>::PointCloudPtr PointCloudPtr;
@@ -70,33 +72,46 @@ namespace pcl
 
       /** \brief Constructor for base SampleConsensusModelRegistration.
         * \param[in] cloud the input point cloud dataset
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelRegistration (const PointCloudConstPtr &cloud) : 
-        SampleConsensusModel<PointT> (cloud),
-        target_ (),
-        indices_tgt_ (),
-        correspondences_ (),
-        sample_dist_thresh_ (0)
+      SampleConsensusModelRegistration (const PointCloudConstPtr &cloud, 
+                                        bool random = false) 
+        : SampleConsensusModel<PointT> (cloud, random)
+        , target_ ()
+        , indices_tgt_ ()
+        , correspondences_ ()
+        , sample_dist_thresh_ (0)
       {
         // Call our own setInputCloud
         setInputCloud (cloud);
+        model_name_ = "SampleConsensusModelRegistration";
+        sample_size_ = 3;
+        model_size_ = 16;
       }
 
       /** \brief Constructor for base SampleConsensusModelRegistration.
         * \param[in] cloud the input point cloud dataset
         * \param[in] indices a vector of point indices to be used from \a cloud
+        * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
       SampleConsensusModelRegistration (const PointCloudConstPtr &cloud,
-                                        const std::vector<int> &indices) :
-        SampleConsensusModel<PointT> (cloud, indices),
-        target_ (),
-        indices_tgt_ (),
-        correspondences_ (),
-        sample_dist_thresh_ (0)
+                                        const std::vector<int> &indices,
+                                        bool random = false) 
+        : SampleConsensusModel<PointT> (cloud, indices, random)
+        , target_ ()
+        , indices_tgt_ ()
+        , correspondences_ ()
+        , sample_dist_thresh_ (0)
       {
         computeOriginalIndexMapping ();
         computeSampleDistanceThreshold (cloud, indices);
+        model_name_ = "SampleConsensusModelRegistration";
+        sample_size_ = 3;
+        model_size_ = 16;
       }
+      
+      /** \brief Empty destructor */
+      virtual ~SampleConsensusModelRegistration () {}
 
       /** \brief Provide a pointer to the input dataset
         * \param[in] cloud the const boost shared pointer to a PointCloud message
@@ -110,7 +125,7 @@ namespace pcl
       }
 
       /** \brief Set the input point cloud target.
-        * \param target the input point cloud target
+        * \param[in] target the input point cloud target
         */
       inline void
       setInputTarget (const PointCloudConstPtr &target)
@@ -204,24 +219,14 @@ namespace pcl
       getModelType () const { return (SACMODEL_REGISTRATION); }
 
     protected:
-      /** \brief Check whether a model is valid given the user constraints.
-        * \param[in] model_coefficients the set of model coefficients
-        */
-      inline bool
-      isModelValid (const Eigen::VectorXf &model_coefficients)
-      {
-        // Needs a valid model coefficients
-        if (model_coefficients.size () != 16)
-          return (false);
-
-        return (true);
-      }
+      using SampleConsensusModel<PointT>::sample_size_;
+      using SampleConsensusModel<PointT>::model_size_;
 
       /** \brief Check if a sample of indices results in a good sample of points
         * indices.
         * \param[in] samples the resultant index samples
         */
-      bool
+      virtual bool
       isSampleGood (const std::vector<int> &samples) const;
 
       /** \brief Computes an "optimal" sample distance threshold based on the
@@ -255,6 +260,7 @@ namespace pcl
       /** \brief Computes an "optimal" sample distance threshold based on the
         * principal directions of the input cloud.
         * \param[in] cloud the const boost shared pointer to a PointCloud message
+        * \param indices
         */
       inline void
       computeSampleDistanceThreshold (const PointCloudConstPtr &cloud,
@@ -279,8 +285,6 @@ namespace pcl
         sample_dist_thresh_ *= sample_dist_thresh_;
         PCL_DEBUG ("[pcl::SampleConsensusModelRegistration::setInputCloud] Estimated a sample selection distance threshold of: %f\n", sample_dist_thresh_);
       }
-
-    private:
 
     /** \brief Estimate a rigid transformation between a source and a target point cloud using an SVD closed-form
       * solution of absolute orientation using unit quaternions
@@ -317,7 +321,7 @@ namespace pcl
       boost::shared_ptr <std::vector<int> > indices_tgt_;
 
       /** \brief Given the index in the original point cloud, give the matching original index in the target cloud */
-      boost::unordered_map<int, int> correspondences_;
+      std::map<int, int> correspondences_;
 
       /** \brief Internal distance threshold used for the sample selection step. */
       double sample_dist_thresh_;

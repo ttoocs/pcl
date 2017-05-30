@@ -78,6 +78,9 @@ namespace pcl
       using PCLBase<PointInT>::deinitCompute;
 
     public:
+      typedef boost::shared_ptr<ConvexHull<PointInT> > Ptr;
+      typedef boost::shared_ptr<const ConvexHull<PointInT> > ConstPtr;
+
       using MeshConstruction<PointInT>::reconstruct;
 
       typedef pcl::PointCloud<PointInT> PointCloud;
@@ -90,6 +93,9 @@ namespace pcl
                       x_axis_ (1.0, 0.0, 0.0), y_axis_ (0.0, 1.0, 0.0), z_axis_ (0.0, 0.0, 1.0)
       {
       };
+      
+      /** \brief Empty destructor */
+      virtual ~ConvexHull () {}
 
       /** \brief Compute a convex hull for all points given.
         *
@@ -113,7 +119,7 @@ namespace pcl
 
       /** \brief If set to true, the qhull library is called to compute the total area and volume of the convex hull.
         * NOTE: When this option is activated, the qhull library produces output to the console.
-        * \param[in] value wheter to compute the area and the volume, default is false
+        * \param[in] value whether to compute the area and the volume, default is false
         */
       void
       setComputeAreaVolume (bool value)
@@ -159,6 +165,14 @@ namespace pcl
       {
         return (dimension_);
       }
+
+      /** \brief Retrieve the indices of the input point cloud that for the convex hull.
+        *
+        * \note Should only be called after reconstruction was performed.
+        * \param[out] hull_point_indices The indices of the points forming the point cloud
+        */
+      void
+      getHullPointIndices (pcl::PointIndices &hull_point_indices) const;
 
     protected:
       /** \brief The actual reconstruction method. 
@@ -248,6 +262,9 @@ namespace pcl
 
       /* \brief z-axis - for checking valid projections. */
       const Eigen::Vector3d z_axis_;
+
+      /* \brief vector containing the point cloud indices of the convex hull points. */
+      pcl::PointIndices hull_indices_;
 
       public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW

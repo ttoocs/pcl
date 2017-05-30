@@ -51,6 +51,7 @@ namespace pcl
   using boost::uint32_t;
   using boost::int64_t;
   using boost::uint64_t;
+  using boost::int_fast16_t;
 }
 
 #if defined __INTEL_COMPILER
@@ -100,9 +101,9 @@ namespace pcl
 #elif ANDROID
 // Use the math.h macros
 # include <math.h>
-# define pcl_isnan(x)    isnan(x)
-# define pcl_isfinite(x) isfinite(x)
-# define pcl_isinf(x)    isinf(x)
+# define pcl_isnan(x)    std::isnan(x)
+# define pcl_isfinite(x) std::isfinite(x)
+# define pcl_isinf(x)    std::isinf(x)
 
 #elif _GLIBCXX_USE_C99_MATH
 // Are the C++ cmath functions enabled?
@@ -159,8 +160,14 @@ pcl_round (float number)
   return (number < 0.0f ? ceilf (number - 0.5f) : floorf (number + 0.5f));
 }
 
+#ifdef __GNUC__
+#define pcl_lrint(x) (lrint(static_cast<double> (x)))
+#define pcl_lrintf(x) (lrintf(static_cast<float> (x)))
+#else
 #define pcl_lrint(x) (static_cast<long int>(pcl_round(x)))
 #define pcl_lrintf(x) (static_cast<long int>(pcl_round(x)))
+#endif
+
 
 #ifdef _WIN32
 __inline float
@@ -288,20 +295,29 @@ log2f (float x)
 // use me instead
 // void NewFunc(int a, double b);
 
-// gcc supports this starting from 4.5 : http://gcc.gnu.org/bugzilla/show_bug.cgi?id=43666
-#ifdef __GNUC__
-#if PCL_LINEAR_VERSION(__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__) < PCL_LINEAR_VERSION(4,5,0) || defined(__INTEL_COMPILER)
-#define PCL_DEPRECATED(func, message) func __attribute__ ((deprecated))
-#else
-#define PCL_DEPRECATED(func, message) func __attribute__ ((deprecated(message)))
+//for clang cf. http://clang.llvm.org/docs/LanguageExtensions.html
+#ifndef __has_extension
+  #define __has_extension(x) 0 // Compatibility with pre-3.0 compilers.
 #endif
 
-#elif defined(_MSC_VER)
-#define PCL_DEPRECATED(func, message) __declspec(deprecated(message)) func
-#else
-#pragma message("WARNING: You need to implement PCL_DEPRECATED for this compiler")
-#define PCL_DEPRECATED(func) func
+#if (defined(__GNUC__) && PCL_LINEAR_VERSION(__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__) < PCL_LINEAR_VERSION(4,5,0) && ! defined(__clang__)) || defined(__INTEL_COMPILER)
+#define PCL_DEPRECATED(message) __attribute__ ((deprecated))
 #endif
+
+// gcc supports this starting from 4.5 : http://gcc.gnu.org/bugzilla/show_bug.cgi?id=43666
+#if (defined(__GNUC__) && PCL_LINEAR_VERSION(__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__) >= PCL_LINEAR_VERSION(4,5,0)) || (defined(__clang__) && __has_extension(attribute_deprecated_with_message))
+#define PCL_DEPRECATED(message) __attribute__ ((deprecated(message)))
+#endif
+
+#ifdef _MSC_VER
+#define PCL_DEPRECATED(message) __declspec(deprecated(message))
+#endif
+
+#ifndef PCL_DEPRECATED
+#pragma message("WARNING: You need to implement PCL_DEPRECATED for this compiler")
+#define PCL_DEPRECATED(message)
+#endif
+
 
 // Macro to deprecate old classes/structs
 //
@@ -319,19 +335,21 @@ log2f (float x)
 //     NewClass() {}
 // };
 
-// gcc supports this starting from 4.5 : http://gcc.gnu.org/bugzilla/show_bug.cgi?id=43666
-#ifdef __GNUC__
-#if PCL_LINEAR_VERSION (__GNUC__, __GNU_MINOR__, __GNU_PATCHLEVEL__) < PCL_LINEAR_VERSION (4, 5, 0) || defined(__INTEL_COMPILER)
-
+#if (defined(__GNUC__) && PCL_LINEAR_VERSION(__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__) < PCL_LINEAR_VERSION(4,5,0) && ! defined(__clang__)) || defined(__INTEL_COMPILER)
 #define PCL_DEPRECATED_CLASS(func, message) __attribute__ ((deprecated)) func
-#else
+#endif
+
+// gcc supports this starting from 4.5 : http://gcc.gnu.org/bugzilla/show_bug.cgi?id=43666
+#if (defined(__GNUC__) && PCL_LINEAR_VERSION(__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__) >= PCL_LINEAR_VERSION(4,5,0)) || (defined(__clang__) && __has_extension(attribute_deprecated_with_message))
 #define PCL_DEPRECATED_CLASS(func, message) __attribute__ ((deprecated(message))) func
 #endif
 
-#elif defined(_MSC_VER)
+#ifdef _MSC_VER
 #define PCL_DEPRECATED_CLASS(func, message) __declspec(deprecated(message)) func
-#else
-#pragma message("WARNING: You need to implement PCL_DEPRECATED for this compiler")
+#endif
+
+#ifndef PCL_DEPRECATED_CLASS
+#pragma message("WARNING: You need to implement PCL_DEPRECATED_CLASS for this compiler")
 #define PCL_DEPRECATED_CLASS(func) func
 #endif
 
@@ -357,8 +375,6 @@ log2f (float x)
 
 #if defined(__APPLE__) || defined(_WIN64) || GLIBC_MALLOC_ALIGNED || FREEBSD_MALLOC_ALIGNED
   #define MALLOC_ALIGNED 1
-#else
-  #define MALLOC_ALIGNED 0
 #endif
 
 inline void*
@@ -374,6 +390,8 @@ aligned_malloc (size_t size)
   ptr = _mm_malloc (size, 16);
 #elif defined (_MSC_VER)
   ptr = _aligned_malloc (size, 16);
+#elif defined (ANDROID)
+  ptr = memalign (16, size);
 #else
   #error aligned_malloc not supported on your platform
   ptr = 0;
@@ -390,6 +408,8 @@ aligned_free (void* ptr)
   ptr = _mm_free (ptr);
 #elif defined (_MSC_VER)
   _aligned_free (ptr);
+#elif defined (ANDROID)
+  free (ptr);
 #else
   #error aligned_free not supported on your platform
 #endif

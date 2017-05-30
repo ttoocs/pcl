@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2011-2012, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -357,6 +358,7 @@ namespace Eigen
   template<typename PointT> struct NumTraits<pcl::ndt2d::NormalDist<PointT> >
   {
     typedef double Real;
+    typedef double Literal;
     static Real dummy_precision () { return 1.0; }
     enum {
       IsComplex = 0,
@@ -375,6 +377,9 @@ template <typename PointSource, typename PointTarget> void
 pcl::NormalDistributionsTransform2D<PointSource, PointTarget>::computeTransformation (PointCloudSource &output, const Eigen::Matrix4f &guess)
 {
   PointCloudSource intm_cloud = output;
+
+  nr_iterations_ = 0;
+  converged_ = false;
 
   if (guess != Eigen::Matrix4f::Identity ())
   {

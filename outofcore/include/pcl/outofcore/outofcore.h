@@ -34,7 +34,7 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *  
- *  $Id: outofcore.h 6913 2012-08-22 09:37:26Z stfox88 $
+ *  $Id$
  */
 
 #ifndef OUTOFCORE_H_
@@ -51,7 +51,8 @@
 #include <pcl/outofcore/octree_disk_container.h>
 #include <pcl/outofcore/octree_ram_container.h>
 
-#include <pcl/outofcore/OutofcoreIteratorBase.h>
-#include <pcl/outofcore/OutofcoreDepthFirstIterator.h>
+#include <pcl/outofcore/outofcore_iterator_base.h>
+#include <pcl/outofcore/outofcore_breadth_first_iterator.h>
+#include <pcl/outofcore/outofcore_depth_first_iterator.h>
 
 #endif // OUTOFCORE_H_

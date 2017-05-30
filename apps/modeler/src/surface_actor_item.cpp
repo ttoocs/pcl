@@ -38,6 +38,12 @@
 
 #include <pcl/apps/modeler/cloud_mesh.h>
 
+#include <vtkLODActor.h>
+#include <vtkPolyData.h>
+#include <vtkCellArray.h>
+#include <vtkDataSetMapper.h>
+#include <vtkPointData.h>
+#include <vtkProperty.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 pcl::modeler::SurfaceActorItem::SurfaceActorItem(QTreeWidgetItem* parent,
@@ -63,10 +69,13 @@ pcl::modeler::SurfaceActorItem::initImpl()
   vtkSmartPointer<vtkDataArray> scalars;
   cloud_mesh_->getColorScalarsFromField(scalars, color_scheme_);
   poly_data_->GetPointData ()->SetScalars (scalars);
-  poly_data_->Update();
 
   vtkSmartPointer<vtkDataSetMapper> mapper = vtkSmartPointer<vtkDataSetMapper>::New();
+#if VTK_MAJOR_VERSION < 6
   mapper->SetInput(poly_data_);
+#else
+  mapper->SetInputData (poly_data_);
+#endif
 
   double minmax[2];
   scalars->GetRange(minmax);
@@ -101,8 +110,6 @@ pcl::modeler::SurfaceActorItem::updateImpl()
   double minmax[2];
   scalars->GetRange(minmax);
   actor_->GetMapper()->SetScalarRange(minmax);
-
-  poly_data_->Update();
 
   return;
 }

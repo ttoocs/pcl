@@ -56,6 +56,16 @@
 #include <pcl/surface/qhull.h>
 
 //////////////////////////////////////////////////////////////////////////
+/** \brief Get dimension of concave hull  
+  * \return dimension
+  */                    
+template <typename PointInT> int
+pcl::ConcaveHull<PointInT>::getDim () const
+{
+  return (getDimension ());
+}
+
+//////////////////////////////////////////////////////////////////////////
 template <typename PointInT> void
 pcl::ConcaveHull<PointInT>::reconstruct (PointCloud &output)
 {
@@ -119,9 +129,10 @@ pcl::ConcaveHull<PointInT>::reconstruct (PointCloud &output, std::vector<pcl::Ve
 template <typename PointInT> void
 pcl::ConcaveHull<PointInT>::performReconstruction (PointCloud &alpha_shape, std::vector<pcl::Vertices> &polygons)
 {
-  EIGEN_ALIGN16 Eigen::Matrix3d covariance_matrix;
   Eigen::Vector4d xyz_centroid;
-  computeMeanAndCovarianceMatrix (*input_, *indices_, covariance_matrix, xyz_centroid);
+  compute3DCentroid (*input_, *indices_, xyz_centroid);
+  EIGEN_ALIGN16 Eigen::Matrix3d covariance_matrix;
+  computeCovarianceMatrixNormalized (*input_, *indices_, xyz_centroid, covariance_matrix);
 
   // Check if the covariance matrix is finite or not.
   for (int i = 0; i < 3; ++i)
@@ -140,7 +151,7 @@ pcl::ConcaveHull<PointInT>::performReconstruction (PointCloud &alpha_shape, std:
   if (dim_ == 0)
   {
     PCL_DEBUG ("[pcl::%s] WARNING: Input dimension not specified.  Automatically determining input dimension.\n", getClassName ().c_str ());
-    if (eigen_values[0] / eigen_values[2] < 1.0e-3)
+    if (std::abs (eigen_values[0]) < std::numeric_limits<double>::epsilon () || std::abs (eigen_values[0] / eigen_values[2]) < 1.0e-3)
       dim_ = 2;
     else
       dim_ = 3;
@@ -199,7 +210,7 @@ pcl::ConcaveHull<PointInT>::performReconstruction (PointCloud &alpha_shape, std:
 
   if (exitcode != 0)
   {
-    PCL_ERROR ("[pcl::%s::performReconstrution] ERROR: qhull was unable to compute a concave hull for the given point cloud (%zu)!\n", getClassName ().c_str (), cloud_transformed.points.size ());
+    PCL_ERROR ("[pcl::%s::performReconstrution] ERROR: qhull was unable to compute a concave hull for the given point cloud (%lu)!\n", getClassName ().c_str (), cloud_transformed.points.size ());
 
     //check if it fails because of NaN values...
     if (!cloud_transformed.is_dense)
@@ -518,16 +529,21 @@ pcl::ConcaveHull<PointInT>::performReconstruction (PointCloud &alpha_shape, std:
 
     alpha_shape.points = alpha_shape_sorted.points;
 
-    polygons.resize (pcd_idx_start_polygons.size () - 1);
+    polygons.reserve (pcd_idx_start_polygons.size () - 1);
 
-    for (size_t poly_id = 0; poly_id < polygons.size (); poly_id++)
+    for (size_t poly_id = 0; poly_id < pcd_idx_start_polygons.size () - 1; poly_id++)
     {
-      polygons[poly_id].vertices.resize (pcd_idx_start_polygons[poly_id + 1] - pcd_idx_start_polygons[poly_id] + 1);
-      // populate points in the corresponding polygon
-      for (int j = pcd_idx_start_polygons[poly_id]; j < pcd_idx_start_polygons[poly_id + 1]; ++j)
-        polygons[poly_id].vertices[j - pcd_idx_start_polygons[poly_id]] = static_cast<uint32_t> (j);
+      // Check if we actually have a polygon, and not some degenerated output from QHull
+      if (pcd_idx_start_polygons[poly_id + 1] - pcd_idx_start_polygons[poly_id] >= 3)
+      {
+        pcl::Vertices vertices;
+        vertices.vertices.resize (pcd_idx_start_polygons[poly_id + 1] - pcd_idx_start_polygons[poly_id]);
+        // populate points in the corresponding polygon
+        for (int j = pcd_idx_start_polygons[poly_id]; j < pcd_idx_start_polygons[poly_id + 1]; ++j)
+          vertices.vertices[j - pcd_idx_start_polygons[poly_id]] = static_cast<uint32_t> (j);
 
-      polygons[poly_id].vertices[polygons[poly_id].vertices.size () - 1] = pcd_idx_start_polygons[poly_id];
+        polygons.push_back (vertices);
+      }
     }
 
     if (voronoi_centers_)
@@ -564,18 +580,18 @@ pcl::ConcaveHull<PointInT>::performReconstruction (PointCloud &alpha_shape, std:
     distances.resize (1);
 
     // for each point in the concave hull, search for the nearest neighbor in the original point cloud
-
-    std::vector<int> indices;
-    indices.resize (alpha_shape.points.size ());
+    hull_indices_.header = input_->header;
+    hull_indices_.indices.clear ();
+    hull_indices_.indices.reserve (alpha_shape.points.size ());
 
     for (size_t i = 0; i < alpha_shape.points.size (); i++)
     {
       tree.nearestKSearch (alpha_shape.points[i], 1, neighbor, distances);
-      indices[i] = neighbor[0];
+      hull_indices_.indices.push_back (neighbor[0]);
     }
 
     // replace point with the closest neighbor in the original point cloud
-    pcl::copyPointCloud (*input_, indices, alpha_shape);
+    pcl::copyPointCloud (*input_, hull_indices_.indices, alpha_shape);
   }
 }
 #ifdef __GNUC__
@@ -590,8 +606,8 @@ pcl::ConcaveHull<PointInT>::performReconstruction (PolygonMesh &output)
   pcl::PointCloud<PointInT> hull_points;
   performReconstruction (hull_points, output.polygons);
 
-  // Convert the PointCloud into a PointCloud2
-  pcl::toROSMsg (hull_points, output.cloud);
+  // Convert the PointCloud into a PCLPointCloud2
+  pcl::toPCLPointCloud2 (hull_points, output.cloud);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -602,6 +618,12 @@ pcl::ConcaveHull<PointInT>::performReconstruction (std::vector<pcl::Vertices> &p
   performReconstruction (hull_points, polygons);
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointInT> void
+pcl::ConcaveHull<PointInT>::getHullPointIndices (pcl::PointIndices &hull_point_indices) const
+{
+  hull_point_indices = hull_indices_;
+}
 
 #define PCL_INSTANTIATE_ConcaveHull(T) template class PCL_EXPORTS pcl::ConcaveHull<T>;
 

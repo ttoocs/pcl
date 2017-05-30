@@ -43,8 +43,8 @@
 #include <pcl/search/kdtree.h>
 
 //Typedefs to make things sane
-typedef pcl::visualization::PointCloudGeometryHandler<sensor_msgs::PointCloud2> GeometryHandler;
-typedef pcl::visualization::PointCloudColorHandler<sensor_msgs::PointCloud2> ColorHandler;
+typedef pcl::visualization::PointCloudGeometryHandler<pcl::PCLPointCloud2> GeometryHandler;
+typedef pcl::visualization::PointCloudColorHandler<pcl::PCLPointCloud2> ColorHandler;
 
 namespace pcl
 {
@@ -71,7 +71,7 @@ namespace pcl
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         
         CloudItem (const QString name,
-                   const sensor_msgs::PointCloud2::Ptr cloud_ptr, 
+                   const pcl::PCLPointCloud2::Ptr cloud_ptr,
                    const Eigen::Vector4f& origin = Eigen::Vector4f (),
                    const Eigen::Quaternionf& orientation = Eigen::Quaternionf (),
                    bool make_templated_cloud = true);
@@ -125,19 +125,18 @@ namespace pcl
       private:
         
         //These are just stored for convenience 
-        sensor_msgs::PointCloud2::Ptr cloud_blob_ptr_;
+        pcl::PCLPointCloud2::Ptr cloud_blob_ptr_;
         ColorHandler::ConstPtr color_handler_;
         GeometryHandler::ConstPtr geometry_handler_;
-
-       
 
         //We keep actual local copies of these.
         Eigen::Vector4f origin_;
         Eigen::Quaternionf orientation_;
         
+        bool template_cloud_set_;
+
         //Internal Storage of the templated type of this cloud
         int point_type_;
-        bool template_cloud_set_;
         
         bool
         checkIfFinite ();
@@ -151,7 +150,6 @@ namespace pcl
           qCritical () << "CloudItem::setPointType for type with no specialization";
           point_type_ = PointTypeFlags::NONE;
         }
-        
         
     };
     
@@ -176,7 +174,7 @@ namespace pcl
 }
 
 //Add PointCloud types to QT MetaType System
-Q_DECLARE_METATYPE (sensor_msgs::PointCloud2::ConstPtr);
+Q_DECLARE_METATYPE (pcl::PCLPointCloud2::ConstPtr);
 Q_DECLARE_METATYPE (GeometryHandler::ConstPtr);
 Q_DECLARE_METATYPE (ColorHandler::ConstPtr);
 Q_DECLARE_METATYPE (Eigen::Vector4f);

@@ -5,6 +5,7 @@
 #include <pcl/common/eigen.h>
 #include <pcl/common/transforms.h>
 #include <pcl/tracking/boost.h>
+#include <pcl/tracking/particle_filter.h>
 
 template <typename PointInT, typename StateT> bool
 pcl::tracking::ParticleFilterTracker<PointInT, StateT>::initCompute ()
@@ -134,7 +135,7 @@ pcl::tracking::ParticleFilterTracker<PointInT, StateT>::normalizeWeight ()
       {
         if (particles_->points[i].weight != 0.0)
         {
-          particles_->points[i].weight = normalizeParticleWeight (particles_->points[i].weight, w_min, w_max);
+          particles_->points[i].weight = static_cast<float> (normalizeParticleWeight (particles_->points[i].weight, w_min, w_max));
         }
       }
     }

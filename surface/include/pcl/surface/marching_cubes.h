@@ -363,6 +363,9 @@ namespace pcl
   class MarchingCubes : public SurfaceReconstruction<PointNT>
   {
     public:
+      typedef boost::shared_ptr<MarchingCubes<PointNT> > Ptr;
+      typedef boost::shared_ptr<const MarchingCubes<PointNT> > ConstPtr;
+
       using SurfaceReconstruction<PointNT>::input_;
       using SurfaceReconstruction<PointNT>::tree_;
 
@@ -376,7 +379,7 @@ namespace pcl
       MarchingCubes ();
 
       /** \brief Destructor. */
-      ~MarchingCubes ();
+      virtual ~MarchingCubes ();
 
 
       /** \brief Method that sets the iso level of the surface to be extracted.
@@ -477,7 +480,7 @@ namespace pcl
       /** \brief Method that returns the scalar value at the given grid position.
         * \param[in] pos The 3D position in the grid
         */
-      float
+      virtual float
       getGridValue (Eigen::Vector3i pos);
 
       /** \brief Method that returns the scalar values of the neighbors of a given 3D position in the grid.
@@ -494,14 +497,14 @@ namespace pcl
       /** \brief Extract the surface.
         * \param[out] output the resultant polygonal mesh
         */
-       void
+       virtual void
        performReconstruction (pcl::PolygonMesh &output);
 
        /** \brief Extract the surface.
          * \param[out] points the points of the extracted mesh
          * \param[out] polygons the connectivity between the point of the extracted mesh.
          */
-       void
+       virtual void
        performReconstruction (pcl::PointCloud<PointNT> &points,
                               std::vector<pcl::Vertices> &polygons);
 

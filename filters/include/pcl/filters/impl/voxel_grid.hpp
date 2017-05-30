@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -38,11 +38,12 @@
 #ifndef PCL_FILTERS_IMPL_VOXEL_GRID_H_
 #define PCL_FILTERS_IMPL_VOXEL_GRID_H_
 
+#include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
 #include <pcl/common/io.h>
 #include <pcl/filters/voxel_grid.h>
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 template <typename PointT> void
 pcl::getMinMax3D (const typename pcl::PointCloud<PointT>::ConstPtr &cloud,
                   const std::string &distance_field_name, float min_distance, float max_distance,
@@ -53,7 +54,7 @@ pcl::getMinMax3D (const typename pcl::PointCloud<PointT>::ConstPtr &cloud,
   max_p.setConstant (-FLT_MAX);
 
   // Get the fields list and the distance field index
-  std::vector<sensor_msgs::PointField> fields;
+  std::vector<pcl::PCLPointField> fields;
   int distance_idx = pcl::getFieldIndex (*cloud, distance_field_name, fields);
 
   float distance_value;
@@ -120,6 +121,85 @@ pcl::getMinMax3D (const typename pcl::PointCloud<PointT>::ConstPtr &cloud,
   max_pt = max_p;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT> void
+pcl::getMinMax3D (const typename pcl::PointCloud<PointT>::ConstPtr &cloud,
+                  const std::vector<int> &indices,
+                  const std::string &distance_field_name, float min_distance, float max_distance,
+                  Eigen::Vector4f &min_pt, Eigen::Vector4f &max_pt, bool limit_negative)
+{
+  Eigen::Array4f min_p, max_p;
+  min_p.setConstant (FLT_MAX);
+  max_p.setConstant (-FLT_MAX);
+
+  // Get the fields list and the distance field index
+  std::vector<pcl::PCLPointField> fields;
+  int distance_idx = pcl::getFieldIndex (*cloud, distance_field_name, fields);
+
+  float distance_value;
+  // If dense, no need to check for NaNs
+  if (cloud->is_dense)
+  {
+    for (std::vector<int>::const_iterator it = indices.begin (); it != indices.end (); ++it)
+    {
+      // Get the distance value
+      const uint8_t* pt_data = reinterpret_cast<const uint8_t*> (&cloud->points[*it]);
+      memcpy (&distance_value, pt_data + fields[distance_idx].offset, sizeof (float));
+
+      if (limit_negative)
+      {
+        // Use a threshold for cutting out points which inside the interval
+        if ((distance_value < max_distance) && (distance_value > min_distance))
+          continue;
+      }
+      else
+      {
+        // Use a threshold for cutting out points which are too close/far away
+        if ((distance_value > max_distance) || (distance_value < min_distance))
+          continue;
+      }
+      // Create the point structure and get the min/max
+      pcl::Array4fMapConst pt = cloud->points[*it].getArray4fMap ();
+      min_p = min_p.min (pt);
+      max_p = max_p.max (pt);
+    }
+  }
+  else
+  {
+    for (std::vector<int>::const_iterator it = indices.begin (); it != indices.end (); ++it)
+    {
+      // Get the distance value
+      const uint8_t* pt_data = reinterpret_cast<const uint8_t*> (&cloud->points[*it]);
+      memcpy (&distance_value, pt_data + fields[distance_idx].offset, sizeof (float));
+
+      if (limit_negative)
+      {
+        // Use a threshold for cutting out points which inside the interval
+        if ((distance_value < max_distance) && (distance_value > min_distance))
+          continue;
+      }
+      else
+      {
+        // Use a threshold for cutting out points which are too close/far away
+        if ((distance_value > max_distance) || (distance_value < min_distance))
+          continue;
+      }
+
+      // Check if the point is invalid
+      if (!pcl_isfinite (cloud->points[*it].x) || 
+          !pcl_isfinite (cloud->points[*it].y) || 
+          !pcl_isfinite (cloud->points[*it].z))
+        continue;
+      // Create the point structure and get the min/max
+      pcl::Array4fMapConst pt = cloud->points[*it].getArray4fMap ();
+      min_p = min_p.min (pt);
+      max_p = max_p.max (pt);
+    }
+  }
+  min_pt = min_p;
+  max_pt = max_p;
+}
+
 struct cloud_point_index_idx 
 {
   unsigned int idx;
@@ -149,19 +229,19 @@ pcl::VoxelGrid<PointT>::applyFilter (PointCloud &output)
   Eigen::Vector4f min_p, max_p;
   // Get the minimum and maximum dimensions
   if (!filter_field_name_.empty ()) // If we don't want to process the entire cloud...
-    getMinMax3D<PointT>(input_, filter_field_name_, static_cast<float> (filter_limit_min_), static_cast<float> (filter_limit_max_), min_p, max_p, filter_limit_negative_);
+    getMinMax3D<PointT> (input_, *indices_, filter_field_name_, static_cast<float> (filter_limit_min_), static_cast<float> (filter_limit_max_), min_p, max_p, filter_limit_negative_);
   else
-    getMinMax3D<PointT>(*input_, min_p, max_p);
+    getMinMax3D<PointT> (*input_, *indices_, min_p, max_p);
 
   // Check that the leaf size is not too small, given the size of the data
   int64_t dx = static_cast<int64_t>((max_p[0] - min_p[0]) * inverse_leaf_size_[0])+1;
   int64_t dy = static_cast<int64_t>((max_p[1] - min_p[1]) * inverse_leaf_size_[1])+1;
   int64_t dz = static_cast<int64_t>((max_p[2] - min_p[2]) * inverse_leaf_size_[2])+1;
 
-  if( (dx*dy*dz) > static_cast<int64_t>(std::numeric_limits<int32_t>::max()) )
+  if ((dx*dy*dz) > static_cast<int64_t>(std::numeric_limits<int32_t>::max()))
   {
     PCL_WARN("[pcl::%s::applyFilter] Leaf size is too small for the input dataset. Integer indices would overflow.", getClassName().c_str());
-    output.clear();
+    output = *input_;
     return;
   }
 
@@ -180,30 +260,15 @@ pcl::VoxelGrid<PointT>::applyFilter (PointCloud &output)
   // Set up the division multiplier
   divb_mul_ = Eigen::Vector4i (1, div_b_[0], div_b_[0] * div_b_[1], 0);
 
-  int centroid_size = 4;
-  if (downsample_all_data_)
-    centroid_size = boost::mpl::size<FieldList>::value;
-
-  // ---[ RGB special case
-  std::vector<sensor_msgs::PointField> fields;
-  int rgba_index = -1;
-  rgba_index = pcl::getFieldIndex (*input_, "rgb", fields);
-  if (rgba_index == -1)
-    rgba_index = pcl::getFieldIndex (*input_, "rgba", fields);
-  if (rgba_index >= 0)
-  {
-    rgba_index = fields[rgba_index].offset;
-    centroid_size += 3;
-  }
-
+  // Storage for mapping leaf and pointcloud indexes
   std::vector<cloud_point_index_idx> index_vector;
-  index_vector.reserve(input_->points.size());
+  index_vector.reserve (indices_->size ());
 
   // If we don't want to process the entire cloud, but rather filter points far away from the viewpoint first...
   if (!filter_field_name_.empty ())
   {
     // Get the distance field index
-    std::vector<sensor_msgs::PointField> fields;
+    std::vector<pcl::PCLPointField> fields;
     int distance_idx = pcl::getFieldIndex (*input_, filter_field_name_, fields);
     if (distance_idx == -1)
       PCL_WARN ("[pcl::%s::applyFilter] Invalid filter field name. Index is %d.\n", getClassName ().c_str (), distance_idx);
@@ -211,17 +276,17 @@ pcl::VoxelGrid<PointT>::applyFilter (PointCloud &output)
     // First pass: go over all points and insert them into the index_vector vector
     // with calculated idx. Points with the same idx value will contribute to the
     // same point of resulting CloudPoint
-    for (unsigned int cp = 0; cp < static_cast<unsigned int> (input_->points.size ()); ++cp)
+    for (std::vector<int>::const_iterator it = indices_->begin (); it != indices_->end (); ++it)
     {
       if (!input_->is_dense)
         // Check if the point is invalid
-        if (!pcl_isfinite (input_->points[cp].x) || 
-            !pcl_isfinite (input_->points[cp].y) || 
-            !pcl_isfinite (input_->points[cp].z))
+        if (!pcl_isfinite (input_->points[*it].x) || 
+            !pcl_isfinite (input_->points[*it].y) || 
+            !pcl_isfinite (input_->points[*it].z))
           continue;
 
       // Get the distance value
-      const uint8_t* pt_data = reinterpret_cast<const uint8_t*> (&input_->points[cp]);
+      const uint8_t* pt_data = reinterpret_cast<const uint8_t*> (&input_->points[*it]);
       float distance_value = 0;
       memcpy (&distance_value, pt_data + fields[distance_idx].offset, sizeof (float));
 
@@ -238,13 +303,13 @@ pcl::VoxelGrid<PointT>::applyFilter (PointCloud &output)
           continue;
       }
       
-      int ijk0 = static_cast<int> (floor (input_->points[cp].x * inverse_leaf_size_[0]) - static_cast<float> (min_b_[0]));
-      int ijk1 = static_cast<int> (floor (input_->points[cp].y * inverse_leaf_size_[1]) - static_cast<float> (min_b_[1]));
-      int ijk2 = static_cast<int> (floor (input_->points[cp].z * inverse_leaf_size_[2]) - static_cast<float> (min_b_[2]));
+      int ijk0 = static_cast<int> (floor (input_->points[*it].x * inverse_leaf_size_[0]) - static_cast<float> (min_b_[0]));
+      int ijk1 = static_cast<int> (floor (input_->points[*it].y * inverse_leaf_size_[1]) - static_cast<float> (min_b_[1]));
+      int ijk2 = static_cast<int> (floor (input_->points[*it].z * inverse_leaf_size_[2]) - static_cast<float> (min_b_[2]));
 
       // Compute the centroid leaf index
       int idx = ijk0 * divb_mul_[0] + ijk1 * divb_mul_[1] + ijk2 * divb_mul_[2];
-      index_vector.push_back (cloud_point_index_idx (static_cast<unsigned int> (idx), cp));
+      index_vector.push_back (cloud_point_index_idx (static_cast<unsigned int> (idx), *it));
     }
   }
   // No distance filtering, process all data
@@ -253,22 +318,22 @@ pcl::VoxelGrid<PointT>::applyFilter (PointCloud &output)
     // First pass: go over all points and insert them into the index_vector vector
     // with calculated idx. Points with the same idx value will contribute to the
     // same point of resulting CloudPoint
-    for (unsigned int cp = 0; cp < static_cast<unsigned int> (input_->points.size ()); ++cp)
+    for (std::vector<int>::const_iterator it = indices_->begin (); it != indices_->end (); ++it)
     {
       if (!input_->is_dense)
         // Check if the point is invalid
-        if (!pcl_isfinite (input_->points[cp].x) || 
-            !pcl_isfinite (input_->points[cp].y) || 
-            !pcl_isfinite (input_->points[cp].z))
+        if (!pcl_isfinite (input_->points[*it].x) || 
+            !pcl_isfinite (input_->points[*it].y) || 
+            !pcl_isfinite (input_->points[*it].z))
           continue;
 
-      int ijk0 = static_cast<int> (floor (input_->points[cp].x * inverse_leaf_size_[0]) - static_cast<float> (min_b_[0]));
-      int ijk1 = static_cast<int> (floor (input_->points[cp].y * inverse_leaf_size_[1]) - static_cast<float> (min_b_[1]));
-      int ijk2 = static_cast<int> (floor (input_->points[cp].z * inverse_leaf_size_[2]) - static_cast<float> (min_b_[2]));
+      int ijk0 = static_cast<int> (floor (input_->points[*it].x * inverse_leaf_size_[0]) - static_cast<float> (min_b_[0]));
+      int ijk1 = static_cast<int> (floor (input_->points[*it].y * inverse_leaf_size_[1]) - static_cast<float> (min_b_[1]));
+      int ijk2 = static_cast<int> (floor (input_->points[*it].z * inverse_leaf_size_[2]) - static_cast<float> (min_b_[2]));
 
       // Compute the centroid leaf index
       int idx = ijk0 * divb_mul_[0] + ijk1 * divb_mul_[1] + ijk2 * divb_mul_[2];
-      index_vector.push_back (cloud_point_index_idx (static_cast<unsigned int> (idx), cp));
+      index_vector.push_back (cloud_point_index_idx (static_cast<unsigned int> (idx), *it));
     }
   }
 
@@ -280,12 +345,22 @@ pcl::VoxelGrid<PointT>::applyFilter (PointCloud &output)
   // we need to skip all the same, adjacenent idx values
   unsigned int total = 0;
   unsigned int index = 0;
+  // first_and_last_indices_vector[i] represents the index in index_vector of the first point in
+  // index_vector belonging to the voxel which corresponds to the i-th output point,
+  // and of the first point not belonging to.
+  std::vector<std::pair<unsigned int, unsigned int> > first_and_last_indices_vector;
+  // Worst case size
+  first_and_last_indices_vector.reserve (index_vector.size ());
   while (index < index_vector.size ()) 
   {
     unsigned int i = index + 1;
     while (i < index_vector.size () && index_vector[i].idx == index_vector[index].idx) 
       ++i;
-    ++total;
+    if (i - index >= min_points_per_voxel_)
+    {
+      ++total;
+      first_and_last_indices_vector.push_back (std::pair<unsigned int, unsigned int> (index, i));
+    }
     index = i;
   }
 
@@ -318,87 +393,38 @@ pcl::VoxelGrid<PointT>::applyFilter (PointCloud &output)
   }
   
   index = 0;
-  Eigen::VectorXf centroid = Eigen::VectorXf::Zero (centroid_size);
-  Eigen::VectorXf temporary = Eigen::VectorXf::Zero (centroid_size);
-
-  for (unsigned int cp = 0; cp < index_vector.size ();)
+  for (unsigned int cp = 0; cp < first_and_last_indices_vector.size (); ++cp)
   {
     // calculate centroid - sum values from all input points, that have the same idx value in index_vector array
-    if (!downsample_all_data_) 
-    {
-      centroid[0] = input_->points[index_vector[cp].cloud_point_index].x;
-      centroid[1] = input_->points[index_vector[cp].cloud_point_index].y;
-      centroid[2] = input_->points[index_vector[cp].cloud_point_index].z;
-    }
-    else 
-    {
-      // ---[ RGB special case
-      if (rgba_index >= 0)
-      {
-        // Fill r/g/b data, assuming that the order is BGRA
-        pcl::RGB rgb;
-        memcpy (&rgb, reinterpret_cast<const char*> (&input_->points[index_vector[cp].cloud_point_index]) + rgba_index, sizeof (RGB));
-        centroid[centroid_size-3] = rgb.r;
-        centroid[centroid_size-2] = rgb.g;
-        centroid[centroid_size-1] = rgb.b;
-      }
-      pcl::for_each_type <FieldList> (NdCopyPointEigenFunctor <PointT> (input_->points[index_vector[cp].cloud_point_index], centroid));
-    }
-
-    unsigned int i = cp + 1;
-    while (i < index_vector.size () && index_vector[i].idx == index_vector[cp].idx) 
-    {
-      if (!downsample_all_data_) 
-      {
-        centroid[0] += input_->points[index_vector[i].cloud_point_index].x;
-        centroid[1] += input_->points[index_vector[i].cloud_point_index].y;
-        centroid[2] += input_->points[index_vector[i].cloud_point_index].z;
-      }
-      else 
-      {
-        // ---[ RGB special case
-        if (rgba_index >= 0)
-        {
-          // Fill r/g/b data, assuming that the order is BGRA
-          pcl::RGB rgb;
-          memcpy (&rgb, reinterpret_cast<const char*> (&input_->points[index_vector[i].cloud_point_index]) + rgba_index, sizeof (RGB));
-          temporary[centroid_size-3] = rgb.r;
-          temporary[centroid_size-2] = rgb.g;
-          temporary[centroid_size-1] = rgb.b;
-        }
-        pcl::for_each_type <FieldList> (NdCopyPointEigenFunctor <PointT> (input_->points[index_vector[i].cloud_point_index], temporary));
-        centroid += temporary;
-      }
-      ++i;
-    }
+  	unsigned int first_index = first_and_last_indices_vector[cp].first;
+  	unsigned int last_index = first_and_last_indices_vector[cp].second;
 
     // index is centroid final position in resulting PointCloud
     if (save_leaf_layout_)
-      leaf_layout_[index_vector[cp].idx] = index;
+      leaf_layout_[index_vector[first_index].idx] = index;
 
-    centroid /= static_cast<float> (i - cp);
+    //Limit downsampling to coords
+    if (!downsample_all_data_)
+    {
+      Eigen::Vector4f centroid (Eigen::Vector4f::Zero ());
 
-    // store centroid
-    // Do we need to process all the fields?
-    if (!downsample_all_data_) 
-    {
-      output.points[index].x = centroid[0];
-      output.points[index].y = centroid[1];
-      output.points[index].z = centroid[2];
+      for (unsigned int li = first_index; li < last_index; ++li)
+        centroid += input_->points[index_vector[li].cloud_point_index].getVector4fMap ();
+
+      centroid /= static_cast<float> (last_index - first_index);
+      output.points[index].getVector4fMap () = centroid;
     }
-    else 
+    else
     {
-      pcl::for_each_type<FieldList> (pcl::NdCopyEigenPointFunctor <PointT> (centroid, output.points[index]));
-      // ---[ RGB special case
-      if (rgba_index >= 0) 
-      {
-        // pack r/g/b into rgb
-        float r = centroid[centroid_size-3], g = centroid[centroid_size-2], b = centroid[centroid_size-1];
-        int rgb = (static_cast<int> (r) << 16) | (static_cast<int> (g) << 8) | static_cast<int> (b);
-        memcpy (reinterpret_cast<char*> (&output.points[index]) + rgba_index, &rgb, sizeof (float));
-      }
+      CentroidPoint<PointT> centroid;
+
+      // fill in the accumulator with leaf points
+      for (unsigned int li = first_index; li < last_index; ++li)
+        centroid.add (input_->points[index_vector[li].cloud_point_index]);  
+
+      centroid.get (output.points[index]);
     }
-    cp = i;
+     
     ++index;
   }
   output.width = static_cast<uint32_t> (output.points.size ());

@@ -108,7 +108,7 @@ TEST (PCL, ConcaveHull_bunny)
   EXPECT_EQ (alpha_shape2.points.size (), 81);
 
   //PolygonMesh concave;
-  //toROSMsg (alpha_shape2, concave.cloud);
+  //toPCLPointCloud2 (alpha_shape2, concave.cloud);
   //concave.polygons = polygons_alpha2;
   //saveVTKFile ("./test/bun0-concave2d.vtk", concave);
 }
@@ -122,15 +122,18 @@ TEST (PCL, ConcaveHull_planar_bunny)
   PointCloud<PointXYZ> hull_3d;
   concave_hull_3d.reconstruct (hull_3d);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+  EXPECT_EQ (concave_hull_3d.getDim (), 3);         // test for PCL_DEPRECATED
+#pragma GCC diagnostic pop
   EXPECT_EQ (concave_hull_3d.getDimension (), 3);
-
 
   ModelCoefficients::Ptr plane_coefficients (new ModelCoefficients ());
   plane_coefficients->values.resize (4);
-  plane_coefficients->values[0] = -0.010666;
-  plane_coefficients->values[1] = -0.793771;
-  plane_coefficients->values[2] = -0.607779;
-  plane_coefficients->values[3] = 0.993252;
+  plane_coefficients->values[0] = -0.010666f;
+  plane_coefficients->values[1] = -0.793771f;
+  plane_coefficients->values[2] = -0.607779f;
+  plane_coefficients->values[3] = 0.993252f;
 
   /// Project segmented object points onto plane
   ProjectInliers<PointXYZ> project_inliers_filter;
@@ -147,6 +150,61 @@ TEST (PCL, ConcaveHull_planar_bunny)
   concave_hull_2d.reconstruct (hull_2d);
 
   EXPECT_EQ (concave_hull_2d.getDimension (), 2);
+}
+
+
+TEST (PCL, ConcaveHull_4points)
+{
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_4 (new pcl::PointCloud<pcl::PointXYZ> ());
+  pcl::PointXYZ p;
+  p.x = p.y = p.z = 0.f;
+  cloud_4->push_back (p);
+
+  p.x = 1.f;
+  p.y = 0.f;
+  p.z = 0.f;
+  cloud_4->push_back (p);
+
+  p.x = 0.f;
+  p.y = 1.f;
+  p.z = 0.f;
+  cloud_4->push_back (p);
+
+  p.x = 1.f;
+  p.y = 1.f;
+  p.z = 0.f;
+  cloud_4->push_back (p);
+
+  cloud_4->height = 1;
+  cloud_4->width = uint32_t (cloud_4->size ());
+
+  ConcaveHull<PointXYZ> concave_hull;
+  concave_hull.setInputCloud (cloud_4);
+  concave_hull.setAlpha (10.);
+  PolygonMesh mesh;
+  concave_hull.reconstruct (mesh);
+
+  EXPECT_EQ (mesh.polygons.size (), 1);
+  EXPECT_EQ (mesh.polygons[0].vertices.size (), 4);
+
+  PointCloud<PointXYZ> mesh_cloud;
+  fromPCLPointCloud2 (mesh.cloud, mesh_cloud);
+
+  EXPECT_NEAR (mesh_cloud[0].x, 1.f, 1e-6);
+  EXPECT_NEAR (mesh_cloud[0].y, 0.f, 1e-6);
+  EXPECT_NEAR (mesh_cloud[0].z, 0.f, 1e-6);
+
+  EXPECT_NEAR (mesh_cloud[1].x, 0.f, 1e-6);
+  EXPECT_NEAR (mesh_cloud[1].y, 0.f, 1e-6);
+  EXPECT_NEAR (mesh_cloud[1].z, 0.f, 1e-6);
+
+  EXPECT_NEAR (mesh_cloud[2].x, 0.f, 1e-6);
+  EXPECT_NEAR (mesh_cloud[2].y, 1.f, 1e-6);
+  EXPECT_NEAR (mesh_cloud[2].z, 0.f, 1e-6);
+
+  EXPECT_NEAR (mesh_cloud[3].x, 1.f, 1e-6);
+  EXPECT_NEAR (mesh_cloud[3].y, 1.f, 1e-6);
+  EXPECT_NEAR (mesh_cloud[3].z, 0.f, 1e-6);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,9 +288,9 @@ main (int argc, char** argv)
   }
 
   // Load file
-  sensor_msgs::PointCloud2 cloud_blob;
+  pcl::PCLPointCloud2 cloud_blob;
   loadPCDFile (argv[1], cloud_blob);
-  fromROSMsg (cloud_blob, *cloud);
+  fromPCLPointCloud2 (cloud_blob, *cloud);
 
   // Create search tree
   tree.reset (new search::KdTree<PointXYZ> (false));
@@ -257,9 +315,9 @@ main (int argc, char** argv)
   // Process for update cloud
   if (argc == 3)
   {
-    sensor_msgs::PointCloud2 cloud_blob1;
+    pcl::PCLPointCloud2 cloud_blob1;
     loadPCDFile (argv[2], cloud_blob1);
-    fromROSMsg (cloud_blob1, *cloud1);
+    fromPCLPointCloud2 (cloud_blob1, *cloud1);
         // Create search tree
     tree3.reset (new search::KdTree<PointXYZ> (false));
     tree3->setInputCloud (cloud1);

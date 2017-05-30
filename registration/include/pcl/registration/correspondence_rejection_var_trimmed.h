@@ -61,7 +61,7 @@ namespace pcl
       * \author Aravindhan K Krishnan. This code is ported from libpointmatcher (https://github.com/ethz-asl/libpointmatcher)
       * \ingroup registration
       */
-    class CorrespondenceRejectorVarTrimmed: public CorrespondenceRejector
+    class PCL_EXPORTS CorrespondenceRejectorVarTrimmed: public CorrespondenceRejector
     {
       using CorrespondenceRejector::input_correspondences_;
       using CorrespondenceRejector::rejection_name_;
@@ -87,7 +87,7 @@ namespace pcl
           * \param[in] original_correspondences the set of initial correspondences given
           * \param[out] remaining_correspondences the resultant filtered set of remaining correspondences
           */
-        inline void 
+        void 
         getRemainingCorrespondences (const pcl::Correspondences& original_correspondences, 
                                      pcl::Correspondences& remaining_correspondences);
 
@@ -132,6 +132,51 @@ namespace pcl
           boost::static_pointer_cast<DataContainer<PointT> > (data_container_)->setInputTarget (target);
         }
 
+
+        
+        /** \brief See if this rejector requires source points */
+        bool
+        requiresSourcePoints () const
+        { return (true); }
+
+        /** \brief Blob method for setting the source cloud */
+        void
+        setSourcePoints (pcl::PCLPointCloud2::ConstPtr cloud2)
+        { 
+          PointCloud<PointXYZ>::Ptr cloud (new PointCloud<PointXYZ>);
+          fromPCLPointCloud2 (*cloud2, *cloud);
+          setInputSource<PointXYZ> (cloud);
+        }
+        
+        /** \brief See if this rejector requires a target cloud */
+        bool
+        requiresTargetPoints () const
+        { return (true); }
+
+        /** \brief Method for setting the target cloud */
+        void
+        setTargetPoints (pcl::PCLPointCloud2::ConstPtr cloud2)
+        { 
+          PointCloud<PointXYZ>::Ptr cloud (new PointCloud<PointXYZ>);
+          fromPCLPointCloud2 (*cloud2, *cloud);
+          setInputTarget<PointXYZ> (cloud);
+        }
+
+        /** \brief Provide a pointer to the search object used to find correspondences in
+          * the target cloud.
+          * \param[in] tree a pointer to the spatial search object.
+          * \param[in] force_no_recompute If set to true, this tree will NEVER be 
+          * recomputed, regardless of calls to setInputTarget. Only use if you are 
+          * confident that the tree will be set correctly.
+          */
+        template <typename PointT> inline void
+        setSearchMethodTarget (const boost::shared_ptr<pcl::search::KdTree<PointT> > &tree, 
+                               bool force_no_recompute = false) 
+        { 
+          boost::static_pointer_cast< DataContainer<PointT> > 
+            (data_container_)->setSearchMethodTarget (tree, force_no_recompute );
+        }
+
         /** \brief Get the computed inlier ratio used for thresholding in correspondence rejection. */
         inline double
         getTrimFactor () const { return factor_; }
@@ -157,22 +202,6 @@ namespace pcl
           */
         inline double
         getMaxRatio () const { return max_ratio_; }
-
-        /** \brief Provide a simple mechanism to update the internal source cloud
-          * using a given transformation. Used in registration loops.
-          * \param[in] transform the transform to apply over the source cloud
-          */
-        virtual bool
-        updateSource (const Eigen::Matrix4d &transform)
-        {
-          if (!data_container_)
-          {
-            PCL_ERROR ("[pcl::registration::%s::updateSource] Data container is not initialized! Please initialize the data container using setInputSource or setInputTarget.\n", getClassName ().c_str ());
-            return (false);
-          }
-
-          return (data_container_->updateSource (transform));
-        }
 
       protected:
 

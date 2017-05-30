@@ -39,8 +39,9 @@
 
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 
-#include <pcl/ros/conversions.h>
+#include <pcl/conversions.h>
 #include <pcl/common/common.h>
+#include <vtkVersion.h>
 #include <vtkCellArray.h>
 #include <vtkTriangleFilter.h>
 #include <vtkPoints.h>
@@ -48,6 +49,12 @@
 #include <vtkPointData.h>
 #include <vtkFloatArray.h>
 
+// Support for VTK 7.1 upwards
+#ifdef vtkGenericDataArray_h
+#define SetTupleValue SetTypedTuple
+#define InsertNextTupleValue InsertNextTypedTuple
+#define GetTupleValue GetTypedTuple
+#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 int
@@ -62,8 +69,12 @@ pcl::VTKUtils::convertToVTK (const pcl::PolygonMesh &triangles, vtkSmartPointer<
   vtkSmartPointer<vtkPolyData> vtk_polygons;
   mesh2vtk (triangles, vtk_polygons);
 
-  vtkSmartPointer<vtkTriangleFilter> vtk_triangles = vtkTriangleFilter::New ();
+  vtkSmartPointer<vtkTriangleFilter> vtk_triangles = vtkSmartPointer<vtkTriangleFilter>::New ();
+#if VTK_MAJOR_VERSION < 6
   vtk_triangles->SetInput (vtk_polygons);
+#else
+  vtk_triangles->SetInputData (vtk_polygons);
+#endif
   vtk_triangles->Update();
 
   triangles_out_vtk = vtk_triangles->GetOutput ();
@@ -125,7 +136,7 @@ pcl::VTKUtils::vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data, pcl::Pol
     cloud_temp->height = 1;
     cloud_temp->is_dense = true;
 
-    pcl::toROSMsg (*cloud_temp, mesh.cloud);
+    pcl::toPCLPointCloud2 (*cloud_temp, mesh.cloud);
   }
   else // in case points do not have color information:
   {
@@ -143,7 +154,7 @@ pcl::VTKUtils::vtk2mesh (const vtkSmartPointer<vtkPolyData>& poly_data, pcl::Pol
     cloud_temp->height = 1;
     cloud_temp->is_dense = true;
 
-    pcl::toROSMsg (*cloud_temp, mesh.cloud);
+    pcl::toPCLPointCloud2 (*cloud_temp, mesh.cloud);
   }
 
   mesh.polygons.resize (nr_polygons);

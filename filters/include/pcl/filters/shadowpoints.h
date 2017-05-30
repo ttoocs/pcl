@@ -16,7 +16,7 @@
  *    copyright notice, this list of conditions and the following
  *    disclaimer in the documentation and/or other materials provided
  *    with the distribution.
- *  * Neither the name of Willow Garage, Inc. nor the names of its
+ *  * Neither the name of the copyright holder(s) nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  * 
@@ -57,6 +57,10 @@ namespace pcl
     using FilterIndices<PointT>::indices_;
     using FilterIndices<PointT>::input_;
     using FilterIndices<PointT>::removed_indices_;
+    using FilterIndices<PointT>::extract_removed_indices_;
+    using FilterIndices<PointT>::negative_;
+    using FilterIndices<PointT>::user_filter_value_;
+    using FilterIndices<PointT>::keep_organized_;
 
     typedef typename FilterIndices<PointT>::PointCloud PointCloud;
     typedef typename PointCloud::Ptr PointCloudPtr;
@@ -64,8 +68,15 @@ namespace pcl
     typedef typename pcl::PointCloud<NormalT>::Ptr NormalsPtr;
 
     public:
+
+      typedef boost::shared_ptr< ShadowPoints<PointT, NormalT> > Ptr;
+      typedef boost::shared_ptr< const ShadowPoints<PointT, NormalT> > ConstPtr;
+
       /** \brief Empty constructor. */
-      ShadowPoints () : input_normals_ (), threshold_ (0.1f)
+      ShadowPoints (bool extract_removed_indices = false) : 
+        FilterIndices<PointT> (extract_removed_indices),
+        input_normals_ (), 
+        threshold_ (0.1f) 
       {
         filter_name_ = "ShadowPoints";
       }
@@ -81,7 +92,7 @@ namespace pcl
       getNormals () const { return (input_normals_); }
 
       /** \brief Set the threshold for shadow points rejection
-        * \param[in] thresold the threshold
+        * \param[in] threshold the threshold
         */
       inline void
       setThreshold (float threshold) { threshold_ = threshold; }

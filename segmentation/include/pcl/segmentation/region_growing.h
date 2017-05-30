@@ -15,7 +15,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -185,7 +185,7 @@ namespace pcl
       getSearchMethod () const;
 
       /** \brief Allows to set search method that will be used for finding KNN.
-        * \param[in] search search method to use
+        * \param[in] tree pointer to a KdTree
         */
       void
       setSearchMethod (const KdTreePtr& tree);
@@ -223,6 +223,15 @@ namespace pcl
         */
       pcl::PointCloud<pcl::PointXYZRGB>::Ptr
       getColoredCloud ();
+
+      /** \brief If the cloud was successfully segmented, then function
+        * returns colored cloud. Otherwise it returns an empty pointer.
+        * Points that belong to the same segment have the same color.
+        * But this function doesn't guarantee that different segments will have different
+        * color(it all depends on RNG). Points that were not listed in the indices array will have red color.
+        */
+      pcl::PointCloud<pcl::PointXYZRGBA>::Ptr
+      getColoredCloudRGBA ();
 
     protected:
 
@@ -263,7 +272,6 @@ namespace pcl
       validatePoint (int initial_seed, int point, int nghbr, bool& is_a_seed) const;
 
       /** \brief This function simply assembles the regions from list of point labels.
-        * \param[out] clusters clusters that were obtained during the segmentation process.
         * Each cluster is an array of point indices.
         */
       void

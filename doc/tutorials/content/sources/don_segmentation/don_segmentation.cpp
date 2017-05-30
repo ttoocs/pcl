@@ -47,14 +47,14 @@ main (int argc, char *argv[])
   istringstream (argv[2]) >> scale1;
   /// large scale
   istringstream (argv[3]) >> scale2;
-  /// threshold for DoN magnitude
-  istringstream (argv[4]) >> threshold;
+  istringstream (argv[4]) >> threshold;   // threshold for DoN magnitude
+  istringstream (argv[5]) >> segradius;   // threshold for radius segmentation
 
   // Load cloud in blob format
-  sensor_msgs::PointCloud2 blob;
+  pcl::PCLPointCloud2 blob;
   pcl::io::loadPCDFile (infile.c_str (), blob);
   pcl::PointCloud<PointXYZRGB>::Ptr cloud (new pcl::PointCloud<PointXYZRGB>);
-  pcl::fromROSMsg (blob, *cloud);
+  pcl::fromPCLPointCloud2 (blob, *cloud);
 
   // Create a search tree, use KDTreee for non-organized data.
   pcl::search::Search<PointXYZRGB>::Ptr tree;
@@ -171,7 +171,7 @@ main (int argc, char *argv[])
   for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it, j++)
   {
     pcl::PointCloud<PointNormal>::Ptr cloud_cluster_don (new pcl::PointCloud<PointNormal>);
-    for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); pit++)
+    for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
     {
       cloud_cluster_don->points.push_back (doncloud->points[*pit]);
     }

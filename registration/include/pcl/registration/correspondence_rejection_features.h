@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2011, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -48,8 +49,7 @@ namespace pcl
 {
   namespace registration
   {
-    /**
-      * @b CorrespondenceRejectorFeatures implements a correspondence rejection method based on a set of feature
+    /** \brief CorrespondenceRejectorFeatures implements a correspondence rejection method based on a set of feature
       * descriptors. Given an input feature space, the method checks if each feature in the source cloud has a
       * correspondence in the target cloud, either by checking the first K (given) point correspondences, or 
       * by defining a tolerance threshold via a radius in feature space.
@@ -57,7 +57,7 @@ namespace pcl
       * \author Radu B. Rusu
       * \ingroup registration
       */
-    class CorrespondenceRejectorFeatures: public CorrespondenceRejector
+    class PCL_EXPORTS CorrespondenceRejectorFeatures: public CorrespondenceRejector
     {
       using CorrespondenceRejector::input_correspondences_;
       using CorrespondenceRejector::rejection_name_;
@@ -135,12 +135,6 @@ namespace pcl
         setFeatureRepresentation (const typename pcl::PointRepresentation<FeatureT>::ConstPtr &fr,
                                   const std::string &key);
 
-        virtual bool
-        updateSource (const Eigen::Matrix4d &)
-        {
-          return (true);
-        }
-
       protected:
 
         /** \brief Apply the rejection algorithm.
@@ -160,6 +154,8 @@ namespace pcl
         class FeatureContainerInterface
         {
           public:
+            /** \brief Empty destructor */
+            virtual ~FeatureContainerInterface () {}
             virtual bool isValid () = 0;
             virtual double getCorrespondenceScore (int index) = 0;
             virtual bool isCorrespondenceValid (int index) = 0;
@@ -189,6 +185,9 @@ namespace pcl
             FeatureContainer () : thresh_(std::numeric_limits<double>::max ()), feature_representation_()
             {
             }
+      
+            /** \brief Empty destructor */
+            virtual ~FeatureContainer () {}
 
             inline void 
             setSourceFeature (const FeatureCloudConstPtr &source_features)
@@ -240,7 +239,7 @@ namespace pcl
             }
 
             /** \brief Obtain a score between a pair of correspondences.
-              * \param[in] the index to check in the list of correspondences
+              * \param[in] index the index to check in the list of correspondences
               * \return score the resultant computed score
               */
             virtual inline double
@@ -273,7 +272,7 @@ namespace pcl
 
             /** \brief Check whether the correspondence pair at the given index is valid
               * by computing the score and testing it against the user given threshold 
-              * \param[in] the index to check in the list of correspondences
+              * \param[in] index the index to check in the list of correspondences
               * \return true if the correspondence is good, false otherwise
               */
             virtual inline bool

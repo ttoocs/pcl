@@ -38,16 +38,17 @@
  *
  */
 
-#ifndef PCL_IN_HAND_SCANNER_IN_HAND_SCANNER_H
-#define PCL_IN_HAND_SCANNER_IN_HAND_SCANNER_H
+#ifndef PCL_APPS_IN_HAND_SCANNER_IN_HAND_SCANNER_H
+#define PCL_APPS_IN_HAND_SCANNER_IN_HAND_SCANNER_H
 
 #include <string>
 #include <sstream>
 #include <iomanip>
 
-#include <pcl/common/time.h>
+#include <pcl/pcl_exports.h>
 #include <pcl/apps/in_hand_scanner/boost.h>
 #include <pcl/apps/in_hand_scanner/common_types.h>
+#include <pcl/apps/in_hand_scanner/opengl_viewer.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward declarations
@@ -59,18 +60,11 @@ namespace pcl
 
   namespace ihs
   {
-    class CustomInteractorStyle;
     class ICP;
     class InputDataProcessing;
     class Integration;
+    class MeshProcessing;
   } // End namespace ihs
-
-  namespace visualization
-  {
-    class PCLVisualizer;
-    class KeyboardEvent;
-  } // End namespace visualization
-
 } // End namespace pcl
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -81,48 +75,17 @@ namespace pcl
 {
   namespace ihs
   {
-
-    class InHandScanner
+    /** \brief
+      * \todo Add Documentation
+      */
+    class PCL_EXPORTS InHandScanner : public pcl::ihs::OpenGLViewer
     {
+      Q_OBJECT
 
       public:
 
-        /** \brief Mode in which the scanner is currently running */
-        typedef enum RunningMode
-        {
-          RM_SHOW_MODEL          = 0, /**< Show the model shape (if one is available) */
-          RM_UNPROCESSED         = 1, /**< Shows the unprocessed input data */
-          RM_PROCESSED           = 2, /**< Shows the processed input data */
-          RM_REGISTRATION_CONT   = 3, /**< Registers new data to the first acquired data continuously */
-          RM_REGISTRATION_SINGLE = 4  /**< Registers new data once and returns to showing the processed data */
-        } RunningMode;
-
-      private:
-
-        typedef pcl::ihs::PointInput         PointInput;
-        typedef pcl::ihs::CloudInput         CloudInput;
-        typedef pcl::ihs::CloudInputPtr      CloudInputPtr;
-        typedef pcl::ihs::CloudInputConstPtr CloudInputConstPtr;
-
-        typedef pcl::ihs::PointProcessed         PointProcessed;
-        typedef pcl::ihs::CloudProcessed         CloudProcessed;
-        typedef pcl::ihs::CloudProcessedPtr      CloudProcessedPtr;
-        typedef pcl::ihs::CloudProcessedConstPtr CloudProcessedConstPtr;
-
-        typedef pcl::ihs::PointModel         PointModel;
-        typedef pcl::ihs::CloudModel         CloudModel;
-        typedef pcl::ihs::CloudModelPtr      CloudModelPtr;
-        typedef pcl::ihs::CloudModelConstPtr CloudModelConstPtr;
-
-        typedef pcl::ihs::Mesh         Mesh;
-        typedef pcl::ihs::MeshPtr      MeshPtr;
-        typedef pcl::ihs::MeshConstPtr MeshConstPtr;
-        typedef Mesh::Vertex           Vertex;
-        typedef Mesh::Face             Face;
-
-        typedef pcl::OpenNIGrabber                Grabber;
-        typedef boost::shared_ptr <Grabber>       GrabberPtr;
-        typedef boost::shared_ptr <const Grabber> GrabberConstPtr;
+        typedef pcl::ihs::OpenGLViewer  Base;
+        typedef pcl::ihs::InHandScanner Self;
 
         typedef pcl::ihs::InputDataProcessing                 InputDataProcessing;
         typedef boost::shared_ptr <InputDataProcessing>       InputDataProcessingPtr;
@@ -131,141 +94,218 @@ namespace pcl
         typedef pcl::ihs::ICP                 ICP;
         typedef boost::shared_ptr <ICP>       ICPPtr;
         typedef boost::shared_ptr <const ICP> ICPConstPtr;
-        typedef pcl::ihs::Transformation      Transformation;
 
         typedef pcl::ihs::Integration                 Integration;
         typedef boost::shared_ptr <Integration>       IntegrationPtr;
         typedef boost::shared_ptr <const Integration> IntegrationConstPtr;
 
-        typedef pcl::visualization::PCLVisualizer       PCLVisualizer;
-        typedef boost::shared_ptr <PCLVisualizer>       PCLVisualizerPtr;
-        typedef boost::shared_ptr <const PCLVisualizer> PCLVisualizerConstPtr;
+        typedef pcl::ihs::MeshProcessing                 MeshProcessing;
+        typedef boost::shared_ptr <MeshProcessing>       MeshProcessingPtr;
+        typedef boost::shared_ptr <const MeshProcessing> MeshProcessingConstPtr;
 
-        typedef pcl::ihs::CustomInteractorStyle InteractorStyle;
-        typedef InteractorStyle*                InteractorStylePtr;
-        typedef const InteractorStyle*          InteractorStyleConstPtr;
+        /** \brief Switch between different branches of the scanning pipeline. */
+        typedef enum RunningMode
+        {
+          RM_SHOW_MODEL          = 0, /**< Shows the model shape (if it is available). */
+          RM_UNPROCESSED         = 1, /**< Shows the unprocessed input data. */
+          RM_PROCESSED           = 2, /**< Shows the processed input data. */
+          RM_REGISTRATION_CONT   = 3, /**< Registers new data to the first acquired data continuously. */
+          RM_REGISTRATION_SINGLE = 4  /**< Registers new data once and returns to showing the processed data. */
+        } RunningMode;
 
-        class FPS
+        /** \brief File type for saving and loading files. */
+        typedef enum FileType
+        {
+          FT_PLY = 0, /**< Polygon File Format. */
+          FT_VTK = 1  /**< VTK File Format. */
+        } FileType;
+
+        /** \brief Constructor. */
+        explicit InHandScanner (Base* parent=0);
+
+        /** \brief Destructor. */
+        ~InHandScanner ();
+
+        /** \brief Get the input data processing. */
+        inline InputDataProcessing&
+        getInputDataProcessing () {return (*input_data_processing_);}
+
+        /** \brief Get the registration. */
+        inline ICP&
+        getICP () {return (*icp_);}
+
+        /** \brief Get the integration. */
+        inline Integration&
+        getIntegration () {return (*integration_);}
+
+      signals:
+
+        /** \brief Emitted when the running mode changes. */
+        void
+        runningModeChanged (RunningMode new_running_mode) const;
+
+      public slots:
+
+        /** \brief Start the grabber (enables the scanning pipeline). */
+        void
+        startGrabber ();
+
+        /** \brief Shows the unprocessed input data. */
+        void
+        showUnprocessedData ();
+
+        /** \brief Shows the processed input data. */
+        void
+        showProcessedData ();
+
+        /** \brief Registers new data to the first acquired data continuously. */
+        void
+        registerContinuously ();
+
+        /** \brief Registers new data once and returns to showing the processed data. */
+        void
+        registerOnce ();
+
+        /** \brief Show the model shape (if one is available). */
+        void
+        showModel ();
+
+        /** \brief Removes unfit vertices regardless of their age. Unfit vertices are those that have not been observed from enough directions. */
+        void
+        removeUnfitVertices ();
+
+        /** \brief Reset the scanning pipeline. */
+        void
+        reset ();
+
+        /** \brief Saves the model mesh in a file with the given filename and filetype.
+          * \note The extension of the filename is ignored!
+          */
+        void
+        saveAs (const std::string& filename, const FileType& filetype);
+
+        /** \see http://doc.qt.digia.com/qt/qwidget.html#keyPressEvent */
+        void
+        keyPressEvent (QKeyEvent* event);
+
+      private:
+
+        typedef pcl::PointXYZRGBA              PointXYZRGBA;
+        typedef pcl::PointCloud <PointXYZRGBA> CloudXYZRGBA;
+        typedef CloudXYZRGBA::Ptr              CloudXYZRGBAPtr;
+        typedef CloudXYZRGBA::ConstPtr         CloudXYZRGBAConstPtr;
+
+        typedef pcl::PointXYZRGBNormal              PointXYZRGBNormal;
+        typedef pcl::PointCloud <PointXYZRGBNormal> CloudXYZRGBNormal;
+        typedef CloudXYZRGBNormal::Ptr              CloudXYZRGBNormalPtr;
+        typedef CloudXYZRGBNormal::ConstPtr         CloudXYZRGBNormalConstPtr;
+
+        typedef pcl::ihs::PointIHS         PointIHS;
+        typedef pcl::ihs::CloudIHS         CloudIHS;
+        typedef pcl::ihs::CloudIHSPtr      CloudIHSPtr;
+        typedef pcl::ihs::CloudIHSConstPtr CloudIHSConstPtr;
+
+        typedef pcl::ihs::Mesh         Mesh;
+        typedef pcl::ihs::MeshPtr      MeshPtr;
+        typedef pcl::ihs::MeshConstPtr MeshConstPtr;
+
+        typedef pcl::OpenNIGrabber                Grabber;
+        typedef boost::shared_ptr <Grabber>       GrabberPtr;
+        typedef boost::shared_ptr <const Grabber> GrabberConstPtr;
+
+        /** \brief Helper object for the computation thread. Please have a look at the documentation of calcFPS. */
+        class ComputationFPS : public Base::FPS
         {
           public:
-            FPS () : fps_ (0.) {}
-          protected:
-            ~FPS () {}
-
-          public:
-            double& value ()       {return (fps_);}
-            double  value () const {return (fps_);}
-
-            std::string
-            str () const
-            {
-              std::stringstream ss;
-              ss << std::setprecision (1) << std::fixed << fps_;
-              return (ss.str ());
-            }
-
-          private:
-            double fps_;
-        };
-
-        class VisualizationFPS : public FPS
-        {
-          public:
-            VisualizationFPS () : FPS () {}
-            ~VisualizationFPS () {}
-        };
-        class ComputationFPS : public FPS
-        {
-          public:
-            ComputationFPS () : FPS () {}
+            ComputationFPS () : Base::FPS () {}
             ~ComputationFPS () {}
         };
 
-      public:
-
-        InHandScanner (int argc, char** argv);
-        ~InHandScanner ();
-
-        void
-        run ();
-
-        void
-        quit ();
-
-        void
-        setRunningMode (const RunningMode& mode);
-
-        void
-        resetRegistration ();
-
-        void
-        resetCamera ();
-
-      private:
-
-        void
-        newDataCallback (const CloudInputConstPtr& cloud_in);
-
-        void
-        drawClouds ();
-
-        void
-        drawMesh ();
-
-        void
-        drawCropBox ();
-
-        void
-        drawFPS ();
-
-        void
-        keyboardCallback (const pcl::visualization::KeyboardEvent& event, void*);
-
-        template <class FPS> void
-        calcFPS (FPS& fps) const
+        /** \brief Helper object for the visualization thread. Please have a look at the documentation of calcFPS. */
+        class VisualizationFPS : public Base::FPS
         {
-          static pcl::StopWatch sw;
-          static unsigned int count = 0;
+          public:
+            VisualizationFPS () : Base::FPS () {}
+            ~VisualizationFPS () {}
+        };
 
-          ++count;
-          if (sw.getTimeSeconds () >= 1.)
-          {
-            fps.value () = static_cast <double> (count) / sw.getTimeSeconds ();
-            count = 0;
-            sw.reset ();
-          }
-        }
+        /** \brief Called when new data arries from the grabber. The grabbing - registration - integration pipeline is implemented here. */
+        void
+        newDataCallback (const CloudXYZRGBAConstPtr& cloud_in);
 
-      private:
+        /** \see http://doc.qt.digia.com/qt/qwidget.html#paintEvent
+          * \see http://doc.qt.digia.com/qt/opengl-overpainting.html
+          */
+        void
+        paintEvent (QPaintEvent* event);
 
-        boost::mutex                mutex_;
-        bool                        run_;
-        VisualizationFPS            visualization_fps_;
-        ComputationFPS              computation_fps_;
-        RunningMode                 running_mode_;
-        unsigned int                iteration_;
+        /** \brief Draw text over the opengl scene.
+          * \see http://doc.qt.digia.com/qt/opengl-overpainting.html
+          */
+        void
+        drawText ();
 
-        PCLVisualizerPtr            visualizer_;
-        InteractorStylePtr          interactor_style_;
-        bool                        draw_crop_box_;
-        Eigen::Vector4f             pivot_;
+        /** \brief Actual implementeation of startGrabber (needed so it can be run in a different thread and doesn't block the application when starting up). */
+        void
+        startGrabberImpl ();
 
-        GrabberPtr                  grabber_;
+        ////////////////////////////////////////////////////////////////////////
+        // Members
+        ////////////////////////////////////////////////////////////////////////
+
+        /** \brief Synchronization. */
+        boost::mutex mutex_;
+
+        /** \brief Please have a look at the documentation of ComputationFPS. */
+        ComputationFPS computation_fps_;
+
+        /** \brief Please have a look at the documentation of VisualizationFPS. */
+        VisualizationFPS visualization_fps_;
+
+        /** \brief Switch between different branches of the scanning pipeline. */
+        RunningMode running_mode_;
+
+        /** \brief The iteration of the scanning pipeline (grab - register - integrate). */
+        unsigned int iteration_;
+
+        /** \brief Used to get new data from the sensor. */
+        GrabberPtr grabber_;
+
+        /** \brief This variable is true if the grabber is starting. */
+        bool starting_grabber_;
+
+        /** \brief Connection of the grabber signal with the data processing thread. */
         boost::signals2::connection new_data_connection_;
 
-        InputDataProcessingPtr      input_data_processing_;
+        /** \brief Processes the data from the sensor. Output is input to the registration. */
+        InputDataProcessingPtr input_data_processing_;
 
-        ICPPtr                      icp_;
-        Transformation              transformation_;
+        /** \brief Registration (Iterative Closest Point). */
+        ICPPtr icp_;
 
-        IntegrationPtr              integration_;
+        /** \brief Transformation that brings the data cloud into model coordinates. */
+        Eigen::Matrix4f transformation_;
 
-        CloudProcessedPtr           cloud_data_draw_;
-        MeshPtr                     mesh_model_draw_;
-        MeshPtr                     mesh_model_;
+        /** \brief Integrate the data cloud into a common model. */
+        IntegrationPtr integration_;
+
+        /** \brief Methods called after the integration. */
+        MeshProcessingPtr mesh_processing_;
+
+        /** \brief Model to which new data is registered to (stored as a mesh). */
+        MeshPtr mesh_model_;
+
+        /** \brief Prevent the application to crash while closing. */
+        bool destructor_called_;
+
+      public:
+
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     };
-
   } // End namespace ihs
 } // End namespace pcl
 
-#endif // PCL_IN_HAND_SCANNER_IN_HAND_SCANNER_H
+// http://doc.qt.digia.com/qt/qmetatype.html#Q_DECLARE_METATYPE
+Q_DECLARE_METATYPE (pcl::ihs::InHandScanner::RunningMode)
+
+#endif // PCL_APPS_IN_HAND_SCANNER_IN_HAND_SCANNER_H

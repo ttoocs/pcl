@@ -1,7 +1,10 @@
 /*
  * Software License Agreement (BSD License)
  *
+ *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
+ *
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -33,7 +36,11 @@
  *
  */
 
+#ifndef PCL_COMMON_NORMS_IMPL_HPP_
+#define PCL_COMMON_NORMS_IMPL_HPP_
+
 #include <pcl/pcl_macros.h>
+#include <pcl/console/print.h>
 
 namespace pcl
 {
@@ -231,3 +238,5 @@ HIK_Norm(FloatVectorT a, FloatVectorT b, int dim)
 }
 
 }
+#endif
+

@@ -41,13 +41,14 @@
 #define PCL_PCL_VISUALIZER_VTK_H_
 
 #if defined __GNUC__
-#pragma GCC system_header 
+#pragma GCC system_header
 #ifdef __DEPRECATED
 #undef __DEPRECATED
 #define __DEPRECATED_DISABLED__
 #endif
 #endif
 
+#include <vtkVersion.h>
 #include <vtkAppendPolyData.h>
 #include <vtkAssemblyPath.h>
 #include <vtkAxesActor.h>
@@ -157,9 +158,9 @@
 #endif
 #include <vtkSelection.h>
 
-#if VTK_MAJOR_VERSION==6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>4)
+#if VTK_MAJOR_VERSION>=6 || (VTK_MAJOR_VERSION==5 && VTK_MINOR_VERSION>4)
 #include <vtkHardwareSelector.h>
-#else 
+#else
 #include <vtkVisibleCellSelector.h>
 #endif
 
@@ -174,7 +175,9 @@
 #include <vtkVertexGlyphFilter.h>
 #include <vtkIdFilter.h>
 #include <vtkIdTypeArray.h>
-
+#include <vtkImageReader2Factory.h>
+#include <vtkImageReader2.h>
+#include <vtkImageData.h>
 
 #if defined __GNUC__ && defined __DEPRECATED_DISABLED__
 #define __DEPRECATED

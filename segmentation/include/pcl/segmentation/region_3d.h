@@ -16,7 +16,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -89,6 +89,20 @@ namespace pcl
         return (count_);
       }
 
+      /** \brief Get the curvature of the region. */
+      float
+      getCurvature () const
+      {
+        return (curvature_);
+      }
+
+      /** \brief Set the curvature of the region. */
+      void
+      setCurvature (float curvature)
+      {
+        curvature_ = curvature;
+      }
+
     protected:
       /** \brief The centroid of the region. */
       Eigen::Vector3f centroid_;
@@ -99,6 +113,9 @@ namespace pcl
       /** \brief The number of points in the region. */
       unsigned count_;
 
+      /** \brief The mean curvature of the region. */
+      float curvature_;
+      
     public:
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };

@@ -41,9 +41,12 @@
 
 #include <pcl/ModelCoefficients.h>
 #include <pcl/point_cloud.h>
-#include <pcl/visualization/vtk.h>
 #include <pcl/visualization/eigen.h>
 #include <pcl/geometry/planar_polygon.h>
+
+template <typename T> class vtkSmartPointer;
+class vtkDataSet;
+class vtkUnstructuredGrid;
 
 /**
   * \file pcl/visualization/common/shapes.h
@@ -188,6 +191,14 @@ namespace pcl
     PCL_EXPORTS vtkSmartPointer<vtkDataSet> 
     createPlane (const pcl::ModelCoefficients &coefficients);
 
+    /** \brief Create a planar shape from a set of model coefficients.
+      * \param[in] coefficients the model coefficients (a, b, c, d with ax+by+cz+d=0)
+      * \param[in] x,y,z projection of this point on the plane is used to get the center of the plane.
+      * \ingroup visualization
+      */
+    PCL_EXPORTS vtkSmartPointer<vtkDataSet> 
+    createPlane (const pcl::ModelCoefficients &coefficients, double x, double y, double z);
+    
     /** \brief Create a 2d circle shape from a set of model coefficients.
       * \param[in] coefficients the model coefficients (x, y, radius)
       * \param[in] z (optional) specify a z value (default: 0)
@@ -211,7 +222,27 @@ namespace pcl
     create2DCircle (const pcl::ModelCoefficients &coefficients, double z = 0.0);
 
     /** \brief Create a cone shape from a set of model coefficients.
-      * \param[in] coefficients the cone coefficients (point_on_axis, axis_direction, radius)
+      * \param[in] coefficients the cone coefficients (cone_apex, axis_direction, angle)
+      *
+      * \code
+      * // The following are given (or computed using sample consensus techniques -- see SampleConsensusModelCone)
+      * // Eigen::Vector3f cone_apex, axis_direction;
+      * // float angle;
+      * // Note: The height of the cone is set using the magnitude of the axis_direction vector.
+      *
+      * pcl::ModelCoefficients cone_coeff;
+      * plane_coeff.values.resize (7);    // We need 7 values
+      * plane_coeff.values[0] = cone_apex.x ();
+      * plane_coeff.values[1] = cone_apex.y ();
+      * plane_coeff.values[2] = cone_apex.z ();
+      * plane_coeff.values[3] = axis_direction.x ();
+      * plane_coeff.values[4] = axis_direction.y ();
+      * plane_coeff.values[5] = axis_direction.z ();
+      * plane_coeff.values[6] = angle (); // degrees
+      *
+      * vtkSmartPointer<vtkDataSet> data = pcl::visualization::createCone (cone_coeff);
+      * \endcode
+      *
       * \ingroup visualization
       */
     PCL_EXPORTS vtkSmartPointer<vtkDataSet> 
@@ -244,8 +275,6 @@ namespace pcl
       * \param[in] y_max is the maximum y value of the box
       * \param[in] z_min is the minimum z value of the box
       * \param[in] z_max is the maximum z value of the box
-      * \param[in] id the cube id/name (default: "cube")
-      * \param[in] viewport (optional) the id of the new viewport (default: 0)
       */
     PCL_EXPORTS vtkSmartPointer<vtkDataSet> 
     createCube (double x_min, double x_max,

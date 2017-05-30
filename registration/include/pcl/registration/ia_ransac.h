@@ -3,6 +3,7 @@
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2010-2012, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
  *
@@ -16,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -64,6 +65,7 @@ namespace pcl
       using Registration<PointSource, PointTarget>::max_iterations_;
       using Registration<PointSource, PointTarget>::tree_;
       using Registration<PointSource, PointTarget>::transformation_estimation_;
+      using Registration<PointSource, PointTarget>::converged_;
       using Registration<PointSource, PointTarget>::getClassName;
 
       typedef typename Registration<PointSource, PointTarget>::PointCloudSource PointCloudSource;
@@ -78,6 +80,9 @@ namespace pcl
       typedef pcl::PointCloud<FeatureT> FeatureCloud;
       typedef typename FeatureCloud::Ptr FeatureCloudPtr;
       typedef typename FeatureCloud::ConstPtr FeatureCloudConstPtr;
+
+      typedef boost::shared_ptr<SampleConsensusInitialAlignment<PointSource, PointTarget, FeatureT> > Ptr;
+      typedef boost::shared_ptr<const SampleConsensusInitialAlignment<PointSource, PointTarget, FeatureT> > ConstPtr;
 
 
       class ErrorFunctor
@@ -241,6 +246,7 @@ namespace pcl
 
       /** \brief Rigid transformation computation method.
         * \param output the transformed input point cloud dataset using the rigid transformation found
+        * \param guess The computed transforamtion
         */
       virtual void 
       computeTransformation (PointCloudSource &output, const Eigen::Matrix4f& guess);

@@ -41,9 +41,6 @@
 
 #include "octree_pointcloud.h"
 
-#include "octree_base.h"
-#include "octree2buf_base.h"
-
 namespace pcl
 {
   namespace octree
@@ -59,10 +56,11 @@ namespace pcl
      *  \author Julius Kammerl (julius@kammerl.de)
      */
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    template<typename PointT, typename LeafContainerT = OctreeContainerEmpty<int>,
-        typename BranchContainerT = OctreeContainerEmpty<int> >
+    template<typename PointT,
+             typename LeafContainerT = OctreeContainerEmpty,
+             typename BranchContainerT = OctreeContainerEmpty >
     class OctreePointCloudOccupancy : public OctreePointCloud<PointT, LeafContainerT,
-        BranchContainerT, OctreeBase<int, LeafContainerT, BranchContainerT> >
+        BranchContainerT, OctreeBase<LeafContainerT, BranchContainerT> >
 
     {
 
@@ -81,7 +79,7 @@ namespace pcl
          * */
         OctreePointCloudOccupancy (const double resolution_arg) :
             OctreePointCloud<PointT, LeafContainerT, BranchContainerT,
-                OctreeBase<int, LeafContainerT, BranchContainerT> > (resolution_arg)
+                OctreeBase<LeafContainerT, BranchContainerT> > (resolution_arg)
         {
         }
 
@@ -95,16 +93,16 @@ namespace pcl
          *  \param point_arg:  input point
          * */
         void setOccupiedVoxelAtPoint( const PointT& point_arg ) {
-        	OctreeKey key;
+            OctreeKey key;
 
             // make sure bounding box is big enough
-            adoptBoundingBoxToPoint (point_arg);
+            this->adoptBoundingBoxToPoint (point_arg);
 
             // generate key
-            genOctreeKeyforPoint (point_arg, key);
+            this->genOctreeKeyforPoint (point_arg, key);
 
             // add point to octree at key
-            this->addData (key, 0);
+            this->createLeaf (key);
         }
 
         /** \brief Set occupied voxels at all points from point cloud.

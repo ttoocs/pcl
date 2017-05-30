@@ -1,7 +1,10 @@
 /*
  * Software License Agreement (BSD License)
  *
+ *  Point Cloud Library (PCL) - www.pointclouds.org
  *  Copyright (c) 2009, Willow Garage, Inc.
+ *  Copyright (c) 2012-, Open Perception, Inc.
+ *
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -14,7 +17,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *   * Neither the name of the copyright holder(s) nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -154,7 +157,9 @@ namespace pcl
       inline void 
       setNrSubdivisions (int nr_subdiv) { nr_subdiv_ = nr_subdiv; }
 
-      /** \brief Get the number of subdivisions for the considered distance interval. */
+      /** \brief Get the number of subdivisions for the considered distance interval. 
+        * \return the number of subdivisions
+	*/
       inline int 
       getNrSubdivisions () const { return (nr_subdiv_); }
 
@@ -166,7 +171,9 @@ namespace pcl
       inline void 
       setPlaneRadius (double plane_radius) { plane_radius_ = plane_radius; }
 
-      /** \brief Get the maximum radius, above which everything can be considered planar. */
+      /** \brief Get the maximum radius, above which everything can be considered planar.
+        * \return the plane_radius used
+	*/
       inline double 
       getPlaneRadius () const { return (plane_radius_); }
 
@@ -184,11 +191,15 @@ namespace pcl
       inline void
       setSaveHistograms (bool save) { save_histograms_ = save; }
 
-      /** \brief Returns whether the full distance-angle histograms are being saved. */
+      /** \brief Returns whether the full distance-angle histograms are being saved. 
+        * \return true if the histograms are being be saved
+	*/
       inline bool
       getSaveHistograms () const { return (save_histograms_); }
 
-      /** \brief Returns a pointer to the list of full distance-angle histograms for all points. */
+      /** \brief Returns a pointer to the list of full distance-angle histograms for all points.
+        * \return the histogram being saved when computing RSD
+	*/
       inline boost::shared_ptr<std::vector<Eigen::MatrixXf, Eigen::aligned_allocator<Eigen::MatrixXf> > >
       getHistograms () const { return (histograms_); }
 
@@ -215,11 +226,6 @@ namespace pcl
       /** \brief Signals whether the full distance-angle histograms are being saved. */
       bool save_histograms_;
 
-      /** \brief Make the computeFeature (&Eigen::MatrixXf); inaccessible from outside the class
-        * \param[out] output the output point cloud 
-        */
-      void 
-      computeFeatureEigen (pcl::PointCloud<Eigen::MatrixXf> &output) {}
     public:
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };

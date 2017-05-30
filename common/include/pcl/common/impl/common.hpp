@@ -39,16 +39,31 @@
 #define PCL_COMMON_IMPL_H_
 
 #include <pcl/point_types.h>
+#include <pcl/common/common.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 inline double
-pcl::getAngle3D (const Eigen::Vector4f &v1, const Eigen::Vector4f &v2)
+pcl::getAngle3D (const Eigen::Vector4f &v1, const Eigen::Vector4f &v2, const bool in_degree)
 {
   // Compute the actual angle
-  double rad = v1.dot (v2) / sqrt (v1.squaredNorm () * v2.squaredNorm ());
-  if (rad < -1.0) rad = -1.0;
-  if (rad >  1.0) rad = 1.0;
-  return (acos (rad));
+  double rad = v1.normalized ().dot (v2.normalized ());
+  if (rad < -1.0)
+    rad = -1.0;
+  else if (rad >  1.0)
+    rad = 1.0;
+  return (in_degree ? acos (rad) * 180.0 / M_PI : acos (rad));
+}
+
+inline double
+pcl::getAngle3D (const Eigen::Vector3f &v1, const Eigen::Vector3f &v2, const bool in_degree)
+{
+  // Compute the actual angle
+  double rad = v1.normalized ().dot (v2.normalized ());
+  if (rad < -1.0)
+    rad = -1.0;
+  else if (rad >  1.0)
+    rad = 1.0;
+  return (in_degree ? acos (rad) * 180.0 / M_PI : acos (rad));
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,14 +132,15 @@ pcl::getMaxDistance (const pcl::PointCloud<PointT> &cloud, const Eigen::Vector4f
   float max_dist = -FLT_MAX;
   int max_idx = -1;
   float dist;
+  const Eigen::Vector3f pivot_pt3 = pivot_pt.head<3> ();
 
   // If the data is dense, we don't need to check for NaN
   if (cloud.is_dense)
   {
     for (size_t i = 0; i < cloud.points.size (); ++i)
     {
-      pcl::Vector4fMapConst pt = cloud.points[i].getVector4fMap ();
-      dist = (pivot_pt - pt).norm ();
+      pcl::Vector3fMapConst pt = cloud.points[i].getVector3fMap ();
+      dist = (pivot_pt3 - pt).norm ();
       if (dist > max_dist)
       {
         max_idx = int (i);
@@ -140,8 +156,8 @@ pcl::getMaxDistance (const pcl::PointCloud<PointT> &cloud, const Eigen::Vector4f
       // Check if the point is invalid
       if (!pcl_isfinite (cloud.points[i].x) || !pcl_isfinite (cloud.points[i].y) || !pcl_isfinite (cloud.points[i].z))
         continue;
-      pcl::Vector4fMapConst pt = cloud.points[i].getVector4fMap ();
-      dist = (pivot_pt - pt).norm ();
+      pcl::Vector3fMapConst pt = cloud.points[i].getVector3fMap ();
+      dist = (pivot_pt3 - pt).norm ();
       if (dist > max_dist)
       {
         max_idx = int (i);
@@ -164,14 +180,15 @@ pcl::getMaxDistance (const pcl::PointCloud<PointT> &cloud, const std::vector<int
   float max_dist = -FLT_MAX;
   int max_idx = -1;
   float dist;
+  const Eigen::Vector3f pivot_pt3 = pivot_pt.head<3> ();
 
   // If the data is dense, we don't need to check for NaN
   if (cloud.is_dense)
   {
     for (size_t i = 0; i < indices.size (); ++i)
     {
-      pcl::Vector4fMapConst pt = cloud.points[indices[i]].getVector4fMap ();
-      dist = (pivot_pt - pt).norm ();
+      pcl::Vector3fMapConst pt = cloud.points[indices[i]].getVector3fMap ();
+      dist = (pivot_pt3 - pt).norm ();
       if (dist > max_dist)
       {
         max_idx = static_cast<int> (i);
@@ -190,8 +207,8 @@ pcl::getMaxDistance (const pcl::PointCloud<PointT> &cloud, const std::vector<int
           !pcl_isfinite (cloud.points[indices[i]].z))
         continue;
 
-      pcl::Vector4fMapConst pt = cloud.points[indices[i]].getVector4fMap ();
-      dist = (pivot_pt - pt).norm ();
+      pcl::Vector3fMapConst pt = cloud.points[indices[i]].getVector3fMap ();
+      dist = (pivot_pt3 - pt).norm ();
       if (dist > max_dist)
       {
         max_idx = static_cast<int> (i);
@@ -201,7 +218,7 @@ pcl::getMaxDistance (const pcl::PointCloud<PointT> &cloud, const std::vector<int
   }
 
   if(max_idx != -1)
-    max_pt = cloud.points[max_idx].getVector4fMap ();
+    max_pt = cloud.points[indices[max_idx]].getVector4fMap ();
   else
     max_pt = Eigen::Vector4f(std::numeric_limits<float>::quiet_NaN(),std::numeric_limits<float>::quiet_NaN(),std::numeric_limits<float>::quiet_NaN(),std::numeric_limits<float>::quiet_NaN());
 }
@@ -383,6 +400,27 @@ pcl::getMinMax (const PointT &histogram, int len, float &min_p, float &max_p)
     min_p = (histogram[i] > min_p) ? min_p : histogram[i]; 
     max_p = (histogram[i] < max_p) ? max_p : histogram[i]; 
   }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+template <typename PointT> inline float
+pcl::calculatePolygonArea (const pcl::PointCloud<PointT> &polygon) 
+{
+  float area = 0.0f;
+  int num_points = polygon.size ();
+  int j = 0;
+  Eigen::Vector3f va,vb,res;
+
+  res(0) = res(1) = res(2) = 0.0f;
+  for (int i = 0; i < num_points; ++i) 
+  {
+    j = (i + 1) % num_points;
+    va = polygon[i].getVector3fMap ();
+    vb = polygon[j].getVector3fMap ();
+    res += va.cross (vb);
+  }
+  area = res.norm ();
+  return (area*0.5);
 }
 
 #endif  //#ifndef PCL_COMMON_IMPL_H_

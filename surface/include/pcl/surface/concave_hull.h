@@ -56,6 +56,9 @@ namespace pcl
   class ConcaveHull : public MeshConstruction<PointInT>
   {
     protected:
+      typedef boost::shared_ptr<ConcaveHull<PointInT> > Ptr;
+      typedef boost::shared_ptr<const ConcaveHull<PointInT> > ConstPtr;
+
       using PCLBase<PointInT>::input_;
       using PCLBase<PointInT>::indices_;
       using PCLBase<PointInT>::initCompute;
@@ -72,6 +75,9 @@ namespace pcl
       ConcaveHull () : alpha_ (0), keep_information_ (false), voronoi_centers_ (), dim_(0)
       {
       };
+      
+      /** \brief Empty destructor */
+      virtual ~ConcaveHull () {}
 
       /** \brief Compute a concave hull for all points given 
         *
@@ -128,18 +134,15 @@ namespace pcl
       }
 
       /** \brief Returns the dimensionality (2 or 3) of the calculated hull. */
-      inline int
-      getDim () const
-      {
-        PCL_WARN ("[pcl::%s::getDim] This method is deprecated. Please use getDimension () instead.\n", getClassName ().c_str ());
-        return dim_;
-      }
-
+      PCL_DEPRECATED ("[pcl::ConcaveHull::getDim] This method is deprecated. Please use getDimension () instead.")
+      int
+      getDim () const;
+      
       /** \brief Returns the dimensionality (2 or 3) of the calculated hull. */
       inline int
       getDimension () const
       {
-        return dim_;
+        return (dim_);
       }
 
       /** \brief Sets the dimension on the input data, 2D or 3D.
@@ -153,6 +156,16 @@ namespace pcl
         else
           PCL_ERROR ("[pcl::%s::setDimension] Invalid input dimension specified!\n", getClassName ().c_str ());
       }
+
+      /** \brief Retrieve the indices of the input point cloud that for the convex hull.
+        *
+        * \note Should only be called after reconstruction was performed and if the ConcaveHull is
+        * set to preserve information via setKeepInformation ().
+        *
+        * \param[out] hull_point_indices The indices of the points forming the point cloud
+        */
+      void
+      getHullPointIndices (pcl::PointIndices &hull_point_indices) const;
 
     protected:
       /** \brief Class get name method. */
@@ -194,6 +207,9 @@ namespace pcl
       
       /** \brief the dimensionality of the concave hull */
       int dim_;
+
+      /** \brief vector containing the point cloud indices of the convex hull points. */
+      pcl::PointIndices hull_indices_;
   };
 }
 

@@ -694,9 +694,11 @@ struct KinFuLSApp
 {
   enum { PCD_BIN = 1, PCD_ASCII = 2, PLY = 3, MESH_PLY = 7, MESH_VTK = 8 };
 
-  KinFuLSApp(pcl::Grabber& source, float vsz, float shiftDistance, int snapshotRate) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
-          registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), was_lost_(false), time_ms_ (0)
+  KinFuLSApp(pcl::Grabber& source, float vsz, float shiftDistance, int snapshotRate, int fragmentRate = 25) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
+          registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), was_lost_(false), time_ms_ (0),
+          record_log_ (false), fragment_rate_ (fragmentRate), frame_id_ (0), rgbd_odometry_ (false)
   {    
+  #define fragment_start_ 0
     //Init Kinfu Tracker
     Eigen::Vector3f volume_size = Vector3f::Constant (vsz/*meters*/);    
 
@@ -800,6 +802,36 @@ struct KinFuLSApp
     kinfu_->setDepthIntrinsics (evaluation_ptr_->fx, evaluation_ptr_->fy, evaluation_ptr_->cx, evaluation_ptr_->cy);
     image_view_.raycaster_ptr_ = RayCaster::Ptr( new RayCaster(kinfu_->rows (), kinfu_->cols (), evaluation_ptr_->fx, evaluation_ptr_->fy, evaluation_ptr_->cx, evaluation_ptr_->cy) );
   }
+
+//SPCL 
+   
+  void
+    toggleLogRecord( std::string record_log_file )
+  {
+    record_log_ = true;
+    record_log_file_ = record_log_file;
+    cout << "Log record: " << ( record_log_ ? "On" : "Off" ) << endl;
+  }
+
+  void
+    toggleCameraParam( std::string camera_file )
+  {
+    cout << "STUBBED: toggleCameraParam in kinfuAppLS.cpp" << endl;
+//    camera_.loadFromFile( camera_file );
+//
+    //kinfu_->setDepthIntrinsics( 582.62448167737955f, 582.69103270988637f, 313.04475870804731f, 238.44389626620386f );
+//    kinfu_->setDepthIntrinsics( camera_.fx_, camera_.fy_, camera_.cx_, camera_.cy_ );
+//    kinfu_->setDepthTruncationForICP( camera_.ICP_trunc_ );
+//    kinfu_->setDepthTruncationForIntegrate( camera_.integration_trunc_ );
+  }
+
+  void
+    toggleRGBDOdometry()
+  {
+    rgbd_odometry_ = true;
+    cout << "Using RGBDOdometry." << endl;
+  }
+//END SPCL
 
   void execute(const PtrStepSz<const unsigned short>& depth, const PtrStepSz<const pcl::gpu::kinfuLS::PixelRGB>& rgb24, bool has_data)
   {        
@@ -1100,6 +1132,19 @@ struct KinFuLSApp
   bool pcd_source_;
   float focal_length_;
 
+  //SPCL
+  bool record_log_;
+  string record_log_file_;
+  
+  int fragment_rate_;
+  int frame_id_;
+
+  bool rgbd_odometry_;
+  //TODO: Camera stuffs
+  //CameraParam camera_;
+
+  //SPCL
+
   pcl::Grabber& capture_;
   KinfuTracker *kinfu_;
 
@@ -1270,7 +1315,7 @@ main (int argc, char* argv[])
   bool triggered_capture = false;
   bool pcd_input = false;
 
-  std::string eval_folder, match_file, openni_device, oni_file, pcd_dir;
+  std::string eval_folder, match_file, openni_device, oni_file, pcd_dir, camera_file;
   try
   {    
     if (pc::parse_argument (argc, argv, "-dev", openni_device) > 0)

@@ -1234,6 +1234,12 @@ print_cli_help ()
   cout << "    --volume_size <in_meters>, -vs      : define integration volume size" << endl;
   cout << "    --shifting_distance <in_meters>, -sd : define shifting threshold (distance target-point / cube center)" << endl;
   cout << "    --snapshot_rate <X_frames>, -sr     : Extract RGB textures every <X_frames>. Default: 45  " << endl;
+//SPCL
+  cout << "    --fragment <X_frames>               : fragments the stream every <X_frames>" << endl;
+  cout << "    --rgbd_odometry                     : turn on rgbd odometry (overwrite kintinuous)" << endl;
+  cout << "    --record_log <log_file>             : record transformation log file" << endl;
+  cout << "    --camera <param_file>               : launch parameters from the file" << endl;
+//SPCL
   cout << endl << "";
   cout << "Valid depth data sources:" << endl; 
   cout << "    -dev <device> (default), -oni <oni_file>, -pcd <pcd_file or directory>" << endl;
@@ -1319,6 +1325,10 @@ main (int argc, char* argv[])
   pc::parse_argument (argc, argv, "--snapshot_rate", snapshot_rate);
   pc::parse_argument (argc, argv, "-sr", snapshot_rate);
 
+  int fragment_rate = 0;
+  pc::parse_argument (argc, argv, "--fragment", fragment_rate);
+
+
   KinFuLSApp app (*capture, volume_size, shift_distance, snapshot_rate);
 
   if (pc::parse_argument (argc, argv, "-eval", eval_folder) > 0)
@@ -1344,6 +1354,21 @@ main (int argc, char* argv[])
 
   if (pc::find_switch (argc, argv, "--extract-textures") || pc::find_switch (argc, argv, "-et"))      
     app.enable_texture_extraction_ = true;
+
+//SPCL args
+  if ( pc::find_switch( argc, argv, "--rgbd_odometry" ) )  
+    app.toggleRGBDOdometry();
+
+  if ( pc::find_switch (argc, argv, "--record_log") ) {
+    std::string record_log_file;
+    pc::parse_argument( argc, argv, "--record_log", record_log_file );
+    app.toggleLogRecord( record_log_file );
+  }
+  
+  if ( pc::parse_argument( argc, argv, "--camera", camera_file ) > 0 ) {
+    app.toggleCameraParam( camera_file );
+  }
+
 
   // executing
   if (triggered_capture) 

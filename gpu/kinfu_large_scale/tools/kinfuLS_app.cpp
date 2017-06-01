@@ -1077,7 +1077,83 @@ struct KinFuLSApp
       image_view_.showDepth (depth_);
       //image_view_.showGeneratedDepth(kinfu_, kinfu_->getCameraPose());
 
-    }
+
+      //SPCL stuff:
+      //TODO: See if relivant - it is, it's the thing called every grame if recording..
+    
+			if ( record_log_ ) {
+				//if ( use_schedule_ ) { //Not doing this.
+/*        if( false ) {
+					if ( framed_transformation_.flag_ & framed_transformation_.SaveAbsoluteMatrix ) {
+						kinfu_traj_.data_.push_back( FramedTransformation(
+							kinfu_traj_.data_.size(),
+							frame_id_ - 1,
+							frame_id_,
+							kinfu_->getCameraPose().matrix()
+							) );
+						kinfu_traj_.cov_.push_back( kinfu_->getCoVarianceMatrix() );
+					}
+					if ( framed_transformation_.flag_ & framed_transformation_.ResetFlag ) {
+						schedule_matrices_.clear();
+					}
+					if ( framed_transformation_.flag_ & framed_transformation_.PushMatrixHashFlag ) {
+						pair< int, FramedTransformation > map_data;
+						schedule_matrices_.insert( pair< int, Matrix4f >( frame_id_ - 1, kinfu_->getCameraPose().matrix().inverse() ) );
+						//PCL_INFO( "Frame #%d : insert matrix into hash map\n", frame_id_ );
+					} else if ( framed_transformation_.flag_ & framed_transformation_.IgnoreIntegrationFlag ) {
+						if ( framed_transformation_.flag_ & framed_transformation_.SaveAbsoluteMatrix ) {
+						} else {
+							int i = frame_id_ - 1;
+							vector< int > & prev = next_pointers_[ i ];
+							hash_map< int, Matrix4f >::const_iterator it;
+							for ( int k = 0; k < prev.size(); k++ ) {
+								it = schedule_matrices_.find( prev[ k ] );
+								if ( it != schedule_matrices_.end() ) {
+									// found!
+									kinfu_traj_.data_.push_back( FramedTransformation(
+										kinfu_traj_.data_.size(),
+										prev[ k ] + 1,
+										frame_id_,
+										it->second * kinfu_->getCameraPose().matrix()
+										) );
+									kinfu_traj_.cov_.push_back( kinfu_->getCoVarianceMatrix() );
+									//PCL_INFO( "Frame #%d : find edge base %d\n", frame_id_, prev[ k ] + 1 );
+								} else {
+									// not found! write down the absolute transformation
+									kinfu_traj_.data_.push_back( FramedTransformation(
+										kinfu_traj_.data_.size(),
+										file_index_,
+										frame_id_,
+										kinfu_->getCameraPose().matrix()
+										) );
+									kinfu_traj_.cov_.push_back( kinfu_->getCoVarianceMatrix() );
+									break;
+									//PCL_INFO( "Frame #%d : find edge base %d\n", frame_id_, prev[ k ] + 1 );
+								}
+							}
+						}
+					} 
+        } //End use_schedule
+          else if ( use_graph_registration_ ) {
+					if ( framed_transformation_.flag_ & framed_transformation_.IgnoreIntegrationFlag ) {
+						kinfu_traj_.data_.push_back( FramedTransformation( kinfu_traj_.data_.size(), rgbd_graph_.tail_frame_, frame_id_, rgbd_graph_.tail_inv_ * kinfu_->getCameraPose().matrix() ) );
+						//cout << rgbd_graph_.tail_inv_ << endl;
+						//cout << kinfu_->getCameraPose().matrix() << endl;
+						//cout << rgbd_graph_.tail_inv_ * kinfu_->getCameraPose().matrix() << endl;
+					}
+				} 
+        else */
+         {
+					if ( kinfu_->getGlobalTime() > 0 ) {
+						// global_time_ == 0 only when lost and reset, in this case, we lose one frame
+						kinfu_traj_.data_.push_back( FramedTransformation( kinfu_traj_.data_.size(), kinfu_->getGlobalTime() - 1, frame_id_, kinfu_->getCameraPose().matrix() ) );
+					}
+				}
+			}
+//      */
+      //END SPCL
+
+    } //End execute?
 
     if (scan_ || (!was_lost_ && kinfu_->icpIsLost ()) ) //if scan mode is OR and ICP just lost itself => show current volume as point cloud
     {
@@ -1272,6 +1348,10 @@ struct KinFuLSApp
 
       if (!triggered_capture)
         capture_.stop (); // Stop stream
+
+      if( record_log_ ){
+        writeLogFile ();
+      }
     }
     c.disconnect();
   }
@@ -1439,6 +1519,7 @@ struct KinFuLSApp
       default:
         break;
       }
+
   }
 
 };

@@ -601,6 +601,12 @@ namespace pcl
             return (has_shifted_);
           }
 
+          //SPCL:
+          int getGlobalTime(){
+            return global_time_;
+          }
+
+
         private:
           
           /** \brief Allocates all GPU internal buffers.

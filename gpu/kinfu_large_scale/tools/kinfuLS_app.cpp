@@ -333,7 +333,7 @@ struct BBox {
 };
 
 struct RGBDTrajectory {
-	vector< pcl::gpu::FramedTransformation > data_;
+	vector< pcl::gpu::kinfuLS::FramedTransformation > data_;
 	vector< Eigen::Matrix<double, 6, 6, Eigen::RowMajor> > cov_;
 	int index_;
 	Eigen::Matrix4f head_inv_;

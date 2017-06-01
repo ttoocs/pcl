@@ -64,7 +64,366 @@ namespace pcl
   namespace gpu
   {
     namespace kinfuLS
-    {        
+    { 
+      //SPCL
+
+    struct FramedTransformation {
+	  enum RegistrationType { Kinfu = 0, DirectApply = 1, InitializeOnly = 2, IncrementalOnly = 3 };
+	  enum ActionFlag {
+		  ResetFlag = 0x1,					// if reset at the very beginning
+		  IgnoreRegistrationFlag = 0x2,		// if discard the registration
+		  IgnoreIntegrationFlag = 0x4,		// if discard integration
+		  PushMatrixHashFlag = 0x8,			// if push the transformation matrix into the hash table
+		  SavePointCloudFlag = 0x10,		// if save point cloud after execution
+		  SaveAbsoluteMatrix = 0x20,		// if save absolute matrix, work with IgnoreIntegrationFlag
+		  ExtractSLACMatrix = 0x40,			// if extract SLAC matrix
+	  };
+
+      int id1_;
+	  int id2_;
+      int frame_;
+	  RegistrationType type_;
+	  int flag_;
+      Eigen::Matrix4f transformation_;
+	  FramedTransformation() : type_( Kinfu ), flag_( 0 ) {}
+      FramedTransformation( int id1, int id2, int f, Eigen::Matrix4f t ) : id1_( id1 ), id2_( id2 ), frame_( f ), transformation_( t ), type_( DirectApply ), flag_( 0 ) {}
+      FramedTransformation( int id1, int id2, int f, Eigen::Matrix4f t, RegistrationType tp, int flg ) 
+		  : id1_( id1 ), id2_( id2 ), frame_( f ), transformation_( t ), type_( tp ), flag_( flg ) {}
+    };
+
+	struct Coordinate {
+	public:
+		int idx_[ 8 ];
+		float val_[ 8 ];
+		float nval_[ 8 ];
+	};
+
+	class ControlGrid
+	{
+	public:
+		ControlGrid(void) {};
+		~ControlGrid(void) {};
+
+	public:
+		std::vector< Eigen::Vector3f > ctr_;
+		int resolution_;
+		float length_;
+		float unit_length_;
+		int min_bound_[ 3 ];
+		int max_bound_[ 3 ];
+		Eigen::Matrix4f init_pose_;
+		Eigen::Matrix4f init_pose_inv_;
+
+	public:
+		void ResetBBox() { min_bound_[ 0 ] = min_bound_[ 1 ] = min_bound_[ 2 ] = 100000000; max_bound_[ 0 ] = max_bound_[ 1 ] = max_bound_[ 2 ] = -100000000; }
+		void RegulateBBox( float vi, int i ) {
+			int v0 = ( int )floor( vi / unit_length_ ) - 1;
+			int v1 = ( int )ceil( vi / unit_length_ ) + 1;
+			if ( v0 < min_bound_[ i ] ) {
+				min_bound_[ i ] = v0;
+			}
+			if ( v1 > max_bound_[ i ] ) {
+				max_bound_[ i ] = v1;
+			}
+		}
+		inline int GetIndex( int i, int j, int k ) {
+			return i + j * ( resolution_ + 1 ) + k * ( resolution_ + 1 ) * ( resolution_ + 1 );
+		}
+		inline bool GetCoordinate( const Eigen::Vector3f & pt, Coordinate & coo ) {
+			int corner[ 3 ] = {
+				( int )floor( pt( 0 ) / unit_length_ ),
+				( int )floor( pt( 1 ) / unit_length_ ),
+				( int )floor( pt( 2 ) / unit_length_ )
+			};
+
+			if ( corner[ 0 ] < 0 || corner[ 0 ] >= resolution_
+				|| corner[ 1 ] < 0 || corner[ 1 ] >= resolution_
+				|| corner[ 2 ] < 0 || corner[ 2 ] >= resolution_ )
+				return false;
+
+			float residual[ 3 ] = {
+				pt( 0 ) / unit_length_ - corner[ 0 ],
+				pt( 1 ) / unit_length_ - corner[ 1 ],
+				pt( 2 ) / unit_length_ - corner[ 2 ]
+			};
+			// for speed, skip sanity check
+			coo.idx_[ 0 ] = GetIndex( corner[ 0 ], corner[ 1 ], corner[ 2 ] );
+			coo.idx_[ 1 ] = GetIndex( corner[ 0 ], corner[ 1 ], corner[ 2 ] + 1 );
+			coo.idx_[ 2 ] = GetIndex( corner[ 0 ], corner[ 1 ] + 1, corner[ 2 ] );
+			coo.idx_[ 3 ] = GetIndex( corner[ 0 ], corner[ 1 ] + 1, corner[ 2 ] + 1 );
+			coo.idx_[ 4 ] = GetIndex( corner[ 0 ] + 1, corner[ 1 ], corner[ 2 ] );
+			coo.idx_[ 5 ] = GetIndex( corner[ 0 ] + 1, corner[ 1 ], corner[ 2 ] + 1 );
+			coo.idx_[ 6 ] = GetIndex( corner[ 0 ] + 1, corner[ 1 ] + 1, corner[ 2 ] );
+			coo.idx_[ 7 ] = GetIndex( corner[ 0 ] + 1, corner[ 1 ] + 1, corner[ 2 ] + 1 );
+
+			coo.val_[ 0 ] = ( 1 - residual[ 0 ] ) * ( 1 - residual[ 1 ] ) * ( 1 - residual[ 2 ] );
+			coo.val_[ 1 ] = ( 1 - residual[ 0 ] ) * ( 1 - residual[ 1 ] ) * ( residual[ 2 ] );
+			coo.val_[ 2 ] = ( 1 - residual[ 0 ] ) * ( residual[ 1 ] ) * ( 1 - residual[ 2 ] );
+			coo.val_[ 3 ] = ( 1 - residual[ 0 ] ) * ( residual[ 1 ] ) * ( residual[ 2 ] );
+			coo.val_[ 4 ] = ( residual[ 0 ] ) * ( 1 - residual[ 1 ] ) * ( 1 - residual[ 2 ] );
+			coo.val_[ 5 ] = ( residual[ 0 ] ) * ( 1 - residual[ 1 ] ) * ( residual[ 2 ] );
+			coo.val_[ 6 ] = ( residual[ 0 ] ) * ( residual[ 1 ] ) * ( 1 - residual[ 2 ] );
+			coo.val_[ 7 ] = ( residual[ 0 ] ) * ( residual[ 1 ] ) * ( residual[ 2 ] );
+
+			return true;
+		}
+		inline void GetPosition( const Coordinate & coo, Eigen::Vector3f & pos ) {
+			//cout << coo.idx_[ 0 ] << ", " << coo.idx_[ 1 ] << ", " << coo.idx_[ 2 ] << ", " << coo.idx_[ 3 ] << ", " << coo.idx_[ 4 ] << ", " << coo.idx_[ 5 ] << ", " << coo.idx_[ 6 ] << ", " << coo.idx_[ 7 ] << ", " << endl;
+			//cout << coo.val_[ 0 ] << ", " << coo.val_[ 1 ] << ", " << coo.val_[ 2 ] << ", " << coo.val_[ 3 ] << ", " << coo.val_[ 4 ] << ", " << coo.val_[ 5 ] << ", " << coo.val_[ 6 ] << ", " << coo.val_[ 7 ] << ", " << endl;
+			//std::cout << ctr_[ coo.idx_[ 0 ] ] << std::endl;
+			pos = coo.val_[ 0 ] * ctr_[ coo.idx_[ 0 ] ] + coo.val_[ 1 ] * ctr_[ coo.idx_[ 1 ] ]
+				+ coo.val_[ 2 ] * ctr_[ coo.idx_[ 2 ] ] + coo.val_[ 3 ] * ctr_[ coo.idx_[ 3 ] ]
+				+ coo.val_[ 4 ] * ctr_[ coo.idx_[ 4 ] ] + coo.val_[ 5 ] * ctr_[ coo.idx_[ 5 ] ]
+				+ coo.val_[ 6 ] * ctr_[ coo.idx_[ 6 ] ] + coo.val_[ 7 ] * ctr_[ coo.idx_[ 7 ] ];
+		}
+		inline void Init( int res, double len, const Eigen::Matrix4f & init_pose ) {
+			init_pose_ = init_pose;
+			init_pose_inv_ = init_pose.inverse();
+			resolution_ = res;
+			length_ = len;
+			unit_length_ = length_ / resolution_;
+
+			int total = ( res + 1 ) * ( res + 1 ) * ( res + 1 );
+			ctr_.resize( total );
+			for ( int i = 0; i <= resolution_; i++ ) {
+				for ( int j = 0; j <= resolution_; j++ ) {
+					for ( int k = 0; k <= resolution_; k++ ) {
+						Eigen::Vector4f pos( i * unit_length_, j * unit_length_, k * unit_length_, 1 );
+						Eigen::Vector4f ppos = pos; // * 1.05;
+						ctr_[ GetIndex( i, j, k ) ]( 0 ) = ppos( 0 );
+						ctr_[ GetIndex( i, j, k ) ]( 1 ) = ppos( 1 );
+						ctr_[ GetIndex( i, j, k ) ]( 2 ) = ppos( 2 );
+					}
+				}
+			}
+		}
+	};
+
+	struct SLACPoint {
+	public:
+		int idx_[ 8 ];
+		float n_[ 3 ];
+		float val_[ 8 ];
+		float nval_[ 8 ];
+		float p_[ 3 ];
+	};
+
+	class SLACPointCloud
+	{
+	public:
+		typedef boost::shared_ptr< SLACPointCloud > Ptr;
+
+	public:
+		SLACPointCloud( int index = 0, int resolution = 12, float length = 3.0f ) {
+			resolution_ = resolution;
+			length_ = length;
+			unit_length_ = length / resolution;
+			index_ = index;
+			nper_ = ( resolution_ + 1 ) * ( resolution_ + 1 ) * ( resolution_ + 1 ) * 3;
+			offset_ = index * nper_;
+		}
+
+		~SLACPointCloud(void) {}
+
+	public:
+		int resolution_;
+		int nper_;
+		int offset_;
+		int index_;
+		float length_;
+		float unit_length_;
+
+	public:
+		std::vector< SLACPoint > points_;
+
+	public:
+		void Init( PointCloud< PointXYZ >::Ptr pc, PointCloud< PointXYZ >::Ptr nc ) {
+			for ( int i = 0; i < ( int )pc->points.size(); i++ ) {
+				float x[ 6 ];
+				x[ 0 ] = pc->points[ i ].x;
+				x[ 1 ] = pc->points[ i ].y;
+				x[ 2 ] = pc->points[ i ].z;
+				x[ 3 ] = nc->points[ i ].x;
+				x[ 4 ] = nc->points[ i ].y;
+				x[ 5 ] = nc->points[ i ].z;
+				points_.resize( points_.size() + 1 );
+				if ( GetCoordinate( x, points_.back() ) == false ) {
+					printf( "Error!!\n" );
+					return;
+				}
+			}
+		}
+
+	public:
+		bool IsValidPoint( int i ) {
+			if ( std::isnan( points_[ i ].p_[ 0 ] ) || std::isnan( points_[ i ].p_[ 1 ] ) || std::isnan( points_[ i ].p_[ 2 ] ) || 
+				std::isnan( points_[ i ].n_[ 0 ] ) || std::isnan( points_[ i ].n_[ 1 ] ) || std::isnan( points_[ i ].n_[ 2 ] ) )
+				return false;
+			else
+				return true;
+		}
+
+	public:
+		void UpdateAllNormal( const Eigen::VectorXd & ctr ) {
+			for ( int i = 0; i < ( int )points_.size(); i++ ) {
+				UpdateNormal( ctr, points_[ i ] );
+			}
+		}
+
+		void UpdateAllPointPN( const Eigen::VectorXd & ctr ) {
+			for ( int i = 0; i < ( int )points_.size(); i++ ) {
+				UpdateNormal( ctr, points_[ i ] );
+				Eigen::Vector3f pos = UpdatePoint( ctr, points_[ i ] );
+				points_[ i ].p_[ 0 ] = pos( 0 );
+				points_[ i ].p_[ 1 ] = pos( 1 );
+				points_[ i ].p_[ 2 ] = pos( 2 );
+			}
+		}
+
+		inline int GetIndex( int i, int j, int k ) {
+			return i + j * ( resolution_ + 1 ) + k * ( resolution_ + 1 ) * ( resolution_ + 1 );
+		}
+
+		inline void UpdateNormal( const Eigen::VectorXd & ctr, SLACPoint & point ) {
+			for ( int i = 0; i < 3; i++ ) {
+				point.n_[ i ] = 0.0f;
+				for ( int j = 0; j < 8; j++ ) {
+					point.n_[ i ] += point.nval_[ j ] * ( float )ctr( point.idx_[ j ] + i + offset_ );
+				}
+			}
+			float len = sqrt( point.n_[ 0 ] * point.n_[ 0 ] + point.n_[ 1 ] * point.n_[ 1 ] + point.n_[ 2 ] * point.n_[ 2 ] );
+			point.n_[ 0 ] /= len;
+			point.n_[ 1 ] /= len;
+			point.n_[ 2 ] /= len;
+		}
+
+		inline void UpdatePose( const Eigen::Matrix4f & inc_pose ) {
+			Eigen::Vector4f p, n;
+			for ( int i = 0; i < ( int )points_.size(); i++ ) {
+				SLACPoint & point = points_[ i ];
+				//cout << point.p_[ 0 ] << endl << point.p_[ 1 ] << endl << point.p_[ 2 ] << endl << point.p_[ 3 ] << endl << point.p_[ 4 ] << endl << point.p_[ 5 ] << endl;
+				p = inc_pose * Eigen::Vector4f( point.p_[ 0 ], point.p_[ 1 ], point.p_[ 2 ], 1 );
+				n = inc_pose * Eigen::Vector4f( point.n_[ 0 ], point.n_[ 1 ], point.n_[ 2 ], 0 );
+				point.p_[ 0 ] = p( 0 );
+				point.p_[ 1 ] = p( 1 );
+				point.p_[ 2 ] = p( 2 );
+				point.n_[ 0 ] = n( 0 );
+				point.n_[ 1 ] = n( 1 );
+				point.n_[ 2 ] = n( 2 );
+				//cout << point.p_[ 0 ] << endl << point.p_[ 1 ] << endl << point.p_[ 2 ] << endl << point.p_[ 3 ] << endl << point.p_[ 4 ] << endl << point.p_[ 5 ] << endl;
+				//cout << endl;
+			}
+		}
+
+		inline Eigen::Vector3f UpdatePoint( const Eigen::VectorXd & ctr, SLACPoint & point ) {
+			Eigen::Vector3f pos;
+			for ( int i = 0; i < 3; i++ ) {
+				pos( i ) = 0.0;
+				for ( int j = 0; j < 8; j++ ) {
+					pos( i ) += point.val_[ j ] * ( float )ctr( point.idx_[ j ] + i + offset_ );
+				}
+			}
+			return pos;
+		}
+
+		inline bool GetCoordinate( float pt[ 6 ], SLACPoint & point ) {
+			point.p_[ 0 ] = pt[ 0 ];
+			point.p_[ 1 ] = pt[ 1 ];
+			point.p_[ 2 ] = pt[ 2 ];
+
+			int corner[ 3 ] = {
+				( int )floor( pt[ 0 ] / unit_length_ ),
+				( int )floor( pt[ 1 ] / unit_length_ ),
+				( int )floor( pt[ 2 ] / unit_length_ )
+			};
+
+			if ( corner[ 0 ] < 0 || corner[ 0 ] >= resolution_
+				|| corner[ 1 ] < 0 || corner[ 1 ] >= resolution_
+				|| corner[ 2 ] < 0 || corner[ 2 ] >= resolution_ )
+				return false;
+
+			float residual[ 3 ] = {
+				pt[ 0 ] / unit_length_ - corner[ 0 ],
+				pt[ 1 ] / unit_length_ - corner[ 1 ],
+				pt[ 2 ] / unit_length_ - corner[ 2 ]
+			};
+			// for speed, skip sanity check
+			point.idx_[ 0 ] = GetIndex( corner[ 0 ], corner[ 1 ], corner[ 2 ] ) * 3;
+			point.idx_[ 1 ] = GetIndex( corner[ 0 ], corner[ 1 ], corner[ 2 ] + 1 ) * 3;
+			point.idx_[ 2 ] = GetIndex( corner[ 0 ], corner[ 1 ] + 1, corner[ 2 ] ) * 3;
+			point.idx_[ 3 ] = GetIndex( corner[ 0 ], corner[ 1 ] + 1, corner[ 2 ] + 1 ) * 3;
+			point.idx_[ 4 ] = GetIndex( corner[ 0 ] + 1, corner[ 1 ], corner[ 2 ] ) * 3;
+			point.idx_[ 5 ] = GetIndex( corner[ 0 ] + 1, corner[ 1 ], corner[ 2 ] + 1 ) * 3;
+			point.idx_[ 6 ] = GetIndex( corner[ 0 ] + 1, corner[ 1 ] + 1, corner[ 2 ] ) * 3;
+			point.idx_[ 7 ] = GetIndex( corner[ 0 ] + 1, corner[ 1 ] + 1, corner[ 2 ] + 1 ) * 3;
+
+			point.val_[ 0 ] = ( 1 - residual[ 0 ] ) * ( 1 - residual[ 1 ] ) * ( 1 - residual[ 2 ] );
+			point.val_[ 1 ] = ( 1 - residual[ 0 ] ) * ( 1 - residual[ 1 ] ) * ( residual[ 2 ] );
+			point.val_[ 2 ] = ( 1 - residual[ 0 ] ) * ( residual[ 1 ] ) * ( 1 - residual[ 2 ] );
+			point.val_[ 3 ] = ( 1 - residual[ 0 ] ) * ( residual[ 1 ] ) * ( residual[ 2 ] );
+			point.val_[ 4 ] = ( residual[ 0 ] ) * ( 1 - residual[ 1 ] ) * ( 1 - residual[ 2 ] );
+			point.val_[ 5 ] = ( residual[ 0 ] ) * ( 1 - residual[ 1 ] ) * ( residual[ 2 ] );
+			point.val_[ 6 ] = ( residual[ 0 ] ) * ( residual[ 1 ] ) * ( 1 - residual[ 2 ] );
+			point.val_[ 7 ] = ( residual[ 0 ] ) * ( residual[ 1 ] ) * ( residual[ 2 ] );
+
+			pt[ 3 ] /= unit_length_;
+			pt[ 4 ] /= unit_length_;
+			pt[ 5 ] /= unit_length_;
+			point.nval_[ 0 ] = 
+				- pt[ 3 ] * ( 1 - residual[ 1 ] ) * ( 1 - residual[ 2 ] ) 
+				- pt[ 4 ] * ( 1 - residual[ 0 ] ) * ( 1 - residual[ 2 ] ) 
+				- pt[ 5 ] * ( 1 - residual[ 0 ] ) * ( 1 - residual[ 1 ] );
+			point.nval_[ 1 ] = 
+				- pt[ 3 ] * ( 1 - residual[ 1 ] ) * ( residual[ 2 ] ) 
+				- pt[ 4 ] * ( 1 - residual[ 0 ] ) * ( residual[ 2 ] ) 
+				+ pt[ 5 ] * ( 1 - residual[ 0 ] ) * ( 1 - residual[ 1 ] );
+			point.nval_[ 2 ] = 
+				- pt[ 3 ] * ( residual[ 1 ] ) * ( 1 - residual[ 2 ] ) 
+				+ pt[ 4 ] * ( 1 - residual[ 0 ] ) * ( 1 - residual[ 2 ] ) 
+				- pt[ 5 ] * ( 1 - residual[ 0 ] ) * ( residual[ 1 ] );
+			point.nval_[ 3 ] = 
+				- pt[ 3 ] * ( residual[ 1 ] ) * ( residual[ 2 ] ) 
+				+ pt[ 4 ] * ( 1 - residual[ 0 ] ) * ( residual[ 2 ] ) 
+				+ pt[ 5 ] * ( 1 - residual[ 0 ] ) * ( residual[ 1 ] );
+			point.nval_[ 4 ] = 
+				  pt[ 3 ] * ( 1 - residual[ 1 ] ) * ( 1 - residual[ 2 ] ) 
+				- pt[ 4 ] * ( residual[ 0 ] ) * ( 1 - residual[ 2 ] ) 
+				- pt[ 5 ] * ( residual[ 0 ] ) * ( 1 - residual[ 1 ] );
+			point.nval_[ 5 ] = 
+				  pt[ 3 ] * ( 1 - residual[ 1 ] ) * ( residual[ 2 ] ) 
+				- pt[ 4 ] * ( residual[ 0 ] ) * ( residual[ 2 ] ) 
+				+ pt[ 5 ] * ( residual[ 0 ] ) * ( 1 - residual[ 1 ] );
+			point.nval_[ 6 ] = 
+				  pt[ 3 ] * ( residual[ 1 ] ) * ( 1 - residual[ 2 ] ) 
+				+ pt[ 4 ] * ( residual[ 0 ] ) * ( 1 - residual[ 2 ] ) 
+				- pt[ 5 ] * ( residual[ 0 ] ) * ( residual[ 1 ] );
+			point.nval_[ 7 ] = 
+				  pt[ 3 ] * ( residual[ 1 ] ) * ( residual[ 2 ] ) 
+				+ pt[ 4 ] * ( residual[ 0 ] ) * ( residual[ 2 ] ) 
+				+ pt[ 5 ] * ( residual[ 0 ] ) * ( residual[ 1 ] );
+
+			point.n_[ 0 ] = pt[ 3 ];
+			point.n_[ 1 ] = pt[ 4 ];
+			point.n_[ 2 ] = pt[ 5 ];
+
+			return true;
+		}
+	};
+
+	typedef std::pair< int, int > CorrespondencePair;
+	struct Correspondence {
+	public:
+		typedef boost::shared_ptr< Correspondence > Ptr;
+
+	public:
+		int idx0_, idx1_;
+		Eigen::Matrix4f trans_;
+		std::vector< CorrespondencePair > corres_;
+	public:
+		Correspondence( int i0, int i1 ) : idx0_( i0 ), idx1_( i1 ) {}
+	};
+      //END SPCL
+   
       /** \brief KinfuTracker class encapsulates implementation of Microsoft Kinect Fusion algorithm
         * \author Anatoly Baskeheev, Itseez Ltd, (myname.mysurname@mycompany.com)
         */

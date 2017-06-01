@@ -245,6 +245,191 @@ boost::shared_ptr<pcl::PolygonMesh> convertToMesh(const DeviceArray<PointXYZ>& t
   }    
   return mesh_ptr;
 }
+//SPCL structs
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct RGBDGraph {
+	struct RGBDGraphEdge {
+		int i_;
+		int frame_i_;
+		int j_;
+		int frame_j_;
+		RGBDGraphEdge( int i, int fi, int j, int fj ) : i_(i), j_(j), frame_i_(fi), frame_j_(fj) {}
+		RGBDGraphEdge() {}
+	};
+	vector< RGBDGraphEdge > edges_;
+	int index_;
+	Eigen::Matrix4f head_inv_;
+	Eigen::Matrix4f head_mat_;
+	int head_frame_;
+	Eigen::Matrix4f tail_inv_;
+	Eigen::Matrix4f tail_mat_;
+	int tail_frame_;
+
+	void loadFromFile( string filename ) {
+		index_ = 0;
+		edges_.clear();
+		int id1, frame1, id2, frame2;
+		FILE * f = fopen( filename.c_str(), "r" );
+		if ( f != NULL ) {
+			char buffer[1024];
+			while ( fgets( buffer, 1024, f ) != NULL ) {
+				if ( strlen( buffer ) > 0 && buffer[ 0 ] != '#' ) {
+					sscanf( buffer, "%d:%d %d:%d", &id1, &frame1, &id2, &frame2 );
+					edges_.push_back( RGBDGraphEdge( id1, frame1, id2, frame2 ) );
+				}
+			}
+			fclose ( f );
+		}
+	}
+
+	void saveToFile( string filename ) {
+		std::ofstream file( filename.c_str() );
+		if ( file.is_open() ) {
+			for ( unsigned int i = 0; i < edges_.size(); i++ ) {
+				RGBDGraphEdge & edge = edges_[ i ];
+				file << edge.i_ << ":" << edge.frame_i_ << " " << edge.j_ << ":" << edge.frame_j_ << endl;
+			}
+			file.close();
+		}
+	}
+
+	bool ended() {
+		return ( index_ >= ( int )edges_.size() );
+	}
+
+};
+
+struct BBoxFrame {
+	int id_;
+	int bounds_[ 6 ];
+};
+
+struct BBox {
+	vector< BBoxFrame > frames_;
+	void loadFromFile( string filename ) {
+		frames_.clear();
+		FILE * f = fopen( filename.c_str(), "r" );
+		if ( f != NULL ) {
+			char buffer[1024];
+			int id;
+			BBoxFrame frame;
+			while ( fgets( buffer, 1024, f ) != NULL ) {
+				if ( strlen( buffer ) > 0 && buffer[ 0 ] != '#' ) {
+					sscanf( buffer, "%d %d %d %d %d %d %d", 
+						&frame.id_, 
+						&frame.bounds_[ 0 ], 
+						&frame.bounds_[ 1 ], 
+						&frame.bounds_[ 2 ], 
+						&frame.bounds_[ 3 ], 
+						&frame.bounds_[ 4 ], 
+						&frame.bounds_[ 5 ] 
+					);
+					frames_.push_back( frame );
+				}
+			}
+			fclose ( f );
+		}
+	}
+};
+
+struct RGBDTrajectory {
+	vector< pcl::gpu::FramedTransformation > data_;
+	vector< Eigen::Matrix<double, 6, 6, Eigen::RowMajor> > cov_;
+	int index_;
+	Eigen::Matrix4f head_inv_;
+	void loadFromFile( string filename ) {
+		data_.clear();
+		index_ = 0;
+		int id1, id2, frame;
+		Matrix4f trans;
+		FILE * f = fopen( filename.c_str(), "r" );
+		if ( f != NULL ) {
+			char buffer[1024];
+			while ( fgets( buffer, 1024, f ) != NULL ) {
+				if ( strlen( buffer ) > 0 && buffer[ 0 ] != '#' ) {
+					sscanf( buffer, "%d %d %d", &id1, &id2, &frame);
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%f %f %f %f", &trans(0,0), &trans(0,1), &trans(0,2), &trans(0,3) );
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%f %f %f %f", &trans(1,0), &trans(1,1), &trans(1,2), &trans(1,3) );
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%f %f %f %f", &trans(2,0), &trans(2,1), &trans(2,2), &trans(2,3) );
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%f %f %f %f", &trans(3,0), &trans(3,1), &trans(3,2), &trans(3,3) );
+					data_.push_back( FramedTransformation( id1, id2, frame, trans ) );
+				}
+			}
+			fclose ( f );
+			head_inv_ = data_[ 0 ].transformation_.inverse();
+		}
+	}
+
+	void saveToFile( string filename ) {
+		std::ofstream file( filename.c_str() );
+		if ( file.is_open() ) {
+			for ( unsigned int i = 0; i < data_.size(); i++ ) {
+				file << data_[ i ].id1_ << "\t" << data_[ i ].id2_ << "\t" << data_[ i ].frame_ << std::endl;
+				file << data_[ i ].transformation_ << std::endl;
+			}
+			file.close();
+		}
+	}
+
+	void saveCovToFile( string filename ) {
+		std::ofstream file( filename.c_str() );
+		if ( file.is_open() ) {
+			for ( unsigned int i = 0; i < data_.size(); i++ ) {
+				file << data_[ i ].id1_ << "\t" << data_[ i ].id2_ << "\t" << data_[ i ].frame_ << std::endl;
+				file << cov_[ i ] << std::endl;
+			}
+			file.close();
+		}
+	}
+
+	bool ended() {
+		return ( index_ >= ( int )data_.size() );
+	}
+
+	void clear() {
+		data_.clear();
+		cov_.clear();
+	}
+};
+
+struct CameraParam {
+public:
+	double fx_, fy_, cx_, cy_, ICP_trunc_, integration_trunc_;
+
+	CameraParam() : fx_( 525.0 ), fy_( 525.0 ), cx_( 319.5 ), cy_( 239.5 ), ICP_trunc_( 2.5 ), integration_trunc_( 2.5 )  {
+	}
+
+	void loadFromFile( std::string filename ) {
+		FILE * f = fopen( filename.c_str(), "r" );
+		if ( f != NULL ) {
+			char buffer[1024];
+			while ( fgets( buffer, 1024, f ) != NULL ) {
+				if ( strlen( buffer ) > 0 && buffer[ 0 ] != '#' ) {
+					sscanf( buffer, "%lf", &fx_);
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%lf", &fy_);
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%lf", &cx_);
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%lf", &cy_);
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%lf", &ICP_trunc_);
+					fgets( buffer, 1024, f );
+					sscanf( buffer, "%lf", &integration_trunc_);
+				}
+			}
+			fclose ( f );
+			PCL_WARN( "Camera model set to (fx, fy, cx, cy, icp_trunc, int_trunc):\n\t%.2f, %.2f, %.2f, %.2f, %.2f, %.2f\n", fx_, fy_, cx_, cy_, ICP_trunc_, integration_trunc_ );
+		}
+	}
+};
+
+//End SPCL structs
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -831,6 +1016,39 @@ struct KinFuLSApp
     rgbd_odometry_ = true;
     cout << "Using RGBDOdometry." << endl;
   }
+
+  void                                                                                                                                                                                                                                                                                                                      
+    writeLogFile()                                                                                                                                                                                                                                                                                                          
+  {                                                                                                                                                                                                                                                                                                                         
+    if ( record_log_file_.length() == 0 ) {                                                                                                                                                                                                                                                                                 
+      time_t rawtime;                                                                                                                                                                                                                                                                                                       
+      struct tm *timeinfo;                                                                                                                                                                                                                                                                                                  
+      time(&rawtime);                                                                                                                                                                                                                                                                                                       
+      timeinfo = localtime(&rawtime);                                                                                                                                                                                                                                                                                       
+      char strFileName[ 1024 ];                                                                                                                                                                                                                                                                                             
+      sprintf(strFileName, "%04d%02d%02d-%02d%02d%02d.log",                                                                                                                                                                                                                                                                 
+        timeinfo->tm_year+1900, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                                                                            
+      printf("Creating log file %s\n", strFileName);                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                            
+      kinfu_traj_.saveToFile( string( strFileName ) );                                                                                                                                                                                                                                                                      
+                                                                                                                                                                                                                                                                                                                            
+      if ( kinfu_traj_.data_.size() == kinfu_traj_.cov_.size() ) {                                                                                                                                                                                                                                                          
+        sprintf(strFileName, "%04d%02d%02d-%02d%02d%02d.cov",                                                                                                                                                                                                                                                               
+          timeinfo->tm_year+1900, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);                                                                                                                                                                                            
+                                                                                                                                                                                                                                                                                                                            
+        printf("Creating cov file %s\n", strFileName);                                                                                                                                                                                                                                                                      
+                                                                                                                                                                                                                                                                                                                            
+        kinfu_traj_.saveCovToFile( string( strFileName ) );                                                                                                                                                                                                                                                                 
+      }                                                                                                                                                                                                                                                                                                                     
+    } else {                                                                                                                                                                                                                                                                                                                
+      kinfu_traj_.saveToFile( record_log_file_ );                                                                                                                                                                                                                                                                           
+    }                                                                                                                                                                                                                                                                                                                       
+  }  
+
+  
+
+
 //END SPCL
 
   void execute(const PtrStepSz<const unsigned short>& depth, const PtrStepSz<const pcl::gpu::kinfuLS::PixelRGB>& rgb24, bool has_data)
@@ -1135,11 +1353,14 @@ struct KinFuLSApp
   //SPCL
   bool record_log_;
   string record_log_file_;
-  
+      
+    RGBDTrajectory kinfu_traj_;
+
   int fragment_rate_;
   int frame_id_;
 
   bool rgbd_odometry_;
+
   //TODO: Camera stuffs
   //CameraParam camera_;
 

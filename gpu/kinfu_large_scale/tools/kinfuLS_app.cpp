@@ -1,7 +1,7 @@
 /*
 Work in progress: patch by Marco (AUG,19th 2012)
 > oni fixed
-> pcl added: mostly to include rgb treatment while grabbing from PCD files obtained by pcl_openni_grab_frame -noend 
+> pcl added: mostly to include rgb treatment while grabbing from PCD files obtained by pcl_openni_grab_frame -noend
 > sync issue fixed
 > volume_size issue fixed
 > world.pcd write exception on windows fixed on new trunk version
@@ -76,7 +76,7 @@ Work in progress: patch by Marco (AUG,19th 2012)
 
 #include <pcl/common/angles.h>
 
-#ifdef HAVE_OPENCV  
+#ifdef HAVE_OPENCV
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #endif
@@ -121,7 +121,7 @@ vector<string> getPcdFilesInDir(const string& directory)
 
   vector<string> result;
   fs::directory_iterator pos(dir);
-  fs::directory_iterator end;           
+  fs::directory_iterator end;
 
   for(; pos != end ; ++pos)
     if (fs::is_regular_file(pos->status()) )
@@ -135,13 +135,13 @@ vector<string> getPcdFilesInDir(const string& directory)
         cout << "added: " << result.back() << endl;
       }
 
-  return result;  
+  return result;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct SampledScopeTime : public StopWatch
-{          
+{
   enum { EACH = 33 };
   SampledScopeTime(int& time_ms) : time_ms_(time_ms) {}
   ~SampledScopeTime()
@@ -159,8 +159,8 @@ struct SampledScopeTime : public StopWatch
     }
     ++i_;
   }
-private:    
-  int& time_ms_;    
+private:
+  int& time_ms_;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -178,13 +178,13 @@ setViewerPose (visualization::PCLVisualizer& viewer, const Eigen::Affine3f& view
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Eigen::Affine3f 
+Eigen::Affine3f
 getViewerPose (visualization::PCLVisualizer& viewer)
 {
   Eigen::Affine3f pose = viewer.getViewerPose();
   Eigen::Matrix3f rotation = pose.linear();
 
-  Matrix3f axis_reorder;  
+  Matrix3f axis_reorder;
   axis_reorder << 0,  0,  1,
           -1,  0,  0,
           0, -1,  0;
@@ -208,10 +208,10 @@ writePolygonMeshFile (int format, const pcl::PolygonMesh& mesh);
 
 template<typename MergedT, typename PointT>
 typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const PointCloud<RGB>& colors)
-{    
+{
   typename PointCloud<MergedT>::Ptr merged_ptr(new PointCloud<MergedT>());
 
-  pcl::copyPointCloud (points, *merged_ptr);      
+  pcl::copyPointCloud (points, *merged_ptr);
   for (size_t i = 0; i < colors.size (); ++i)
     merged_ptr->points[i].rgba = colors.points[i].rgba;
 
@@ -222,7 +222,7 @@ typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 boost::shared_ptr<pcl::PolygonMesh> convertToMesh(const DeviceArray<PointXYZ>& triangles)
-{ 
+{
   if (triangles.empty())
           return boost::shared_ptr<pcl::PolygonMesh>();
 
@@ -231,7 +231,7 @@ boost::shared_ptr<pcl::PolygonMesh> convertToMesh(const DeviceArray<PointXYZ>& t
   cloud.height = 1;
   triangles.download(cloud.points);
 
-  boost::shared_ptr<pcl::PolygonMesh> mesh_ptr( new pcl::PolygonMesh() ); 
+  boost::shared_ptr<pcl::PolygonMesh> mesh_ptr( new pcl::PolygonMesh() );
   pcl::toPCLPointCloud2(cloud, mesh_ptr->cloud);
 
   mesh_ptr->polygons.resize (triangles.size() / 3);
@@ -240,9 +240,9 @@ boost::shared_ptr<pcl::PolygonMesh> convertToMesh(const DeviceArray<PointXYZ>& t
     pcl::Vertices v;
     v.vertices.push_back(i*3+0);
     v.vertices.push_back(i*3+2);
-    v.vertices.push_back(i*3+1);              
+    v.vertices.push_back(i*3+1);
     mesh_ptr->polygons[i] = v;
-  }    
+  }
   return mesh_ptr;
 }
 //SPCL structs
@@ -315,14 +315,14 @@ struct BBox {
 			BBoxFrame frame;
 			while ( fgets( buffer, 1024, f ) != NULL ) {
 				if ( strlen( buffer ) > 0 && buffer[ 0 ] != '#' ) {
-					sscanf( buffer, "%d %d %d %d %d %d %d", 
-						&frame.id_, 
-						&frame.bounds_[ 0 ], 
-						&frame.bounds_[ 1 ], 
-						&frame.bounds_[ 2 ], 
-						&frame.bounds_[ 3 ], 
-						&frame.bounds_[ 4 ], 
-						&frame.bounds_[ 5 ] 
+					sscanf( buffer, "%d %d %d %d %d %d %d",
+						&frame.id_,
+						&frame.bounds_[ 0 ],
+						&frame.bounds_[ 1 ],
+						&frame.bounds_[ 2 ],
+						&frame.bounds_[ 3 ],
+						&frame.bounds_[ 4 ],
+						&frame.bounds_[ 5 ]
 					);
 					frames_.push_back( frame );
 				}
@@ -508,7 +508,7 @@ struct ImageView
 
     int cols;
     view_device_.download (view_host_, cols);
-    viewerScene_.showRGBImage (reinterpret_cast<unsigned char*> (&view_host_[0]), view_device_.cols (), view_device_.rows ());    
+    viewerScene_.showRGBImage (reinterpret_cast<unsigned char*> (&view_host_[0]), view_device_.cols (), view_device_.rows ());
 
           //viewerColor_.showRGBImage ((unsigned char*)&rgb24.data, rgb24.cols, rgb24.rows);
 #ifdef HAVE_OPENCV
@@ -522,16 +522,16 @@ struct ImageView
   }
 
   void
-  showDepth (const PtrStepSz<const unsigned short>& depth) 
-  { 
-    viewerDepth_.showShortImage (depth.data, depth.cols, depth.rows, 0, 5000, true); 
+  showDepth (const PtrStepSz<const unsigned short>& depth)
+  {
+    viewerDepth_.showShortImage (depth.data, depth.cols, depth.rows, 0, 5000, true);
   }
 
   void
   showGeneratedDepth (KinfuTracker& kinfu, const Eigen::Affine3f& pose)
-  {            
+  {
     raycaster_ptr_->run(kinfu.volume(), pose, kinfu.getCyclicalBufferStructure ());
-    raycaster_ptr_->generateDepthImage(generated_depth_);    
+    raycaster_ptr_->generateDepthImage(generated_depth_);
 
     int c;
     vector<unsigned short> data;
@@ -588,19 +588,19 @@ struct SceneCloudView
     cloud_viewer_.setSize (640, 480);
     cloud_viewer_.setCameraClipDistances (0.01, 10.01);
 
-    cloud_viewer_.addText ("H: print help", 2, 15, 20, 34, 135, 246);         
+    cloud_viewer_.addText ("H: print help", 2, 15, 20, 34, 135, 246);
     cloud_viewer_.addText ("ICP State: ", 450, 55, 20, 0.0, 1.0, 0.0, "icp");
     cloud_viewer_.addText ("Press 'S' to save the current world", 450, 35, 10, 0.0, 1.0, 0.0, "icp_save");
     cloud_viewer_.addText ("Press 'R' to reset the system", 450, 15, 10, 0.0, 1.0, 0.0, "icp_reset");
   }
-  
-  inline void 
+
+  inline void
   drawCamera (Eigen::Affine3f& pose, const string& name, double r, double g, double b)
   {
     double focal = 575;
     double height = 480;
     double width = 640;
-    
+
     // create a 5-point visual for each camera
     pcl::PointXYZ p1, p2, p3, p4, p5;
     p1.x=0; p1.y=0; p1.z=0;
@@ -645,10 +645,10 @@ struct SceneCloudView
     cloud_viewer_.addLine (p4, p3, r, g, b, ss.str ());
     ss.str ("");
     ss << name << "_line8";
-    cloud_viewer_.addLine (p3, p2, r, g, b, ss.str ());    
+    cloud_viewer_.addLine (p3, p2, r, g, b, ss.str ());
   }
-  
-  inline void 
+
+  inline void
   removeCamera (const string& name)
   {
     cloud_viewer_.removeShape (name);
@@ -694,33 +694,33 @@ struct SceneCloudView
       cloud_viewer_.updateText ("Press 'R' to reset the system", 450, 15, 10, 0.0, 1.0, 0.0, "icp_reset");
     }
     else if (!was_lost_ && kinfu.icpIsLost()) //execute only when we just lost ourselves (i.e. was_lost_ = false && icpIsLost == true)
-    { 
+    {
       // draw position of the last good track
       Eigen::Affine3f last_pose = kinfu.getCameraPose();
       drawCamera(last_pose, name, 0.0, 1.0, 0.0);
-      
-     
-      
+
+
+
       cloud_viewer_.updateText ("ICP State: LOST", 450, 55, 20, 1.0, 0.0, 0.0, "icp");
       cloud_viewer_.updateText ("Press 'S' to save the current world", 450, 35, 10, 1.0, 0.0, 0.0, "icp_save");
       cloud_viewer_.updateText ("Press 'R' to reset the system", 450, 15, 10, 1.0, 0.0, 0.0, "icp_reset");
     }
-    
-    
+
+
     if( kinfu.icpIsLost() )
     {
       removeCamera(name_estimate);
        // draw current camera estimate
       Eigen::Affine3f last_pose_estimate = kinfu.getLastEstimatedPose();
-      drawCamera(last_pose_estimate, name_estimate, 1.0, 0.0, 0.0);      
+      drawCamera(last_pose_estimate, name_estimate, 1.0, 0.0, 0.0);
     }
-      
-      
-      
+
+
+
 //       cout << "current estimated pose: " << kinfu.getLastEstimatedPose().translation() << std::endl << kinfu.getLastEstimatedPose().linear() << std::endl;
-//     
+//
   }
-  
+
   void
   show (KinfuTracker& kinfu, bool integrate_colors)
   {
@@ -737,7 +737,7 @@ struct SceneCloudView
     }
     else
     {
-      DeviceArray<PointXYZ> extracted = kinfu.volume().fetchCloud (cloud_buffer_device_);             
+      DeviceArray<PointXYZ> extracted = kinfu.volume().fetchCloud (cloud_buffer_device_);
 
       if (compute_normals_)
       {
@@ -769,7 +769,7 @@ struct SceneCloudView
     size_t points_size = valid_combined_ ? combined_ptr_->points.size () : cloud_ptr_->points.size ();
     cout << "Done.  Cloud size: " << points_size / 1000 << "K" << endl;
 
-    cloud_viewer_.removeAllPointClouds ();    
+    cloud_viewer_.removeAllPointClouds ();
     if (valid_combined_)
     {
       visualization::PointCloudColorHandlerRGBHack<PointNormal> rgb(combined_ptr_, point_colors_ptr_);
@@ -780,7 +780,7 @@ struct SceneCloudView
     {
       visualization::PointCloudColorHandlerRGBHack<PointXYZ> rgb(cloud_ptr_, point_colors_ptr_);
       cloud_viewer_.addPointCloud<PointXYZ> (cloud_ptr_, rgb);
-    }    
+    }
   }
 
   void
@@ -803,7 +803,7 @@ struct SceneCloudView
       case 0: cout << "Cloud extraction mode: GPU, Connected-6" << endl; break;
       case 1: cout << "Cloud extraction mode: CPU, Connected-6    (requires a lot of memory)" << endl; break;
       case 2: cout << "Cloud extraction mode: CPU, Connected-26   (requires a lot of memory)" << endl; break;
-    }         
+    }
   }
 
   void
@@ -818,7 +818,7 @@ struct SceneCloudView
   {
     cloud_viewer_.removeAllPointClouds ();
     cloud_ptr_->points.clear ();
-    normals_ptr_->points.clear ();    
+    normals_ptr_->points.clear ();
     if (print_message)
       cout << "Clouds/Meshes were cleared" << endl;
   }
@@ -832,12 +832,12 @@ struct SceneCloudView
     if (!marching_cubes_)
       marching_cubes_ = MarchingCubes::Ptr( new MarchingCubes() );
 
-    DeviceArray<PointXYZ> triangles_device = marching_cubes_->run(kinfu.volume(), triangles_buffer_device_);    
+    DeviceArray<PointXYZ> triangles_device = marching_cubes_->run(kinfu.volume(), triangles_buffer_device_);
     mesh_ptr_ = convertToMesh(triangles_device);
 
     cloud_viewer_.removeAllPointClouds ();
     if (mesh_ptr_)
-      cloud_viewer_.addPolygonMesh(*mesh_ptr_);	
+      cloud_viewer_.addPolygonMesh(*mesh_ptr_);
 
     cout << "Done.  Triangles number: " << triangles_device.size() / MarchingCubes::POINTS_PER_TRIANGLE / 1000 << "K" << endl;
   }
@@ -858,9 +858,9 @@ struct SceneCloudView
   DeviceArray<Normal> normals_device_;
 
   PointCloud<PointNormal>::Ptr combined_ptr_;
-  DeviceArray<PointNormal> combined_device_;  
+  DeviceArray<PointNormal> combined_device_;
 
-  DeviceArray<RGB> point_colors_device_; 
+  DeviceArray<RGB> point_colors_device_;
   PointCloud<RGB>::Ptr point_colors_ptr_;
 
   MarchingCubes::Ptr marching_cubes_;
@@ -882,10 +882,10 @@ struct KinFuLSApp
   KinFuLSApp(pcl::Grabber& source, float vsz, float shiftDistance, int snapshotRate, int fragmentRate = 25) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
           registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), was_lost_(false), time_ms_ (0),
           record_log_ (false), fragment_rate_ (fragmentRate), frame_id_ (0), rgbd_odometry_ (false)
-  {    
+  {
   #define fragment_start_ 0
     //Init Kinfu Tracker
-    Eigen::Vector3f volume_size = Vector3f::Constant (vsz/*meters*/);    
+    Eigen::Vector3f volume_size = Vector3f::Constant (vsz/*meters*/);
 
     PCL_WARN ("--- CURRENT SETTINGS ---\n");
     PCL_INFO ("Volume size is set to %.2f meters\n", vsz);
@@ -910,7 +910,7 @@ struct KinFuLSApp
     //kinfu_->setDepthTruncationForICP(3.f/*meters*/);
     kinfu_->setCameraMovementThreshold(0.001f);
 
-    //Init KinFuLSApp            
+    //Init KinFuLSApp
     tsdf_cloud_ptr_ = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI>);
     image_view_.raycaster_ptr_ = RayCaster::Ptr( new RayCaster(kinfu_->rows (), kinfu_->cols ()) );
 
@@ -930,11 +930,11 @@ struct KinFuLSApp
     float width = 640.0f;
     screenshot_manager_.setCameraIntrinsics (pcl::device::kinfuLS::FOCAL_LENGTH, height, width);
     snapshot_rate_ = snapshotRate;
-    
+
     Eigen::Matrix3f Rid = Eigen::Matrix3f::Identity ();   // * AngleAxisf( pcl::deg2rad(-30.f), Vector3f::UnitX());
     Eigen::Vector3f T = Vector3f (0, 0, -volume_size(0)*1.5f);
-    delta_lost_pose_ = Eigen::Translation3f (T) * Eigen::AngleAxisf (Rid); 
-    
+    delta_lost_pose_ = Eigen::Translation3f (T) * Eigen::AngleAxisf (Rid);
+
   }
 
   ~KinFuLSApp()
@@ -953,20 +953,20 @@ struct KinFuLSApp
 
   void
   initRegistration ()
-  {        
+  {
     registration_ = capture_.providesCallback<pcl::ONIGrabber::sig_cb_openni_image_depth_image> ();
     cout << "Registration mode: " << (registration_ ? "On" : "Off (not supported by source)") << endl;
   }
 
-  void 
+  void
   toggleColorIntegration()
   {
     if(registration_)
     {
       const int max_color_integration_weight = 2;
       kinfu_->initColorIntegration(max_color_integration_weight);
-      integrate_colors_ = true;      
-    }    
+      integrate_colors_ = true;
+    }
     cout << "Color integration: " << (integrate_colors_ ? "On" : "Off ( requires registration mode )") << endl;
   }
 
@@ -988,8 +988,8 @@ struct KinFuLSApp
     image_view_.raycaster_ptr_ = RayCaster::Ptr( new RayCaster(kinfu_->rows (), kinfu_->cols (), evaluation_ptr_->fx, evaluation_ptr_->fy, evaluation_ptr_->cx, evaluation_ptr_->cy) );
   }
 
-//SPCL 
-   
+//SPCL
+
   void
     toggleLogRecord( std::string record_log_file )
   {
@@ -1017,47 +1017,47 @@ struct KinFuLSApp
     cout << "Using RGBDOdometry." << endl;
   }
 
-  void                                                                                                                                                                                                                                                                                                                      
-    writeLogFile()                                                                                                                                                                                                                                                                                                          
-  {                                                                                                                                                                                                                                                                                                                         
-    if ( record_log_file_.length() == 0 ) {                                                                                                                                                                                                                                                                                 
-      time_t rawtime;                                                                                                                                                                                                                                                                                                       
-      struct tm *timeinfo;                                                                                                                                                                                                                                                                                                  
-      time(&rawtime);                                                                                                                                                                                                                                                                                                       
-      timeinfo = localtime(&rawtime);                                                                                                                                                                                                                                                                                       
-      char strFileName[ 1024 ];                                                                                                                                                                                                                                                                                             
-      sprintf(strFileName, "%04d%02d%02d-%02d%02d%02d.log",                                                                                                                                                                                                                                                                 
-        timeinfo->tm_year+1900, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);                                                                                                                                                                                              
-                                                                                                                                                                                                                                                                                                                            
-      printf("Creating log file %s\n", strFileName);                                                                                                                                                                                                                                                                        
-                                                                                                                                                                                                                                                                                                                            
-      kinfu_traj_.saveToFile( string( strFileName ) );                                                                                                                                                                                                                                                                      
-                                                                                                                                                                                                                                                                                                                            
-      if ( kinfu_traj_.data_.size() == kinfu_traj_.cov_.size() ) {                                                                                                                                                                                                                                                          
-        sprintf(strFileName, "%04d%02d%02d-%02d%02d%02d.cov",                                                                                                                                                                                                                                                               
-          timeinfo->tm_year+1900, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                            
-        printf("Creating cov file %s\n", strFileName);                                                                                                                                                                                                                                                                      
-                                                                                                                                                                                                                                                                                                                            
-        kinfu_traj_.saveCovToFile( string( strFileName ) );                                                                                                                                                                                                                                                                 
-      }                                                                                                                                                                                                                                                                                                                     
-    } else {                                                                                                                                                                                                                                                                                                                
-      kinfu_traj_.saveToFile( record_log_file_ );                                                                                                                                                                                                                                                                           
-    }                                                                                                                                                                                                                                                                                                                       
-  }  
+  void
+    writeLogFile()
+  {
+    if ( record_log_file_.length() == 0 ) {
+      time_t rawtime;
+      struct tm *timeinfo;
+      time(&rawtime);
+      timeinfo = localtime(&rawtime);
+      char strFileName[ 1024 ];
+      sprintf(strFileName, "%04d%02d%02d-%02d%02d%02d.log",
+        timeinfo->tm_year+1900, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 
-  
+      printf("Creating log file %s\n", strFileName);
+
+      kinfu_traj_.saveToFile( string( strFileName ) );
+
+      if ( kinfu_traj_.data_.size() == kinfu_traj_.cov_.size() ) {
+        sprintf(strFileName, "%04d%02d%02d-%02d%02d%02d.cov",
+          timeinfo->tm_year+1900, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+
+        printf("Creating cov file %s\n", strFileName);
+
+        kinfu_traj_.saveCovToFile( string( strFileName ) );
+      }
+    } else {
+      kinfu_traj_.saveToFile( record_log_file_ );
+    }
+  }
+
+
 
 
 //END SPCL
 
   void execute(const PtrStepSz<const unsigned short>& depth, const PtrStepSz<const pcl::gpu::kinfuLS::PixelRGB>& rgb24, bool has_data)
-  {        
+  {
     bool has_image = false;
     frame_counter_++;
 
     was_lost_ = kinfu_->icpIsLost();
-    
+
     if (has_data)
     {
       depth_device_.upload (depth.data, depth.step, depth.rows, depth.cols);
@@ -1076,7 +1076,7 @@ struct KinFuLSApp
 
       image_view_.showDepth (depth_);
       //image_view_.showGeneratedDepth(kinfu_, kinfu_->getCameraPose());
-            
+
     }
 
     if (scan_ || (!was_lost_ && kinfu_->icpIsLost ()) ) //if scan mode is OR and ICP just lost itself => show current volume as point cloud
@@ -1085,7 +1085,7 @@ struct KinFuLSApp
       //scene_cloud_view_.show (*kinfu_, integrate_colors_); // this triggers out of memory errors, so I comment it out for now (Raph)
 
       if (scan_volume_)
-      {                
+      {
         cout << "Downloading TSDF volume from device ... " << flush;
         // kinfu_->volume().downloadTsdfAndWeighs (tsdf_volume_.volumeWriteable (), tsdf_volume_.weightsWriteable ());
         kinfu_->volume ().downloadTsdfAndWeightsLocal ();
@@ -1097,13 +1097,13 @@ struct KinFuLSApp
         cout << "Converting volume to TSDF cloud ... " << flush;
         // tsdf_volume_.convertToTsdfCloud (tsdf_cloud_ptr_);
         kinfu_->volume ().convertToTsdfCloud (tsdf_cloud_ptr_);
-        // cout << "done [" << tsdf_cloud_ptr_->size () << " points]" << endl << endl;        
+        // cout << "done [" << tsdf_cloud_ptr_->size () << " points]" << endl << endl;
         cout << "done [" << kinfu_->volume ().size () << " points]" << endl << endl;
       }
       else
         cout << "[!] tsdf volume download is disabled" << endl << endl;
     }
-    
+
 
     if (scan_mesh_)
     {
@@ -1115,7 +1115,7 @@ struct KinFuLSApp
     {
       Eigen::Affine3f viewer_pose = getViewerPose(scene_cloud_view_.cloud_viewer_);
       image_view_.showScene (*kinfu_, rgb24, registration_, independent_camera_ ? &viewer_pose : 0);
-    }    
+    }
 
     if (current_frame_cloud_view_)
       current_frame_cloud_view_->show (*kinfu_);
@@ -1135,14 +1135,14 @@ struct KinFuLSApp
         screenshot_manager_.saveImage (kinfu_->getCameraPose (), rgb24);
       }
     }
-    
+
     // display ICP state
     scene_cloud_view_.displayICPState (*kinfu_, was_lost_);
-    
+
   }
 
-  void source_cb1(const boost::shared_ptr<openni_wrapper::DepthImage>& depth_wrapper)  
-  {        
+  void source_cb1(const boost::shared_ptr<openni_wrapper::DepthImage>& depth_wrapper)
+  {
     {
       boost::mutex::scoped_try_lock lock(data_ready_mutex_);
       if (exit_ || !lock)
@@ -1154,7 +1154,7 @@ struct KinFuLSApp
 
       source_depth_data_.resize(depth_.cols * depth_.rows);
       depth_wrapper->fillDepthImageRaw(depth_.cols, depth_.rows, &source_depth_data_[0]);
-      depth_.data = &source_depth_data_[0];     
+      depth_.data = &source_depth_data_[0];
     }
     data_ready_cond_.notify_one();
   }
@@ -1175,15 +1175,15 @@ struct KinFuLSApp
 
       source_depth_data_.resize(depth_.cols * depth_.rows);
       depth_wrapper->fillDepthImageRaw(depth_.cols, depth_.rows, &source_depth_data_[0]);
-      depth_.data = &source_depth_data_[0];      
+      depth_.data = &source_depth_data_[0];
 
       rgb24_.cols = image_wrapper->getWidth();
       rgb24_.rows = image_wrapper->getHeight();
-      rgb24_.step = rgb24_.cols * rgb24_.elemSize(); 
+      rgb24_.step = rgb24_.cols * rgb24_.elemSize();
 
       source_image_data_.resize(rgb24_.cols * rgb24_.rows);
       image_wrapper->fillRGB(rgb24_.cols, rgb24_.rows, (unsigned char*)&source_image_data_[0]);
-      rgb24_.data = &source_image_data_[0];    
+      rgb24_.data = &source_image_data_[0];
 
     }
     data_ready_cond_.notify_one();
@@ -1191,10 +1191,10 @@ struct KinFuLSApp
 
   void source_cb3(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr & DC3)
   {
-    {                             
+    {
       //std::cout << "Giving colors1\n";
       boost::mutex::scoped_try_lock lock(data_ready_mutex_);
-      //std::cout << lock << std::endl; //causes compile errors 
+      //std::cout << lock << std::endl; //causes compile errors
       if (exit_ || !lock)
         return;
       //std::cout << "Giving colors2\n";
@@ -1203,15 +1203,15 @@ struct KinFuLSApp
       depth_.cols = width;
       depth_.rows = height;
       depth_.step = depth_.cols * depth_.elemSize();
-      source_depth_data_.resize(depth_.cols * depth_.rows);   
+      source_depth_data_.resize(depth_.cols * depth_.rows);
 
       rgb24_.cols = width;
       rgb24_.rows = height;
-      rgb24_.step = rgb24_.cols * rgb24_.elemSize(); 
+      rgb24_.step = rgb24_.cols * rgb24_.elemSize();
       source_image_data_.resize(rgb24_.cols * rgb24_.rows);
 
       unsigned char *rgb    = (unsigned char *)  &source_image_data_[0];
-      unsigned short *depth = (unsigned short *) &source_depth_data_[0];  
+      unsigned short *depth = (unsigned short *) &source_depth_data_[0];
 
       //std::cout << "Giving colors3\n";
       for (int i=0; i<width*height; i++) {
@@ -1222,15 +1222,15 @@ struct KinFuLSApp
         depth[i]    = pt.z/0.001;
       }
       //std::cout << "Giving colors4\n";
-      rgb24_.data = &source_image_data_[0];   
-      depth_.data = &source_depth_data_[0];      
-    }	
+      rgb24_.data = &source_image_data_[0];
+      depth_.data = &source_depth_data_[0];
+    }
     data_ready_cond_.notify_one();
   }
 
   void
   startMainLoop (bool triggered_capture)
-  {   
+  {
     using namespace openni_wrapper;
     typedef boost::shared_ptr<DepthImage> DepthImagePtr;
     typedef boost::shared_ptr<Image>      ImagePtr;
@@ -1250,11 +1250,11 @@ struct KinFuLSApp
     {
       boost::unique_lock<boost::mutex> lock(data_ready_mutex_);
 
-      if (!triggered_capture) 
+      if (!triggered_capture)
         capture_.start ();
 
       while (!exit_ && !scene_cloud_view_.cloud_viewer_.wasStopped () && !image_view_.viewerScene_.wasStopped () && !this->kinfu_->isFinished ())
-      { 
+      {
         if (triggered_capture)
           capture_.start(); // Triggers new frame
 
@@ -1265,21 +1265,21 @@ struct KinFuLSApp
         catch (const std::exception& /*e*/) { cout << "Exception" << endl; break; }
 
         scene_cloud_view_.cloud_viewer_.spinOnce (3);
-        //~ cout << "In main loop" << endl;                  
-      } 
+        //~ cout << "In main loop" << endl;
+      }
       exit_ = true;
       boost::this_thread::sleep (boost::posix_time::millisec (100));
 
-      if (!triggered_capture)     
+      if (!triggered_capture)
         capture_.stop (); // Stop stream
     }
-    c.disconnect();       
+    c.disconnect();
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   void
   writeCloud (int format) const
-  {      
+  {
     const SceneCloudView& view = scene_cloud_view_;
 
     if (!view.cloud_ptr_->points.empty ())
@@ -1292,7 +1292,7 @@ struct KinFuLSApp
           writeCloudFile (format, view.cloud_ptr_);
       }
       else
-      {        
+      {
         if (view.valid_combined_)
           writeCloudFile (format, merge<PointXYZRGBNormal>(*view.combined_ptr_, *view.point_colors_ptr_));
         else
@@ -1305,7 +1305,7 @@ struct KinFuLSApp
   void
   writeMesh(int format) const
   {
-    if (scene_cloud_view_.mesh_ptr_) 
+    if (scene_cloud_view_.mesh_ptr_)
       writePolygonMeshFile(format, *scene_cloud_view_.mesh_ptr_);
   }
 
@@ -1325,14 +1325,14 @@ struct KinFuLSApp
     cout << "    I    : toggle independent camera mode" << endl;
     cout << "    B    : toggle volume bounds" << endl;
     cout << "    *    : toggle scene view painting ( requires registration mode )" << endl;
-    cout << "    C    : clear clouds" << endl;    
+    cout << "    C    : clear clouds" << endl;
     cout << "   1,2,3 : save cloud to PCD(binary), PCD(ASCII), PLY(ASCII)" << endl;
     cout << "    7,8  : save mesh to PLY, VTK" << endl;
     cout << "   X, V  : TSDF volume utility" << endl;
     cout << "   L, l  : On the next shift, KinFu will extract the whole current cube, extract the world and stop" << endl;
     cout << "   S, s  : On the next shift, KinFu will extract the world and stop" << endl;
     cout << endl;
-  }  
+  }
 
   bool exit_;
   bool scan_;
@@ -1353,7 +1353,7 @@ struct KinFuLSApp
   //SPCL
   bool record_log_;
   string record_log_file_;
-      
+
     RGBDTrajectory kinfu_traj_;
 
   int fragment_rate_;
@@ -1385,10 +1385,10 @@ struct KinFuLSApp
   std::vector<pcl::gpu::kinfuLS::PixelRGB> source_image_data_;
   std::vector<unsigned short> source_depth_data_;
   PtrStepSz<const unsigned short> depth_;
-  PtrStepSz<const pcl::gpu::kinfuLS::PixelRGB> rgb24_;  
-  
+  PtrStepSz<const pcl::gpu::kinfuLS::PixelRGB> rgb24_;
+
   Eigen::Affine3f delta_lost_pose_;
-  
+
   bool was_lost_;
 
   int time_ms_;
@@ -1401,7 +1401,7 @@ struct KinFuLSApp
 
     int key = e.getKeyCode ();
 
-    if (e.keyUp ())    
+    if (e.keyUp ())
       switch (key)
       {
       case 27: app->exit_ = true; break;
@@ -1409,17 +1409,17 @@ struct KinFuLSApp
       case (int)'a': case (int)'A': app->scan_mesh_ = true; break;
       case (int)'h': case (int)'H': app->printHelp (); break;
       case (int)'m': case (int)'M': app->scene_cloud_view_.toggleExtractionMode (); break;
-      case (int)'n': case (int)'N': app->scene_cloud_view_.toggleNormals (); break;      
+      case (int)'n': case (int)'N': app->scene_cloud_view_.toggleNormals (); break;
       case (int)'c': case (int)'C': app->scene_cloud_view_.clearClouds (true); break;
       case (int)'i': case (int)'I': app->toggleIndependentCamera (); break;
       case (int)'b': case (int)'B': app->scene_cloud_view_.toggleCube(app->kinfu_->volume().getSize()); break;
       case (int)'l': case (int)'L': app->kinfu_->performLastScan (); break;
       case (int)'s': case (int)'S': app->kinfu_->extractAndSaveWorld (); break;
       case (int)'r': case (int)'R': app->kinfu_->reset(); app->scene_cloud_view_.clearClouds(); break;
-      case (int)'7': case (int)'8': app->writeMesh (key - (int)'0'); break;  
-      case (int)'1': case (int)'2': case (int)'3': app->writeCloud (key - (int)'0'); break;      
+      case (int)'7': case (int)'8': app->writeMesh (key - (int)'0'); break;
+      case (int)'1': case (int)'2': case (int)'3': app->writeCloud (key - (int)'0'); break;
       case '*': app->image_view_.toggleImagePaint (); break;
-      
+
       case (int)'p': case (int)'P': app->kinfu_->setDisableICP(); break;
 
       case (int)'x': case (int)'X':
@@ -1438,7 +1438,7 @@ struct KinFuLSApp
         break;
       default:
         break;
-      }    
+      }
   }
 
 };
@@ -1474,13 +1474,13 @@ writePolygonMeshFile (int format, const pcl::PolygonMesh& mesh)
   if (format == KinFuLSApp::MESH_PLY)
   {
     cout << "Saving mesh to to 'mesh.ply'... " << flush;
-    pcl::io::savePLYFile("mesh.ply", mesh);		
+    pcl::io::savePLYFile("mesh.ply", mesh);
   }
   else /* if (format == KinFuLSApp::MESH_VTK) */
   {
     cout << "Saving mesh to to 'mesh.vtk'... " << flush;
-    pcl::io::saveVTKFile("mesh.vtk", mesh);    
-  }  
+    pcl::io::saveVTKFile("mesh.vtk", mesh);
+  }
   cout << "Done" << endl;
 }
 
@@ -1490,11 +1490,11 @@ int
 print_cli_help ()
 {
   cout << "\nKinFu parameters:" << endl;
-  cout << "    --help, -h                          : print this message" << endl;  
+  cout << "    --help, -h                          : print this message" << endl;
   cout << "    --registration, -r                  : try to enable registration (source needs to support this)" << endl;
   cout << "    --current-cloud, -cc                : show current frame cloud" << endl;
-  cout << "    --save-views, -sv                   : accumulate scene view and save in the end ( Requires OpenCV. Will cause 'bad_alloc' after some time )" << endl;  
-  cout << "    --registration, -r                  : enable registration mode" << endl; 
+  cout << "    --save-views, -sv                   : accumulate scene view and save in the end ( Requires OpenCV. Will cause 'bad_alloc' after some time )" << endl;
+  cout << "    --registration, -r                  : enable registration mode" << endl;
   cout << "    --integrate-colors, -ic             : enable color integration mode (allows to get cloud with colors)" << endl;
   cout << "    --extract-textures, -et             : extract RGB PNG images to KinFuSnapshots folder." << endl;
   cout << "    --volume_size <in_meters>, -vs      : define integration volume size" << endl;
@@ -1507,10 +1507,10 @@ print_cli_help ()
   cout << "    --camera <param_file>               : launch parameters from the file" << endl;
 //SPCL
   cout << endl << "";
-  cout << "Valid depth data sources:" << endl; 
+  cout << "Valid depth data sources:" << endl;
   cout << "    -dev <device> (default), -oni <oni_file>, -pcd <pcd_file or directory>" << endl;
   cout << endl << "";
-  cout << " For RGBD benchmark (Requires OpenCV):" << endl; 
+  cout << " For RGBD benchmark (Requires OpenCV):" << endl;
   cout << "    -eval <eval_folder> [-match_file <associations_file_in_the_folder>]" << endl << endl;
 
   return 0;
@@ -1520,7 +1520,7 @@ print_cli_help ()
 
 int
 main (int argc, char* argv[])
-{  
+{
   if (pc::find_switch (argc, argv, "--help") || pc::find_switch (argc, argv, "-h"))
     return print_cli_help ();
 
@@ -1538,7 +1538,7 @@ main (int argc, char* argv[])
 
   std::string eval_folder, match_file, openni_device, oni_file, pcd_dir, camera_file;
   try
-  {    
+  {
     if (pc::parse_argument (argc, argv, "-dev", openni_device) > 0)
     {
       capture.reset (new pcl::OpenNIGrabber (openni_device));
@@ -1554,7 +1554,7 @@ main (int argc, char* argv[])
       float fps_pcd = 15.0f;
       pc::parse_argument (argc, argv, "-pcd_fps", fps_pcd);
 
-      vector<string> pcd_files = getPcdFilesInDir(pcd_dir);    
+      vector<string> pcd_files = getPcdFilesInDir(pcd_dir);
       // Sort the read files by name
       sort (pcd_files.begin (), pcd_files.end ());
       capture.reset (new pcl::PCDGrabber<pcl::PointXYZRGBA> (pcd_files, fps_pcd, false));
@@ -1571,10 +1571,10 @@ main (int argc, char* argv[])
       capture.reset( new pcl::OpenNIGrabber() );
 
       //capture.reset( new pcl::ONIGrabber("d:/onis/20111013-224932.oni", true, true) );
-      //capture.reset( new pcl::ONIGrabber("d:/onis/reg20111229-180846.oni, true, true) );    
+      //capture.reset( new pcl::ONIGrabber("d:/onis/reg20111229-180846.oni, true, true) );
       //capture.reset( new pcl::ONIGrabber("/media/Main/onis/20111013-224932.oni", true, true) );
       //capture.reset( new pcl::ONIGrabber("d:/onis/20111013-224551.oni", true, true) );
-      //capture.reset( new pcl::ONIGrabber("d:/onis/20111013-224719.oni", true, true) );    
+      //capture.reset( new pcl::ONIGrabber("d:/onis/20111013-224719.oni", true, true) );
     }
   }
   catch (const pcl::PCLException& /*e*/) { return cout << "Can't open depth source" << endl, -1; }
@@ -1604,7 +1604,7 @@ main (int argc, char* argv[])
     app.initCurrentFrameView ();
 
   if (pc::find_switch (argc, argv, "--save-views") || pc::find_switch (argc, argv, "-sv"))
-    app.image_view_.accumulate_views_ = true;  //will cause bad alloc after some time  
+    app.image_view_.accumulate_views_ = true;  //will cause bad alloc after some time
 
   if (pc::find_switch (argc, argv, "--registration") || pc::find_switch (argc, argv, "-r"))  {
     if (pcd_input) {
@@ -1615,14 +1615,14 @@ main (int argc, char* argv[])
     }
   }
 
-  if (pc::find_switch (argc, argv, "--integrate-colors") || pc::find_switch (argc, argv, "-ic"))      
+  if (pc::find_switch (argc, argv, "--integrate-colors") || pc::find_switch (argc, argv, "-ic"))
     app.toggleColorIntegration();
 
-  if (pc::find_switch (argc, argv, "--extract-textures") || pc::find_switch (argc, argv, "-et"))      
+  if (pc::find_switch (argc, argv, "--extract-textures") || pc::find_switch (argc, argv, "-et"))
     app.enable_texture_extraction_ = true;
 
 //SPCL args
-  if ( pc::find_switch( argc, argv, "--rgbd_odometry" ) )  
+  if ( pc::find_switch( argc, argv, "--rgbd_odometry" ) )
     app.toggleRGBDOdometry();
 
   if ( pc::find_switch (argc, argv, "--record_log") ) {
@@ -1630,21 +1630,21 @@ main (int argc, char* argv[])
     pc::parse_argument( argc, argv, "--record_log", record_log_file );
     app.toggleLogRecord( record_log_file );
   }
-  
+
   if ( pc::parse_argument( argc, argv, "--camera", camera_file ) > 0 ) {
     app.toggleCameraParam( camera_file );
   }
 
 
   // executing
-  if (triggered_capture) 
+  if (triggered_capture)
     std::cout << "Capture mode: triggered\n";
-  else				     
+  else
     std::cout << "Capture mode: stream\n";
 
   // set verbosity level
   pcl::console::setVerbosityLevel(pcl::console::L_VERBOSE);
-  try { app.startMainLoop (triggered_capture); }  
+  try { app.startMainLoop (triggered_capture); }
   catch (const pcl::PCLException& /*e*/) { cout << "PCLException" << endl; }
   catch (const std::bad_alloc& /*e*/) { cout << "Bad alloc" << endl; }
   catch (const std::exception& /*e*/) { cout << "Exception" << endl; }

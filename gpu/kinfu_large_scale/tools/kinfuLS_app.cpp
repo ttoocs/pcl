@@ -224,17 +224,17 @@ typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const 
 
 //SPCL
 
-//wtf, is this not defiend or something, just here for the lulz?
+//TODO: Find out how the Normals on here were origonally of <PointT>
 template<typename MergedT, typename PointT>
-typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const PointCloud<PointT>& normals, const PointCloud<RGB>& colors)
+typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const PointCloud<Normal>& normals, const PointCloud<RGB>& colors)
 {
 	typename PointCloud<MergedT>::Ptr merged_ptr(new PointCloud<MergedT>());
 
 	pcl::copyPointCloud (points, *merged_ptr);
 	for (size_t i = 0; i < colors.size (); ++i) {
-		merged_ptr->points[i].normal_x = normals.points[i].x;
-		merged_ptr->points[i].normal_y = normals.points[i].y;
-		merged_ptr->points[i].normal_z = normals.points[i].z;
+		merged_ptr->points[i].normal_x = normals.points[i].normal_x;//.x;
+		merged_ptr->points[i].normal_y = normals.points[i].normal_y;
+		merged_ptr->points[i].normal_z = normals.points[i].normal_z;
 		merged_ptr->points[i].rgba = colors.points[i].rgba;
 	}
 
@@ -242,15 +242,15 @@ typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const 
 }
 
 template<typename MergedT, typename PointT>
-typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const PointCloud<PointT>& normals)
+typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const PointCloud<Normal>& normals)
 {
 	typename PointCloud<MergedT>::Ptr merged_ptr(new PointCloud<MergedT>());
 
 	pcl::copyPointCloud (points, *merged_ptr);
 	for (size_t i = 0; i < normals.size (); ++i) {
-		merged_ptr->points[i].normal_x = normals.points[i].x;
-		merged_ptr->points[i].normal_y = normals.points[i].y;
-		merged_ptr->points[i].normal_z = normals.points[i].z;
+		merged_ptr->points[i].normal_x = normals.points[i].normal_x; //normals.points[i].x;
+		merged_ptr->points[i].normal_y = normals.points[i].normal_y;
+		merged_ptr->points[i].normal_z = normals.points[i].normal_z;
 	}
 
 	return merged_ptr;

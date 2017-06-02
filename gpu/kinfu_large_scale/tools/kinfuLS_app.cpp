@@ -199,6 +199,10 @@ getViewerPose (visualization::PCLVisualizer& viewer)
 template<typename CloudT> void
 writeCloudFile (int format, const CloudT& cloud);
 
+//SPCL
+template<typename CloudT> void
+  writeCloudFile ( int file_index, int format, const CloudT& cloud );
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void
 writePolygonMeshFile (int format, const pcl::PolygonMesh& mesh);
@@ -216,6 +220,40 @@ typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const 
     merged_ptr->points[i].rgba = colors.points[i].rgba;
 
   return merged_ptr;
+}
+
+//SPCL
+
+//wtf, is this not defiend or something, just here for the lulz?
+template<typename MergedT, typename PointT>
+typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const PointCloud<PointT>& normals, const PointCloud<RGB>& colors)
+{
+	typename PointCloud<MergedT>::Ptr merged_ptr(new PointCloud<MergedT>());
+
+	pcl::copyPointCloud (points, *merged_ptr);
+	for (size_t i = 0; i < colors.size (); ++i) {
+		merged_ptr->points[i].normal_x = normals.points[i].x;
+		merged_ptr->points[i].normal_y = normals.points[i].y;
+		merged_ptr->points[i].normal_z = normals.points[i].z;
+		merged_ptr->points[i].rgba = colors.points[i].rgba;
+	}
+
+	return merged_ptr;
+}
+
+template<typename MergedT, typename PointT>
+typename PointCloud<MergedT>::Ptr merge(const PointCloud<PointT>& points, const PointCloud<PointT>& normals)
+{
+	typename PointCloud<MergedT>::Ptr merged_ptr(new PointCloud<MergedT>());
+
+	pcl::copyPointCloud (points, *merged_ptr);
+	for (size_t i = 0; i < normals.size (); ++i) {
+		merged_ptr->points[i].normal_x = normals.points[i].x;
+		merged_ptr->points[i].normal_y = normals.points[i].y;
+		merged_ptr->points[i].normal_z = normals.points[i].z;
+	}
+
+	return merged_ptr;
 }
 
 
@@ -881,7 +919,7 @@ struct KinFuLSApp
 
   KinFuLSApp(pcl::Grabber& source, float vsz, float shiftDistance, int snapshotRate, int fragmentRate = 25) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
           registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), was_lost_(false), time_ms_ (0),
-          record_log_ (false), fragment_rate_ (fragmentRate), frame_id_ (0), rgbd_odometry_ (false)
+          record_log_ (false), fragment_rate_ (fragmentRate), frame_id_ (0), rgbd_odometry_ (false), file_index_ (0)
   {
   #define fragment_start_ 0
     //Init Kinfu Tracker
@@ -1149,8 +1187,68 @@ struct KinFuLSApp
 						kinfu_traj_.data_.push_back( FramedTransformation( kinfu_traj_.data_.size(), kinfu_->getGlobalTime() - 1, frame_id_, kinfu_->getCameraPose().matrix() ) );
 					}
 				}
-			}
-//      */
+			} //End  record_log_
+      
+      //SPCL... jenesaispas
+      if ( fragment_rate_ > 0 && record_log_ ) // && ( framed_transformation_.flag_ & framed_transformation_.SavePointCloudFlag ) )
+      {
+        scene_cloud_view_.show( *kinfu_, integrate_colors_ );
+        
+  			if(scene_cloud_view_.point_colors_ptr_->points.empty()) // no colors
+	  		{
+  				if (scene_cloud_view_.compute_normals_)
+  					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointNormal>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.normals_ptr_));
+  				else
+  					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, scene_cloud_view_.cloud_ptr_);
+  			}
+  			else
+  			{
+  				if (scene_cloud_view_.compute_normals_) {
+  					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGBNormal>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.normals_ptr_, *scene_cloud_view_.point_colors_ptr_));
+  				}
+  				else
+  					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGB>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.point_colors_ptr_));
+  			}
+
+  			// enable when you need mesh output instead of pcd output when using --fragment
+  			//scene_cloud_view_.showMesh(*kinfu_, integrate_colors_);
+  			//writeMesh( KinFuLSApp::MESH_PLY, file_index_ );
+  
+  			/*s
+  			if ( framed_transformation_.flag_ & framed_transformation_.SaveAbsoluteMatrix ) {
+  			} else {
+  			char filename[ 1024 ];
+  			memset( filename, 0, 1024 );
+  
+  			sprintf( filename, "cloud_bin_fragment_%d.log", file_index_ );
+  
+  			kinfu_traj_.saveToFile( filename );
+  			kinfu_traj_.clear();
+  			}
+  			*/
+  
+  			/*
+  			//std::vector< int > raw_data;
+  			//int col;
+  			//kinfu_->volume().data().download( raw_data, col );
+  			cout << "Downloading TSDF volume from device ... " << flush;
+  			kinfu_->volume().downloadTsdfAndWeighs (tsdf_volume_.volumeWriteable (), tsdf_volume_.weightsWriteable ());
+  			tsdf_volume_.setHeader (Eigen::Vector3i (pcl::device::VOLUME_X, pcl::device::VOLUME_Y, pcl::device::VOLUME_Z), kinfu_->volume().getSize ());
+  
+  			int cnt = 0;
+  			for ( int i = 0; i < ( int )tsdf_volume_.size(); i++ ) {
+  			if ( tsdf_volume_.volume().at( i ) != 0.0f )
+  			cnt++;
+  			}
+  			cout << "valid voxel number is " << cnt << endl;
+  
+  			writeRawTSDF( file_index_, tsdf_volume_ );
+  			*/
+  
+	  		file_index_++;
+		  }
+          
+
       //END SPCL
 
     } //End execute?
@@ -1431,6 +1529,8 @@ struct KinFuLSApp
   float focal_length_;
 
   //SPCL
+  int file_index_;
+
   bool record_log_;
   string record_log_file_;
 
@@ -1546,6 +1646,37 @@ writeCloudFile (int format, const CloudPtr& cloud_prt)
   }
   cout << "Done" << endl;
 }
+//SPCL
+
+template<typename CloudPtr> void
+	writeCloudFile ( int file_index, int format, const CloudPtr& cloud_prt )
+{
+	char filename[ 1024 ];
+	memset( filename, 0, 1024 );
+
+	if (format == KinFuLSApp::PCD_BIN)
+	{
+		sprintf( filename, "cloud_bin_%d.pcd", file_index );
+		cout << "Saving point cloud to '" << filename << "' (binary)... " << flush;
+		pcl::io::savePCDFile (filename, *cloud_prt, true);
+	}
+	else
+		if (format == KinFuLSApp::PCD_ASCII)
+		{
+			sprintf( filename, "cloud_%d.pcd", file_index );
+			cout << "Saving point cloud to '" << filename << "' (ASCII)... " << flush;
+			pcl::io::savePCDFile (filename, *cloud_prt, false);
+		}
+		else   /* if (format == KinFuApp::PLY) */
+		{
+			sprintf( filename, "cloud_%d.ply", file_index );
+			cout << "Saving point cloud to '" << filename << "' (ASCII)... " << flush;
+			pcl::io::savePLYFileASCII (filename, *cloud_prt);
+
+		}
+		cout << "Done" << endl;
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1675,8 +1806,8 @@ main (int argc, char* argv[])
   int fragment_rate = 0;
   pc::parse_argument (argc, argv, "--fragment", fragment_rate);
 
-
-  KinFuLSApp app (*capture, volume_size, shift_distance, snapshot_rate);
+  //SPCL: added fragment_rate
+  KinFuLSApp app (*capture, volume_size, shift_distance, snapshot_rate, fragment_rate);
 
   if (pc::parse_argument (argc, argv, "-eval", eval_folder) > 0)
     app.toggleEvaluationMode(eval_folder, match_file);

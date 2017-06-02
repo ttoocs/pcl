@@ -67,28 +67,29 @@ namespace pcl
     { 
       //SPCL
 
-    struct FramedTransformation {
-	  enum RegistrationType { Kinfu = 0, DirectApply = 1, InitializeOnly = 2, IncrementalOnly = 3 };
-	  enum ActionFlag {
-		  ResetFlag = 0x1,					// if reset at the very beginning
-		  IgnoreRegistrationFlag = 0x2,		// if discard the registration
-		  IgnoreIntegrationFlag = 0x4,		// if discard integration
-		  PushMatrixHashFlag = 0x8,			// if push the transformation matrix into the hash table
-		  SavePointCloudFlag = 0x10,		// if save point cloud after execution
-		  SaveAbsoluteMatrix = 0x20,		// if save absolute matrix, work with IgnoreIntegrationFlag
-		  ExtractSLACMatrix = 0x40,			// if extract SLAC matrix
-	  };
-
-      int id1_;
-	  int id2_;
-      int frame_;
-	  RegistrationType type_;
-	  int flag_;
-      Eigen::Matrix4f transformation_;
-	  FramedTransformation() : type_( Kinfu ), flag_( 0 ) {}
-      FramedTransformation( int id1, int id2, int f, Eigen::Matrix4f t ) : id1_( id1 ), id2_( id2 ), frame_( f ), transformation_( t ), type_( DirectApply ), flag_( 0 ) {}
-      FramedTransformation( int id1, int id2, int f, Eigen::Matrix4f t, RegistrationType tp, int flg ) 
-		  : id1_( id1 ), id2_( id2 ), frame_( f ), transformation_( t ), type_( tp ), flag_( flg ) {}
+      struct FramedTransformation {
+  	    enum RegistrationType { Kinfu = 0, DirectApply = 1, InitializeOnly = 2, IncrementalOnly = 3 };
+    	  enum ActionFlag {
+    		  ResetFlag = 0x1,					// if reset at the very beginning
+    		  IgnoreRegistrationFlag = 0x2,		// if discard the registration
+    		  IgnoreIntegrationFlag = 0x4,		// if discard integration
+    		  PushMatrixHashFlag = 0x8,			// if push the transformation matrix into the hash table
+    		  SavePointCloudFlag = 0x10,		// if save point cloud after execution
+    		  SaveAbsoluteMatrix = 0x20,		// if save absolute matrix, work with IgnoreIntegrationFlag
+    		  ExtractSLACMatrix = 0x40,			// if extract SLAC matrix
+  	    };
+        
+        int id1_;
+      	int id2_;
+        int frame_;
+      	RegistrationType type_;
+    	  int flag_;
+        Eigen::Matrix4f transformation_;
+        FramedTransformation() : type_( Kinfu ), flag_( 0 ) {}
+        FramedTransformation( int id1, int id2, int f, Eigen::Matrix4f t ) 
+          : id1_( id1 ), id2_( id2 ), frame_( f ), transformation_( t ), type_( DirectApply ), flag_( 0 ) {}
+        FramedTransformation( int id1, int id2, int f, Eigen::Matrix4f t, RegistrationType tp, int flg ) 
+    	    : id1_( id1 ), id2_( id2 ), frame_( f ), transformation_( t ), type_( tp ), flag_( flg ) {}
     };
 
 	struct Coordinate {

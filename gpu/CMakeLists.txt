@@ -4,6 +4,21 @@ set(SUBSYS_DEPS )
 
 OPTION(BUILD_GPU "Build the GPU-related subsystems" ${DEFAULT})
 
+
+add_definitions(
+  #-std=c++11
+)
+
+##THIS IS GETTING OVERWRITTEN SOMEWHERE D:
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mno-avx")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mno-avx ")
+
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -mno-avx")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -mno-avx")
+
+# run -r -ic -sd 10 -oni ../sandbox/input.oni -vs 4 --fragment 25 --record_log ../sandbox/100-0.log --camera longrange.param
+
+
 if(BUILD_GPU AND CUDA_FOUND)
     		
 	if(CMAKE_COMPILER_IS_GNUCXX)

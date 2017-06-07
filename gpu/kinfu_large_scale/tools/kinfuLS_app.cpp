@@ -613,7 +613,7 @@ struct SceneCloudView
 {
   enum { GPU_Connected6 = 0, CPU_Connected6 = 1, CPU_Connected26 = 2 };
 
-  SceneCloudView() : extraction_mode_ (GPU_Connected6), compute_normals_ (false), valid_combined_ (false), cube_added_(false), cloud_viewer_ ("Scene Cloud Viewer")
+  SceneCloudView() : extraction_mode_ (GPU_Connected6), compute_normals_ (true), valid_combined_ (false), cube_added_(false), cloud_viewer_ ("Scene Cloud Viewer")
   {
     cloud_ptr_ = PointCloud<PointXYZ>::Ptr (new PointCloud<PointXYZ>);
     normals_ptr_ = PointCloud<Normal>::Ptr (new PointCloud<Normal>);
@@ -1198,17 +1198,29 @@ struct KinFuLSApp
   			if(scene_cloud_view_.point_colors_ptr_->points.empty()) // no colors
 	  		{
   				if (scene_cloud_view_.compute_normals_)
-  					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointNormal>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.normals_ptr_));
+  				{
+            writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, scene_cloud_view_.combined_ptr_);
+//          	writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointNormal>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.normals_ptr_));
+            cout << "NORMALS 1" << endl;
+          }
   				else
+          {
   					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, scene_cloud_view_.cloud_ptr_);
+            cout << "NO NORMALS 1" << endl;
+          }
   			}
   			else
   			{
   				if (scene_cloud_view_.compute_normals_) {
-  					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGBNormal>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.normals_ptr_, *scene_cloud_view_.point_colors_ptr_));
+  					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGBNormal>(*scene_cloud_view_.combined_ptr_, *scene_cloud_view_.point_colors_ptr_));
+  					//writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGBNormal>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.normals_ptr_, *scene_cloud_view_.point_colors_ptr_));
+            cout << "NORMALS 2" << endl;
   				}
   				else
+          {
   					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGB>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.point_colors_ptr_));
+            cout << "NO NORMALS 2" << endl;
+          }
   			}
 
   			// enable when you need mesh output instead of pcd output when using --fragment

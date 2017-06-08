@@ -1191,7 +1191,7 @@ struct KinFuLSApp
 			} //End  record_log_
       
       //SPCL... jenesaispas
-      if ( fragment_rate_ > 0 && record_log_ ) // && ( framed_transformation_.flag_ & framed_transformation_.SavePointCloudFlag ) )
+      if ( fragment_rate_ > 0 && (frame_id_ % (fragment_rate * 2 ) == 1 ) && record_log_ ) // && ( framed_transformation_.flag_ & framed_transformation_.SavePointCloudFlag ) )
       {
         scene_cloud_view_.show( *kinfu_, integrate_colors_ );
         

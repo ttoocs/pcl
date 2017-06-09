@@ -94,6 +94,12 @@ using pcl::gpu::DeviceArray;
 using pcl::gpu::DeviceArray2D;
 using pcl::gpu::PtrStepSz;
 
+//#define SPCL_FRAME_ID
+#ifndef SPCL_FRAME_ID
+  #define frame_id_ frame_counter_
+#endif
+
+
 namespace pc = pcl::console;
 
 namespace pcl
@@ -1191,7 +1197,7 @@ struct KinFuLSApp
 			} //End  record_log_
       
       //SPCL... jenesaispas
-      if ( fragment_rate_ > 0 && (frame_id_ % (fragment_rate * 2 ) == 1 ) && record_log_ ) // && ( framed_transformation_.flag_ & framed_transformation_.SavePointCloudFlag ) )
+      if ( fragment_rate_ > 0 && ((frame_id_ - 1 ) % (fragment_rate_) == 1 ) && record_log_ ) // && ( framed_transformation_.flag_ & framed_transformation_.SavePointCloudFlag ) )
       {
         scene_cloud_view_.show( *kinfu_, integrate_colors_ );
         
@@ -1373,6 +1379,19 @@ struct KinFuLSApp
       rgb24_.data = &source_image_data_[0];
 
     }
+    //SPCL
+    #ifdef SPCL_FRAME_ID
+    int image_frame_id = image_wrapper->getMetaData().FrameID();
+    int depth_frame_id = depth_wrapper->getDepthMetaData().FrameID();
+    if ( image_frame_id != depth_frame_id ) {
+      frame_id_ = depth_frame_id;
+      PCL_WARN( "Triggered frame number asynchronized : depth %d, image %d\n", depth_frame_id, image_frame_id );
+    } else {
+      frame_id_ = depth_frame_id;
+    }
+    #endif
+    //SPCL
+
     data_ready_cond_.notify_one();
   }
 
@@ -1550,7 +1569,9 @@ struct KinFuLSApp
     RGBDTrajectory kinfu_traj_;
 
   int fragment_rate_;
-  int frame_id_;
+  #ifdef SPCL_FRAME_ID
+    int frame_id_;
+  #endif
 
   bool rgbd_odometry_;
 

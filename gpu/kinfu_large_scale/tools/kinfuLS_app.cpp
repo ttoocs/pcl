@@ -942,6 +942,8 @@ struct KinFuLSApp
     if(shiftDistance > 2.5 * vsz)
       PCL_WARN ("WARNING Shifting distance (%.2f) is very large compared to the volume size (%.2f).\nYou can modify it using --shifting_distance.\n", shiftDistance, vsz);
 
+    cout << "Fragment Rate: " << fragment_rate_ << endl;
+
     kinfu_ = new pcl::gpu::kinfuLS::KinfuTracker(volume_size, shiftDistance);
 
     Eigen::Matrix3f R = Eigen::Matrix3f::Identity ();   // * AngleAxisf( pcl::deg2rad(-30.f), Vector3f::UnitX());
@@ -1046,13 +1048,13 @@ struct KinFuLSApp
   void
     toggleCameraParam( std::string camera_file )
   {
-    cout << "STUBBED: toggleCameraParam in kinfuAppLS.cpp" << endl;
-//    camera_.loadFromFile( camera_file );
-//
-    //kinfu_->setDepthIntrinsics( 582.62448167737955f, 582.69103270988637f, 313.04475870804731f, 238.44389626620386f );
-//    kinfu_->setDepthIntrinsics( camera_.fx_, camera_.fy_, camera_.cx_, camera_.cy_ );
-//    kinfu_->setDepthTruncationForICP( camera_.ICP_trunc_ );
-//    kinfu_->setDepthTruncationForIntegrate( camera_.integration_trunc_ );
+    //cout << "STUBBED: toggleCameraParam in kinfuAppLS.cpp" << endl;
+    camera_.loadFromFile( camera_file );
+
+//    kinfu_->setDepthIntrinsics( 582.62448167737955f, 582.69103270988637f, 313.04475870804731f, 238.44389626620386f );
+    kinfu_->setDepthIntrinsics( camera_.fx_, camera_.fy_, camera_.cx_, camera_.cy_ );
+    kinfu_->setDepthTruncationForICP( camera_.ICP_trunc_ );
+//    kinfu_->setDepthTruncationForIntegrate( camera_.integration_trunc_ ); //Doesn't exist?
   }
 
   void
@@ -1207,12 +1209,12 @@ struct KinFuLSApp
   				{
             writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, scene_cloud_view_.combined_ptr_);
 //          	writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointNormal>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.normals_ptr_));
-            cout << "NORMALS 1" << endl;
+            //cout << "NORMALS 1" << endl;
           }
   				else
           {
   					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, scene_cloud_view_.cloud_ptr_);
-            cout << "NO NORMALS 1" << endl;
+            //cout << "NO NORMALS 1" << endl;
           }
   			}
   			else
@@ -1220,13 +1222,14 @@ struct KinFuLSApp
   				if (scene_cloud_view_.compute_normals_) {
   					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGBNormal>(*scene_cloud_view_.combined_ptr_, *scene_cloud_view_.point_colors_ptr_));
   					//writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGBNormal>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.normals_ptr_, *scene_cloud_view_.point_colors_ptr_));
-            cout << "NORMALS 2" << endl;
+            //cout << "NORMALS 2" << endl;
   				}
   				else
           {
   					writeCloudFile (file_index_, KinFuLSApp::PCD_BIN, merge<PointXYZRGB>(*scene_cloud_view_.cloud_ptr_, *scene_cloud_view_.point_colors_ptr_));
-            cout << "NO NORMALS 2" << endl;
+            //cout << "NO NORMALS 2" << endl;
           }
+          kinfu_->reset();
   			}
 
   			// enable when you need mesh output instead of pcd output when using --fragment
@@ -1576,7 +1579,7 @@ struct KinFuLSApp
   bool rgbd_odometry_;
 
   //TODO: Camera stuffs
-  //CameraParam camera_;
+  CameraParam camera_;
 
   //SPCL
 
@@ -1839,6 +1842,7 @@ main (int argc, char* argv[])
 
   int fragment_rate = 0;
   pc::parse_argument (argc, argv, "--fragment", fragment_rate);
+
 
   //SPCL: added fragment_rate
   KinFuLSApp app (*capture, volume_size, shift_distance, snapshot_rate, fragment_rate);

@@ -536,7 +536,8 @@ namespace pcl
 			const std::vector<int>& iterCounts, const std::vector<float>& minGradientMagnitudes,
 			const DepthMap& depth, const View * pcolor = NULL, FramedTransformation * frame_ptr = NULL
 		);
-
+bool  intersect( int bbox[ 6 ] );
+//END SPCL
  
           /** \brief Returns camera pose at given time, default the last pose
             * \param[in] time Index of frame for which camera pose is returned.

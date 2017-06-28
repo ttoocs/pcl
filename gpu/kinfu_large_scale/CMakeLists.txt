@@ -5,6 +5,17 @@ set(SUBSYS_DEPS common visualization io gpu_containers gpu_utils geometry search
 
 set(build FALSE)
 
+#OPEN CV HACK
+find_package(OpenCV REQUIRED )
+
+add_definitions(
+  -DHAVE_OPENCV
+)
+
+link_libraries(
+  ${OpenCV_LIBS}
+)
+
 # OpenNI found?
 if(NOT WITH_OPENNI)
     set(DEFAULT FALSE)

@@ -46,6 +46,9 @@ const float Evaluation::fy = 525.0f;
 const float Evaluation::cx = 319.5f;
 const float Evaluation::cy = 239.5f;
 
+//Hack as these don't actually work, much outdated code I guess.
+#undef HAVE_OPENCV
+
 #ifndef HAVE_OPENCV
 
 struct Evaluation::Impl {};

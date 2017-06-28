@@ -51,7 +51,7 @@
 
 #ifdef HAVE_OPENCV
   #include <opencv2/opencv.hpp>
-  //~ #include <opencv2/gpu/gpu.hpp>
+  //#include <opencv2/gpu/gpu.hpp>
 #endif
 
 using namespace std;
@@ -913,3 +913,412 @@ namespace pcl
     }
   }
 }
+
+
+//SPCL Stuff:
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool
+	pcl::gpu::kinfuLS::KinfuTracker::rgbdodometry(
+	const cv::Mat& image0, const cv::Mat& _depth0, const cv::Mat& validMask0,
+	const cv::Mat& image1, const cv::Mat& _depth1, const cv::Mat& validMask1,
+	const cv::Mat& cameraMatrix, float minDepth, float maxDepth, float maxDepthDiff,
+	const std::vector<int>& iterCounts, const std::vector<float>& minGradientMagnitudes,
+	const DepthMap& depth_raw, const View * pcolor, FramedTransformation * frame_ptr
+	)
+{
+  using namespace cv;
+	//ScopeTime time( "Kinfu Tracker All" );
+	if ( frame_ptr != NULL && ( frame_ptr->flag_ & frame_ptr->ResetFlag ) ) {
+		reset();
+		if ( frame_ptr->type_ == frame_ptr->DirectApply )
+		{
+			Eigen::Affine3f aff_rgbd( frame_ptr->transformation_ );
+			rmats_[0] = aff_rgbd.linear();
+			tvecs_[0] = aff_rgbd.translation();
+		}
+	}
+
+	device::kinfuLS::Intr intr (fx_, fy_, cx_, cy_, max_integrate_distance_);
+
+	if ( frame_ptr != NULL && ( frame_ptr->flag_ & frame_ptr->IgnoreRegistrationFlag ) ) {
+	}
+	else
+	{
+		//ScopeTime time(">>> Bilateral, pyr-down-all, create-maps-all");
+		//depth_raw.copyTo(depths_curr_[0]);
+		device::kinfuLS::bilateralFilter (depth_raw, depths_curr_[0]);
+
+		if (max_icp_distance_ > 0)
+			device::kinfuLS::truncateDepth(depths_curr_[0], max_icp_distance_);
+
+		for (int i = 1; i < LEVELS; ++i)
+			device::kinfuLS::pyrDown (depths_curr_[i-1], depths_curr_[i]);
+
+		for (int i = 0; i < LEVELS; ++i)
+		{
+			device::kinfuLS::createVMap (intr(i), depths_curr_[i], vmaps_curr_[i]);
+			//device::createNMap(vmaps_curr_[i], nmaps_curr_[i]);
+			computeNormalsEigen (vmaps_curr_[i], nmaps_curr_[i]);
+		}
+pcl::device::kinfuLS
+		pcl::device::kinfuLS::sync ();
+	}
+
+	//can't perform more on first frame
+	if (global_time_ == 0)
+	{
+		Matrix3frm initial_cam_rot = rmats_[0]; //  [Ri|ti] - pos of camera, i.e.
+		Matrix3frm initial_cam_rot_inv = initial_cam_rot.inverse ();
+		Vector3f   initial_cam_trans = tvecs_[0]; //  transform from camera to global coo space for (i-1)th camera pose
+
+		Mat33&  device_initial_cam_rot = device_cast<Mat33> (initial_cam_rot);
+		Mat33&  device_initial_cam_rot_inv = device_cast<Mat33> (initial_cam_rot_inv);
+		float3& device_initial_cam_trans = device_cast<float3>(initial_cam_trans);
+
+		float3 device_volume_size = device_cast<const float3>(tsdf_volume_->getSize());
+
+		device::kinfuLS::integrateTsdfVolume(depth_raw, intr, device_volume_size, device_initial_cam_rot_inv, device_initial_cam_trans, tsdf_volume_->getTsdfTruncDist(), tsdf_volume_->data(), getCyclicalBufferStructure (), depthRawScaled_);
+		//device::integrateTsdfVolume(depths_curr_[ 0 ], intr, device_volume_size, device_initial_cam_rot_inv, device_initial_cam_trans, tsdf_volume_->getTsdfTruncDist(), tsdf_volume_->data(), getCyclicalBufferStructure (), depthRawScaled_);
+
+		for (int i = 0; i < LEVELS; ++i)
+			device::kinfuLS::tranformMaps (vmaps_curr_[i], nmaps_curr_[i], device_initial_cam_rot, device_initial_cam_trans, vmaps_g_prev_[i], nmaps_g_prev_[i]);
+
+		if(perform_last_scan_)
+			finished_ = true;
+		++global_time_;
+		return (false);
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////
+	// Iterative Closest Point
+
+	// GET PREVIOUS GLOBAL TRANSFORM
+	// Previous global rotation
+	const int sobelSize = 3;
+	const double sobelScale = 1./8;
+
+	Mat depth0 = _depth0.clone(),
+		depth1 = _depth1.clone();
+
+	// check RGB-D input data
+	CV_Assert( !image0.empty() );
+	CV_Assert( image0.type() == CV_8UC1 );
+	CV_Assert( depth0.type() == CV_32FC1 && depth0.size() == image0.size() );
+
+	CV_Assert( image1.size() == image0.size() );
+	CV_Assert( image1.type() == CV_8UC1 );
+	CV_Assert( depth1.type() == CV_32FC1 && depth1.size() == image0.size() );
+
+	// check masks
+	CV_Assert( validMask0.empty() || (validMask0.type() == CV_8UC1 && validMask0.size() == image0.size()) );
+	CV_Assert( validMask1.empty() || (validMask1.type() == CV_8UC1 && validMask1.size() == image0.size()) );
+
+	// check camera params
+	CV_Assert( cameraMatrix.type() == CV_32FC1 && cameraMatrix.size() == Size(3,3) );
+
+	// other checks
+	CV_Assert( iterCounts.empty() || minGradientMagnitudes.empty() ||
+		minGradientMagnitudes.size() == iterCounts.size() );
+
+	vector<int> defaultIterCounts;
+	vector<float> defaultMinGradMagnitudes;
+	vector<int> const* iterCountsPtr = &iterCounts;
+	vector<float> const* minGradientMagnitudesPtr = &minGradientMagnitudes;
+	if( iterCounts.empty() || minGradientMagnitudes.empty() )
+	{
+		defaultIterCounts.resize(4);
+		defaultIterCounts[0] = 7;
+		defaultIterCounts[1] = 7;
+		defaultIterCounts[2] = 7;
+		defaultIterCounts[3] = 10;
+
+		defaultMinGradMagnitudes.resize(4);
+		defaultMinGradMagnitudes[0] = 12;
+		defaultMinGradMagnitudes[1] = 5;
+		defaultMinGradMagnitudes[2] = 3;
+		defaultMinGradMagnitudes[3] = 1;
+
+		iterCountsPtr = &defaultIterCounts;
+		minGradientMagnitudesPtr = &defaultMinGradMagnitudes;
+	}
+
+	preprocessDepth( depth0, depth1, validMask0, validMask1, minDepth, maxDepth );
+
+	vector<Mat> pyramidImage0, pyramidDepth0,
+		pyramidImage1, pyramidDepth1, pyramid_dI_dx1, pyramid_dI_dy1, pyramidTexturedMask1,
+		pyramidCameraMatrix;
+	buildPyramids( image0, image1, depth0, depth1, cameraMatrix, sobelSize, sobelScale, *minGradientMagnitudesPtr,
+		pyramidImage0, pyramidDepth0, pyramidImage1, pyramidDepth1,
+		pyramid_dI_dx1, pyramid_dI_dy1, pyramidTexturedMask1, pyramidCameraMatrix );
+
+	Mat resultRt = Mat::eye(4,4,CV_64FC1);
+	Mat currRt, ksi;
+
+	Matrix3frm cam_rot_global_prev = rmats_[global_time_ - 1];            // [Ri|ti] - pos of camera, i.e.
+	// Previous global translation
+	Vector3f   cam_trans_global_prev = tvecs_[global_time_ - 1];          // transform from camera to global coo space for (i-1)th camera pose
+
+	if ( frame_ptr != NULL && ( frame_ptr->type_ == frame_ptr->InitializeOnly ) ) {
+		Eigen::Affine3f aff_rgbd( frame_ptr->transformation_ );
+		cam_rot_global_prev = aff_rgbd.linear();
+		cam_trans_global_prev = aff_rgbd.translation();
+	} else if ( frame_ptr != NULL && ( frame_ptr->type_ == frame_ptr->IncrementalOnly ) ) {
+		Eigen::Affine3f aff_rgbd( frame_ptr->transformation_ * getCameraPose().matrix() );
+		cam_rot_global_prev = aff_rgbd.linear();
+		cam_trans_global_prev = aff_rgbd.translation();
+	}
+
+
+	// Previous global inverse rotation
+	Matrix3frm cam_rot_global_prev_inv = cam_rot_global_prev.inverse ();  // Rprev.t();
+
+	// GET CURRENT GLOBAL TRANSFORM
+	Matrix3frm cam_rot_global_curr = cam_rot_global_prev;                 // transform to global coo for ith camera pose
+	Vector3f   cam_trans_global_curr = cam_trans_global_prev;
+
+	// CONVERT TO DEVICE TYPES 
+	//LOCAL PREVIOUS TRANSFORM
+	Mat33&  device_cam_rot_local_prev_inv = device_cast<Mat33> (cam_rot_global_prev_inv);
+	Mat33&  device_cam_rot_local_prev = device_cast<Mat33> (cam_rot_global_prev); 
+
+	float3& device_cam_trans_local_prev_tmp = device_cast<float3> (cam_trans_global_prev);
+	float3 device_cam_trans_local_prev;
+	device_cam_trans_local_prev.x = device_cam_trans_local_prev_tmp.x - (getCyclicalBufferStructure ())->origin_metric.x;
+	device_cam_trans_local_prev.y = device_cam_trans_local_prev_tmp.y - (getCyclicalBufferStructure ())->origin_metric.y;
+	device_cam_trans_local_prev.z = device_cam_trans_local_prev_tmp.z - (getCyclicalBufferStructure ())->origin_metric.z;
+	float3 device_volume_size = device_cast<const float3> (tsdf_volume_->getSize());
+
+	///////////////////////////////////////////////////////////////////////////////////////////
+	// Ray casting
+	/*Mat33& device_Rcurr = device_cast<Mat33> (Rcurr);*/
+	{          
+		//ScopeTime time( ">>> raycast" );
+		raycast (intr, device_cam_rot_local_prev, device_cam_trans_local_prev, tsdf_volume_->getTsdfTruncDist (), device_volume_size, tsdf_volume_->data (), getCyclicalBufferStructure (), vmaps_g_prev_[0], nmaps_g_prev_[0]);    
+	}
+	{
+		// POST-PROCESSING: We need to transform the newly raycasted maps into the global space.
+		//ScopeTime time( ">>> transformation based on raycast" );
+		Mat33&  rotation_id = device_cast<Mat33> (rmats_[0]); /// Identity Rotation Matrix. Because we only need translation
+		float3 cube_origin = (getCyclicalBufferStructure ())->origin_metric;
+
+		//~ PCL_INFO ("Raycasting with cube origin at %f, %f, %f\n", cube_origin.x, cube_origin.y, cube_origin.z);
+
+		MapArr& vmap_temp = vmaps_g_prev_[0];
+		MapArr& nmap_temp = nmaps_g_prev_[0];
+
+		device::kinfuLS::tranformMaps (vmap_temp, nmap_temp, rotation_id, cube_origin, vmaps_g_prev_[0], nmaps_g_prev_[0]);
+
+		for (int i = 1; i < LEVELS; ++i)
+		{
+			resizeVMap (vmaps_g_prev_[i-1], vmaps_g_prev_[i]);
+			resizeNMap (nmaps_g_prev_[i-1], nmaps_g_prev_[i]);
+		}
+		pcl::device::kinfuLS::sync ();
+	}
+
+	if ( frame_ptr != NULL && ( frame_ptr->flag_ & frame_ptr->IgnoreRegistrationFlag ) )
+	{
+		rmats_.push_back (cam_rot_global_prev); 
+		tvecs_.push_back (cam_trans_global_prev);
+	}
+	else if ( frame_ptr != NULL && ( frame_ptr->type_ == frame_ptr->DirectApply ) )
+	{
+		//Eigen::Affine3f aff_rgbd( getCameraPose( 0 ).matrix() * frame_ptr->transformation_ );
+		Eigen::Affine3f aff_rgbd( frame_ptr->transformation_ );
+		cam_rot_global_curr = aff_rgbd.linear();
+		cam_trans_global_curr = aff_rgbd.translation();
+		rmats_.push_back (cam_rot_global_curr); 
+		tvecs_.push_back (cam_trans_global_curr);
+	}
+	else
+	{
+		//ScopeTime time(">>> icp-all");
+
+		Eigen::Matrix4f result_trans = Eigen::Matrix4f::Identity();
+		Eigen::Affine3f mat_prev;
+		mat_prev.linear() = cam_rot_global_prev;
+		mat_prev.translation() = cam_trans_global_prev;
+
+		for( int level_index = (int)iterCountsPtr->size() - 1; level_index >= 0; level_index-- )
+		{
+			// We need to transform the maps from global to the local coordinates
+			Mat33&  rotation_id = device_cast<Mat33> (rmats_[0]); // Identity Rotation Matrix. Because we only need translation
+			float3 cube_origin = (getCyclicalBufferStructure ())->origin_metric;
+			cube_origin.x = -cube_origin.x;
+			cube_origin.y = -cube_origin.y;
+			cube_origin.z = -cube_origin.z;
+
+			const Mat& levelCameraMatrix = pyramidCameraMatrix[ level_index ];
+
+			const Mat& levelImage0 = pyramidImage0[ level_index ];
+			const Mat& levelDepth0 = pyramidDepth0[ level_index ];
+			Mat levelCloud0;
+			cvtDepth2Cloud( pyramidDepth0[ level_index ], levelCloud0, levelCameraMatrix );
+
+			const Mat& levelImage1 = pyramidImage1[ level_index ];
+			const Mat& levelDepth1 = pyramidDepth1[ level_index ];
+			const Mat& level_dI_dx1 = pyramid_dI_dx1[ level_index ];
+			const Mat& level_dI_dy1 = pyramid_dI_dy1[ level_index ];
+
+			CV_Assert( level_dI_dx1.type() == CV_16S );
+			CV_Assert( level_dI_dy1.type() == CV_16S );
+
+			const double fx = levelCameraMatrix.at<double>(0,0);
+			const double fy = levelCameraMatrix.at<double>(1,1);
+			const double determinantThreshold = 1e-6;
+
+			Mat corresps( levelImage0.size(), levelImage0.type() );
+
+			for( int iter = 0; iter < (*iterCountsPtr)[ level_index ]; iter ++ ) {
+				bool odo_good = true;
+
+				int correspsCount = computeCorresp( levelCameraMatrix, levelCameraMatrix.inv(), resultRt.inv(DECOMP_SVD),
+					levelDepth0, levelDepth1, pyramidTexturedMask1[ level_index ], maxDepthDiff,
+					corresps );
+				if( correspsCount == 0 ) {
+					odo_good = false;
+				} else {
+					odo_good = computeKsi( 0,
+						levelImage0, levelCloud0,
+						levelImage1, level_dI_dx1, level_dI_dy1,
+						corresps, correspsCount,
+						fx, fy, sobelScale, determinantThreshold,
+						ksi, AA_, bb_ );
+				}
+
+				if ( odo_good == false ) {
+					AA_.setZero();
+					bb_.setZero();
+				}
+
+				Mat33&  device_cam_rot_local_curr = device_cast<Mat33> (cam_rot_global_curr);/// We have not dealt with changes in rotations
+
+				float3& device_cam_trans_local_curr_tmp = device_cast<float3> (cam_trans_global_curr);
+				float3 device_cam_trans_local_curr; 
+				device_cam_trans_local_curr.x = device_cam_trans_local_curr_tmp.x - (getCyclicalBufferStructure ())->origin_metric.x;
+				device_cam_trans_local_curr.y = device_cam_trans_local_curr_tmp.y - (getCyclicalBufferStructure ())->origin_metric.y;
+				device_cam_trans_local_curr.z = device_cam_trans_local_curr_tmp.z - (getCyclicalBufferStructure ())->origin_metric.z;
+
+				AAA_ = AA_;
+				bbb_ = bb_;
+
+				double det = AAA_.determinant ();
+
+				if ( fabs (det) < 1e-15 || pcl_isnan (det) )
+				{
+					if (pcl_isnan (det)) cout << "qnan" << endl;
+
+					PCL_ERROR ("LOST ... @%d frame.%d level.%d iteration, matrices are\n", global_time_, level_index, iter);
+					cout << "Determinant : " << det << endl;
+					cout << "Singular matrix :" << endl << A_ << endl;
+					cout << "Corresponding b :" << endl << b_ << endl;
+
+					if ( frame_ptr != NULL && frame_ptr->type_ == frame_ptr->InitializeOnly ) {
+						Eigen::Affine3f aff_rgbd( frame_ptr->transformation_ );
+						cam_rot_global_curr = aff_rgbd.linear();
+						cam_trans_global_curr = aff_rgbd.translation();
+						break;
+					} else {
+						reset ();
+						return (false);
+					}
+				}
+
+				Eigen::Matrix< float, 6, 1 > result = AAA_.llt().solve( bbb_ ).cast< float >();
+
+				float alpha = result (0);
+				float beta  = result (1);
+				float gamma = result (2);
+
+				Eigen::Matrix3f cam_rot_incremental = (Eigen::Matrix3f)AngleAxisf (gamma, Vector3f::UnitZ ()) * AngleAxisf (beta, Vector3f::UnitY ()) * AngleAxisf (alpha, Vector3f::UnitX ());
+				Vector3f cam_trans_incremental = result.tail<3> ();
+
+				Eigen::Affine3f mat_inc;
+				mat_inc.linear() = cam_rot_incremental;
+				mat_inc.translation() = cam_trans_incremental;
+
+				result_trans = mat_inc * result_trans;
+				Eigen::Matrix4d temp = result_trans.cast< double >();
+				eigen2cv( temp, resultRt );
+
+				Eigen::Affine3f mat_curr;
+				mat_curr.matrix() = mat_prev.matrix() * result_trans;
+
+				cam_rot_global_curr = mat_curr.linear();
+				cam_trans_global_curr = mat_curr.translation();
+			}
+		}
+
+		//save tranform
+		rmats_.push_back (cam_rot_global_curr); 
+		tvecs_.push_back (cam_trans_global_curr);
+	}
+
+	bool has_shifted = false;
+	if ( force_shift_ ) {
+		has_shifted = cyclical_.checkForShift(tsdf_volume_, color_volume_, getCameraPose (), 0.6 * volume_size_, true, perform_last_scan_, force_shift_, extract_world_);
+		force_shift_ = false;
+	} else {
+		force_shift_ = cyclical_.checkForShift(tsdf_volume_, color_volume_, getCameraPose (), 0.6 * volume_size_, false, perform_last_scan_, force_shift_, extract_world_);
+	}
+
+	if(has_shifted)
+		PCL_WARN ("SHIFTING\n");
+
+	// get NEW local rotation 
+	Matrix3frm cam_rot_local_curr_inv = cam_rot_global_curr.inverse ();
+	Mat33&  device_cam_rot_local_curr_inv = device_cast<Mat33> (cam_rot_local_curr_inv);
+	Mat33&  device_cam_rot_local_curr = device_cast<Mat33> (cam_rot_global_curr); 
+
+	// get NEW local translation
+	float3& device_cam_trans_local_curr_tmp = device_cast<float3> (cam_trans_global_curr);
+	float3 device_cam_trans_local_curr;
+	device_cam_trans_local_curr.x = device_cam_trans_local_curr_tmp.x - (getCyclicalBufferStructure ())->origin_metric.x;
+	device_cam_trans_local_curr.y = device_cam_trans_local_curr_tmp.y - (getCyclicalBufferStructure ())->origin_metric.y;
+	device_cam_trans_local_curr.z = device_cam_trans_local_curr_tmp.z - (getCyclicalBufferStructure ())->origin_metric.z;  
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////
+	// Integration check - We do not integrate volume if camera does not move.  
+	float rnorm = rodrigues2(cam_rot_global_curr.inverse() * cam_rot_global_prev).norm();
+	float tnorm = (cam_trans_global_curr - cam_trans_global_prev).norm();    
+	const float alpha = 1.f;
+	bool integrate = (rnorm + alpha * tnorm)/2 >= integration_metric_threshold_;
+	integrate = true;
+
+	///////////////////////////////////////////////////////////////////////////////////////////
+	// Volume integration
+	if (integrate)
+	{
+		//integrateTsdfVolume(depth_raw, intr, device_volume_size, device_Rcurr_inv, device_tcurr, tranc_dist, volume_);
+		if ( frame_ptr != NULL && ( frame_ptr->flag_ & frame_ptr->IgnoreIntegrationFlag ) ) {
+		} else {
+			//ScopeTime time( ">>> integrate" );
+			integrateTsdfVolume (depth_raw, intr, device_volume_size, device_cam_rot_local_curr_inv, device_cam_trans_local_curr, tsdf_volume_->getTsdfTruncDist (), tsdf_volume_->data (), getCyclicalBufferStructure (), depthRawScaled_);
+		}
+	}
+
+	{
+		if ( pcolor && color_volume_ )
+		{
+			//ScopeTime time( ">>> update color" );
+			const float3 device_volume_size = device_cast<const float3> (tsdf_volume_->getSize());
+
+			device::kinfuLS::updateColorVolume(intr, tsdf_volume_->getTsdfTruncDist(), device_cam_rot_local_curr_inv, device_cam_trans_local_curr, vmaps_g_prev_[0], 
+				*pcolor, device_volume_size, color_volume_->data(), getCyclicalBufferStructure(), color_volume_->getMaxWeight());
+		}
+	}
+
+	++global_time_;
+	return (true);
+}
+
+bool
+	pcl::gpu::kinfuLS::KinfuTracker::intersect( int bounds[ 6 ] )
+{
+	pcl::gpu::kinfuLS::tsdf_buffer* buffer = getCyclicalBufferStructure();
+	// need more work here.
+	return true;
+}
+

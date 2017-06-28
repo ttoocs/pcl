@@ -59,6 +59,15 @@
 #include <pcl/gpu/kinfu_large_scale/cyclical_buffer.h>
 //#include <pcl/gpu/kinfu_large_scale/standalone_marching_cubes.h>
 
+#ifdef HAVE_OPENCV
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/highgui/highgui.hpp>
+//#include <opencv2/contrib/contrib.hpp>
+#endif
+
 namespace pcl
 {
   namespace gpu
@@ -519,6 +528,16 @@ namespace pcl
             */
           bool operator() (const DepthMap& depth, const View& colors);
 
+//SPCL
+		bool rgbdodometry(
+			const cv::Mat& image0, const cv::Mat& _depth0, const cv::Mat& validMask0,
+			const cv::Mat& image1, const cv::Mat& _depth1, const cv::Mat& validMask1,
+			const cv::Mat& cameraMatrix, float minDepth, float maxDepth, float maxDepthDiff,
+			const std::vector<int>& iterCounts, const std::vector<float>& minGradientMagnitudes,
+			const DepthMap& depth, const View * pcolor = NULL, FramedTransformation * frame_ptr = NULL
+		);
+
+ 
           /** \brief Returns camera pose at given time, default the last pose
             * \param[in] time Index of frame for which camera pose is returned.
             * \return camera pose

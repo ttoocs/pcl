@@ -1114,12 +1114,71 @@ struct KinFuLSApp
       {
         SampledScopeTime fps(time_ms_);
 
-        //run kinfu algorithm
-        if (integrate_colors_)
-          has_image = (*kinfu_) (depth_device_, image_view_.colors_device_);
-        else
-          has_image = (*kinfu_) (depth_device_);
-      }
+        //  
+        if (! rgbd_odometry_ ){
+
+          //run kinfu algorithm (PCL)
+          if (integrate_colors_)
+            has_image = (*kinfu_) (depth_device_, image_view_.colors_device_);
+          else
+            has_image = (*kinfu_) (depth_device_);
+          }
+        else{
+          //SPCL
+          
+					// normalize color of grayImage1_
+					cv::Scalar scale0 = cv::mean( grayImage0_ );
+					cv::Scalar scale1 = cv::mean( grayImage1_ );
+					grayImage1_.convertTo( grayImage1_, -1, scale0.val[ 0 ] / scale1.val[ 0 ] );
+					//cout << scale0.val[ 0 ] / scale1.val[ 0 ] << endl;
+
+					vector<int> iterCounts(4);
+					iterCounts[0] = 7;
+					iterCounts[1] = 7;
+					iterCounts[2] = 7;
+					iterCounts[3] = 10;
+
+					vector<float> minGradMagnitudes(4);
+					minGradMagnitudes[0] = 12;
+					minGradMagnitudes[1] = 5;
+					minGradMagnitudes[2] = 3;
+					minGradMagnitudes[3] = 1;
+					const float minDepth = 0.f; //in meters
+					const float maxDepth = 7.5f; //in meters
+					const float maxDepthDiff = 0.07f; //in meters
+
+					//float vals[] = {525., 0., 3.1950000000000000e+02,
+					//	0., 525., 2.3950000000000000e+02,
+					//	0., 0., 1.};
+					float vals[] = { camera_.fx_, 0., camera_.cx_,
+						0., camera_.fy_, camera_.cy_,
+						0., 0., 1.
+					};
+
+					const cv::Mat cameraMatrix = cv::Mat(3,3,CV_32FC1,vals);
+					const cv::Mat distCoeff(1,5,CV_32FC1,cv::Scalar(0));
+
+					//run kinfu algorithm
+					if (integrate_colors_) {
+						has_image = (*kinfu_).rgbdodometry(
+							grayImage0_, depthFlt0_, cv::Mat(),
+							grayImage1_, depthFlt1_, cv::Mat(),
+							cameraMatrix, minDepth, maxDepth, maxDepthDiff,
+							iterCounts, minGradMagnitudes,
+							depth_device_, &image_view_.colors_device_, &framed_transformation_
+							);
+					} else {
+						has_image = (*kinfu_).rgbdodometry(
+							grayImage0_, depthFlt0_, cv::Mat(),
+							grayImage1_, depthFlt1_, cv::Mat(),
+							cameraMatrix, minDepth, maxDepth, maxDepthDiff,
+							iterCounts, minGradMagnitudes,
+							depth_device_
+							);
+					}
+
+        } //End rgbd_odometry_
+      } //End 
 
       image_view_.showDepth (depth_);
       //image_view_.showGeneratedDepth(kinfu_, kinfu_->getCameraPose());
@@ -1381,20 +1440,50 @@ struct KinFuLSApp
       image_wrapper->fillRGB(rgb24_.cols, rgb24_.rows, (unsigned char*)&source_image_data_[0]);
       rgb24_.data = &source_image_data_[0];
 
-    }
-    //SPCL
-    #ifdef SPCL_FRAME_ID
-    int image_frame_id = image_wrapper->getMetaData().FrameID();
-    int depth_frame_id = depth_wrapper->getDepthMetaData().FrameID();
-    if ( image_frame_id != depth_frame_id ) {
-      frame_id_ = depth_frame_id;
-      PCL_WARN( "Triggered frame number asynchronized : depth %d, image %d\n", depth_frame_id, image_frame_id );
-    } else {
-      frame_id_ = depth_frame_id;
-    }
-    #endif
-    //SPCL
+      //SPCL
+      #ifdef SPCL_FRAME_ID
+      int image_frame_id = image_wrapper->getMetaData().FrameID();
+      int depth_frame_id = depth_wrapper->getDepthMetaData().FrameID();
+      if ( image_frame_id != depth_frame_id ) {
+        frame_id_ = depth_frame_id;
+        PCL_WARN( "Triggered frame number asynchronized : depth %d, image %d\n", depth_frame_id, image_frame_id );
+      } else {
+        frame_id_ = depth_frame_id;
+      }
+      #endif
+    
+      //RGBD
+   
+/* 
+			int image_frame_id = image_wrapper->getMetaData().FrameID();
+			int depth_frame_id = depth_wrapper->getDepthMetaData().FrameID();
+			if ( image_frame_id != depth_frame_id ) {
+				frame_id_ = depth_frame_id;
+				PCL_WARN( "Triggered frame number asynchronized : depth %d, image %d\n", depth_frame_id, image_frame_id );
+			} else {
+				frame_id_ = depth_frame_id;
+				//PCL_INFO( "Triggered frame : depth %d, image %d\n", depth_frame_id, image_frame_id );
+			}
+			//cout << "[" << boost::this_thread::get_id() << "] : " << "Process Depth " << depth_wrapper->getDepthMetaData().FrameID() << ", " << depth_wrapper->getDepthMetaData().Timestamp()
+			// << " Image" << image_wrapper->getMetaData().FrameID() << ", " << image_wrapper->getMetaData().Timestamp() << endl;
 
+			if ( rgbd_odometry_ ){ //|| kintinuous_ ) {
+				depthFlt0_.copyTo( depthFlt1_ );
+				grayImage0_.copyTo( grayImage1_ );
+
+				cv::Mat depth_mat( depth_wrapper->getHeight(), depth_wrapper->getWidth(), CV_16UC1 );
+				cv::Mat image_mat( image_wrapper->getHeight(), image_wrapper->getWidth(), CV_8UC3 );
+				depth_wrapper->fillDepthImageRaw( depth_wrapper->getWidth(), depth_wrapper->getHeight(), ( unsigned short * )depth_mat.data );
+				image_wrapper->fillRGB( image_wrapper->getWidth(), image_wrapper->getHeight(), ( unsigned char* )image_mat.data );
+
+				cv::cvtColor( image_mat, grayImage0_, CV_RGB2GRAY );
+				depth_mat.convertTo( depthFlt0_, CV_32FC1, 1./1000 );
+			}
+*/
+
+
+    //SPCL
+    }
     data_ready_cond_.notify_one();
   }
 
@@ -1569,7 +1658,7 @@ struct KinFuLSApp
   bool record_log_;
   string record_log_file_;
 
-    RGBDTrajectory kinfu_traj_;
+  RGBDTrajectory kinfu_traj_;
 
   int fragment_rate_;
   #ifdef SPCL_FRAME_ID
@@ -1577,6 +1666,8 @@ struct KinFuLSApp
   #endif
 
   bool rgbd_odometry_;
+  cv::Mat grayImage0_, grayImage1_, depthFlt0_, depthFlt1_;
+  FramedTransformation framed_transformation_;
 
   //TODO: Camera stuffs
   CameraParam camera_;

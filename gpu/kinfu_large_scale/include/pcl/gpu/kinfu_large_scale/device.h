@@ -80,9 +80,9 @@ namespace pcl
         */ 
       struct Intr
       {
-        float fx, fy, cx, cy;
+        float fx, fy, cx, cy, trunc_dist;
         Intr () {}
-        Intr (float fx_, float fy_, float cx_, float cy_) : fx (fx_), fy (fy_), cx (cx_), cy (cy_) {}
+        Intr (float fx_, float fy_, float cx_, float cy_, float trunc_dist_=0) : fx (fx_), fy (fy_), cx (cx_), cy (cy_), trunc_dist(trunc_dist_){}
 
         Intr operator () (int level_index) const
         { 

@@ -737,6 +737,21 @@ namespace pcl
           /** \brief Truncation threshold for depth image for ICP step */
           float max_icp_distance_;
 
+          //SPCL
+          float max_integrate_distance_;
+          
+      		Eigen::Matrix<float, 6, 6, Eigen::RowMajor> A_;
+          Eigen::Matrix<float, 6, 1> b_;
+  
+      		Eigen::Matrix<float, 6, 6, Eigen::RowMajor> AA_;
+      		Eigen::Matrix<float, 6, 1> bb_;
+
+      		Eigen::Matrix<float, 6, 6, Eigen::RowMajor> AAA_;
+	      	Eigen::Matrix<float, 6, 1> bbb_;
+
+
+          //END SPCL
+      
           /** \brief Intrinsic parameters of depth camera. */
           float fx_, fy_, cx_, cy_;
 

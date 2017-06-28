@@ -1641,9 +1641,9 @@ bool
 		{
 			//ScopeTime time( ">>> update color" );
 			const float3 device_volume_size = device_cast<const float3> (tsdf_volume_->getSize());
-
-			device::kinfuLS::updateColorVolume(intr, tsdf_volume_->getTsdfTruncDist(), device_cam_rot_local_curr_inv, device_cam_trans_local_curr, vmaps_g_prev_[0], 
-				*pcolor, device_volume_size, color_volume_->data(), getCyclicalBufferStructure(), color_volume_->getMaxWeight());
+//NOTE: PCL doesn't have the buffer this has, so I'm simply remove it.
+//			device::kinfuLS::updateColorVolume(intr, tsdf_volume_->getTsdfTruncDist(), device_cam_rot_local_curr_inv, device_cam_trans_local_curr, vmaps_g_prev_[0], *pcolor, device_volume_size, color_volume_->data(), getCyclicalBufferStructure(), color_volume_->getMaxWeight());
+			device::kinfuLS::updateColorVolume(intr, tsdf_volume_->getTsdfTruncDist(), device_cam_rot_local_curr_inv, device_cam_trans_local_curr, vmaps_g_prev_[0], *pcolor, device_volume_size, color_volume_->data(), color_volume_->getMaxWeight());
 		}
 	}
 

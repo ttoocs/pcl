@@ -1454,7 +1454,7 @@ struct KinFuLSApp
     
       //RGBD
    
-/* 
+// /* 
 			int image_frame_id = image_wrapper->getMetaData().FrameID();
 			int depth_frame_id = depth_wrapper->getDepthMetaData().FrameID();
 			if ( image_frame_id != depth_frame_id ) {
@@ -1479,7 +1479,7 @@ struct KinFuLSApp
 				cv::cvtColor( image_mat, grayImage0_, CV_RGB2GRAY );
 				depth_mat.convertTo( depthFlt0_, CV_32FC1, 1./1000 );
 			}
-*/
+// */
 
 
     //SPCL

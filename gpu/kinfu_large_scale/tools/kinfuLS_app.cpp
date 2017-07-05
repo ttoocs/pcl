@@ -926,7 +926,7 @@ struct KinFuLSApp
 
   KinFuLSApp(pcl::Grabber& source, float vsz, float shiftDistance, int snapshotRate, int fragmentRate ) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
           registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), was_lost_(false), time_ms_ (0),
-          record_log_ (false), fragment_rate_ (fragmentRate), frame_id_ (0), rgbd_odometry_ (false), file_index_ (0)
+          record_log_ (false), fragment_rate_ (fragmentRate), frame_id_ (0), rgbd_odometry_ (false), file_index_ (0), first_run (true)
   {
   #define fragment_start_ 0
     //Init Kinfu Tracker
@@ -1556,7 +1556,14 @@ struct KinFuLSApp
         if (triggered_capture)
           capture_.start(); // Triggers new frame
 
-        bool has_data = data_ready_cond_.timed_wait (lock, boost::posix_time::millisec(100));
+  //        bool has_data = data_ready_cond_.timed_wait (lock, boost::posix_time::millisec(100));
+        bool has_data = true;
+        if (first_run){
+          has_data = false;
+          first_run = false;
+        }else{
+          data_ready_cond_.wait (lock);
+        }
 
         try { this->execute (depth_, rgb24_, has_data); }
         catch (const std::bad_alloc& /*e*/) { cout << "Bad alloc" << endl; break; }
@@ -1669,6 +1676,7 @@ struct KinFuLSApp
   cv::Mat grayImage0_, grayImage1_, depthFlt0_, depthFlt1_;
   FramedTransformation framed_transformation_;
 
+  bool first_run;
   //TODO: Camera stuffs
   CameraParam camera_;
 

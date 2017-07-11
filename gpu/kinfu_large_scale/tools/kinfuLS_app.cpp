@@ -1545,19 +1545,32 @@ struct KinFuLSApp
     openni::VideoStream depthStream, colourStream;
 
     device.open(oni_file.c_str());
+    std::cout << OpenNI::getExtendedError() << std::endl ;
+    
     depthStream.create(device, SENSOR_DEPTH);
+    std::cout << OpenNI::getExtendedError() << std::endl ;
     colourStream.create(device, SENSOR_COLOR);
+    std::cout << OpenNI::getExtendedError() << std::endl ;
 
     device.getPlaybackControl()->setSpeed(-1);
+    std::cout << OpenNI::getExtendedError() << std::endl ;
     
     depthStream.start();
+    std::cout << OpenNI::getExtendedError() << std::endl ;
     colourStream.start();
+    std::cout << OpenNI::getExtendedError() << std::endl ;
 
     int numFrames = device.getPlaybackControl()->getNumberOfFrames(depthStream);
+    std::cout << numFrames << std::endl;
+
     frame_counter_ = 0;    
     //frameCtr = 0;
 
+    boost::mutex ffs;
     for (int i = 0; i < numFrames; ++i) {
+      
+      boost::mutex::scoped_lock lock(ffs);
+      
       //get a frame
       VideoFrameRef depthFrame, colourFrame;
 

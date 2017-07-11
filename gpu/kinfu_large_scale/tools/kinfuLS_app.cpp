@@ -51,6 +51,14 @@ Work in progress: patch by Marco (AUG,19th 2012)
 
 #include <pcl/console/parse.h>
 
+#define newNI
+
+#ifdef newNI
+#include <openni2/OpenNI.h>
+#include <opencv2/opencv.hpp>
+using namespace openni;
+#endif
+
 #include <boost/filesystem.hpp>
 
 #include <pcl/gpu/kinfu_large_scale/kinfu.h>
@@ -1001,7 +1009,11 @@ struct KinFuLSApp
   void
   initRegistration ()
   {
+    #ifndef newNI
     registration_ = capture_.providesCallback<pcl::ONIGrabber::sig_cb_openni_image_depth_image> ();
+    #else
+    registration_ = true;
+    #endif
     cout << "Registration mode: " << (registration_ ? "On" : "Off (not supported by source)") << endl;
   }
 
@@ -1526,6 +1538,72 @@ struct KinFuLSApp
     data_ready_cond_.notify_one();
   }
 
+  #ifdef newNI
+  void startMainLoop (string oni_file)
+	{
+    openni::Device device;
+    openni::VideoStream depthStream, colourStream;
+
+    device.open(oni_file.c_str());
+    depthStream.create(device, SENSOR_DEPTH);
+    colourStream.create(device, SENSOR_COLOR);
+
+    device.getPlaybackControl()->setSpeed(-1);
+    
+    depthStream.start();
+    colourStream.start();
+
+    int numFrames = device.getPlaybackControl()->getNumberOfFrames(depthStream);
+    frame_counter_ = 0;    
+    //frameCtr = 0;
+
+    for (int i = 0; i < numFrames; ++i) {
+      //get a frame
+      VideoFrameRef depthFrame, colourFrame;
+
+      depthStream.readFrame(&depthFrame);
+      colourStream.readFrame(&colourFrame);
+
+      depth_.cols = depthFrame.getWidth();
+			depth_.rows = depthFrame.getHeight();
+			depth_.step = depth_.cols * depth_.elemSize();
+      depth_.data = (const short unsigned int*) depthFrame.getData();
+
+			rgb24_.cols = colourFrame.getWidth();
+			rgb24_.rows = colourFrame.getHeight();
+			rgb24_.step = rgb24_.cols * rgb24_.elemSize(); 
+			rgb24_.data = (const pcl::gpu::kinfuLS::PixelRGB*) colourFrame.getData();
+
+			int image_frame_id = colourFrame.getFrameIndex();
+			int depth_frame_id = depthFrame.getFrameIndex();
+			if ( image_frame_id != depth_frame_id ) {
+				frame_id_ = depth_frame_id;
+				PCL_WARN( "Triggered frame number asynchronized : depth %d, image %d\n", depth_frame_id, image_frame_id );
+			} else {
+				frame_id_ = depth_frame_id;
+			}
+
+			if ( rgbd_odometry_) {
+				depthFlt0_.copyTo( depthFlt1_ );
+				grayImage0_.copyTo( grayImage1_ );
+
+				cv::Mat depth_mat( depthFrame.getHeight(), depthFrame.getWidth(), CV_16UC1 ,  ( unsigned short * ) depthFrame.getData());
+				cv::Mat image_mat( colourFrame.getHeight(), colourFrame.getWidth(), CV_8UC3 ,  ( unsigned char * )  colourFrame.getData());
+
+				cv::cvtColor( image_mat, grayImage0_, CV_RGB2GRAY );
+				depth_mat.convertTo( depthFlt0_, CV_32FC1, 1./1000 );
+			}
+
+      cout << "Processing frame " << frame_counter_ << " out of " << numFrames << endl;
+
+      // execute
+      execute(depth_, rgb24_, true);
+    }
+      if( record_log_ ){
+        writeLogFile ();
+      }
+	}
+  #else
   void
   startMainLoop (bool triggered_capture)
   {
@@ -1584,6 +1662,7 @@ struct KinFuLSApp
     }
     c.disconnect();
   }
+  #endif
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   void
@@ -1893,9 +1972,11 @@ main (int argc, char* argv[])
     }
     else if (pc::parse_argument (argc, argv, "-oni", oni_file) > 0)
     {
+      #ifndef newNI
       triggered_capture = true;
       bool repeat = false; // Only run ONI file once
       capture.reset (new pcl::ONIGrabber (oni_file, repeat, !triggered_capture));
+      #endif
     }
     else if (pc::parse_argument (argc, argv, "-pcd", pcd_dir) > 0)
     {
@@ -1942,6 +2023,13 @@ main (int argc, char* argv[])
   int fragment_rate = 0;
   pc::parse_argument (argc, argv, "--fragment", fragment_rate);
 
+  #ifdef newNI
+  if (OpenNI::initialize() != STATUS_OK) {
+    std::cout << "Failed to Initialize OpenNI" << std::endl;
+    std::cout << OpenNI::getExtendedError() << std::endl;
+    return false;
+  }
+  #endif
 
   //SPCL: added fragment_rate
   KinFuLSApp app (*capture, volume_size, shift_distance, snapshot_rate, fragment_rate);
@@ -1993,7 +2081,11 @@ main (int argc, char* argv[])
 
   // set verbosity level
   pcl::console::setVerbosityLevel(pcl::console::L_VERBOSE);
+  #ifdef newNI
+  try { app.startMainLoop (oni_file);}
+  #else
   try { app.startMainLoop (triggered_capture); }
+  #endif
   catch (const pcl::PCLException& /*e*/) { cout << "PCLException" << endl; }
   catch (const std::bad_alloc& /*e*/) { cout << "Bad alloc" << endl; }
   catch (const std::exception& /*e*/) { cout << "Exception" << endl; }
@@ -2014,5 +2106,10 @@ main (int argc, char* argv[])
   //~ }
   //~ #endif
   std::cout << "pcl_kinfu_largeScale exiting...\n";
+
+  #ifdef newNI
+  OpenNI::shutdown();
+  #endif
+
   return 0;
 }

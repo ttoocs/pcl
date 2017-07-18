@@ -13,6 +13,11 @@ find_package(CUDA 4)
 if(CUDA_FOUND)
 	message(STATUS "Found CUDA Toolkit v${CUDA_VERSION_STRING}")
 	
+	set(CUDA_HOST_COMPILER "/usr/bin/gcc-5")
+	
+	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-ccbin /usr/bin/gcc-5") 
+	message("MY DIRTY HACK" ${CUDA_HOST_COMPILER} ":" ${CUDA_NVCC_FLAGS})
+
 	if(${CUDA_VERSION_STRING} VERSION_LESS "7.5")
 	  # Recent versions of cmake set CUDA_HOST_COMPILER to CMAKE_C_COMPILER which
 	  # on OSX defaults to clang (/usr/bin/cc), but this is not a supported cuda

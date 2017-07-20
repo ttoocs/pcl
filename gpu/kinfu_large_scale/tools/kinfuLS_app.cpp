@@ -52,6 +52,7 @@ Work in progress: patch by Marco (AUG,19th 2012)
 #include <pcl/console/parse.h>
 
 #define CVIN
+//#define newNI
 
 #if defined(newNI) || defined(CVIN)
 #include <openni2/OpenNI.h>
@@ -1126,7 +1127,7 @@ struct KinFuLSApp
       {
         SampledScopeTime fps(time_ms_);
 
-        //  
+        //
         if (! rgbd_odometry_ ){
 
           //run kinfu algorithm (PCL)
@@ -1137,7 +1138,7 @@ struct KinFuLSApp
           }
         else{
           //SPCL
-          
+
 					// normalize color of grayImage1_
 					cv::Scalar scale0 = cv::mean( grayImage0_ );
 					cv::Scalar scale1 = cv::mean( grayImage1_ );
@@ -1190,7 +1191,7 @@ struct KinFuLSApp
 					}
 
         } //End rgbd_odometry_
-      } //End 
+      } //End
 
       image_view_.showDepth (depth_);
       //image_view_.showGeneratedDepth(kinfu_, kinfu_->getCameraPose());
@@ -1198,7 +1199,7 @@ struct KinFuLSApp
 
       //SPCL stuff:
       //TODO: See if relivant - it is, it's the thing called every grame if recording..
-    
+
 			if ( record_log_ ) {
 				//if ( use_schedule_ ) { //Not doing this.
 /*        if( false ) {
@@ -1250,7 +1251,7 @@ struct KinFuLSApp
 								}
 							}
 						}
-					} 
+					}
         } //End use_schedule
           else if ( use_graph_registration_ ) {
 					if ( framed_transformation_.flag_ & framed_transformation_.IgnoreIntegrationFlag ) {
@@ -1259,7 +1260,7 @@ struct KinFuLSApp
 						//cout << kinfu_->getCameraPose().matrix() << endl;
 						//cout << rgbd_graph_.tail_inv_ * kinfu_->getCameraPose().matrix() << endl;
 					}
-				} 
+				}
         else */
          {
 					if ( kinfu_->getGlobalTime() > 0 ) {
@@ -1268,12 +1269,12 @@ struct KinFuLSApp
 					}
 				}
 			} //End  record_log_
-      
+
       //SPCL... jenesaispas
       if ( fragment_rate_ > 0 && ((frame_id_ ) % (fragment_rate_) == 0 ) && record_log_ ) // && ( framed_transformation_.flag_ & framed_transformation_.SavePointCloudFlag ) )
       {
         scene_cloud_view_.show( *kinfu_, integrate_colors_ );
-        
+
   			if(scene_cloud_view_.point_colors_ptr_->points.empty()) // no colors
 	  		{
   				if (scene_cloud_view_.compute_normals_)
@@ -1306,20 +1307,20 @@ struct KinFuLSApp
   			// enable when you need mesh output instead of pcd output when using --fragment
   			//scene_cloud_view_.showMesh(*kinfu_, integrate_colors_);
   			//writeMesh( KinFuLSApp::MESH_PLY, file_index_ );
-  
+
   			/*s
   			if ( framed_transformation_.flag_ & framed_transformation_.SaveAbsoluteMatrix ) {
   			} else {
   			char filename[ 1024 ];
   			memset( filename, 0, 1024 );
-  
+
   			sprintf( filename, "cloud_bin_fragment_%d.log", file_index_ );
-  
+
   			kinfu_traj_.saveToFile( filename );
   			kinfu_traj_.clear();
   			}
   			*/
-  
+
   			/*
   			//std::vector< int > raw_data;
   			//int col;
@@ -1327,20 +1328,20 @@ struct KinFuLSApp
   			cout << "Downloading TSDF volume from device ... " << flush;
   			kinfu_->volume().downloadTsdfAndWeighs (tsdf_volume_.volumeWriteable (), tsdf_volume_.weightsWriteable ());
   			tsdf_volume_.setHeader (Eigen::Vector3i (pcl::device::VOLUME_X, pcl::device::VOLUME_Y, pcl::device::VOLUME_Z), kinfu_->volume().getSize ());
-  
+
   			int cnt = 0;
   			for ( int i = 0; i < ( int )tsdf_volume_.size(); i++ ) {
   			if ( tsdf_volume_.volume().at( i ) != 0.0f )
   			cnt++;
   			}
   			cout << "valid voxel number is " << cnt << endl;
-  
+
   			writeRawTSDF( file_index_, tsdf_volume_ );
   			*/
-  
+
 	  		file_index_++;
 		  }
-          
+
 
       //END SPCL
 
@@ -1463,10 +1464,10 @@ struct KinFuLSApp
         frame_id_ = depth_frame_id;
       }
       #endif
-    
+
       //RGBD
-   
-// /* 
+
+// /*
 			int image_frame_id = image_wrapper->getMetaData().FrameID();
 			int depth_frame_id = depth_wrapper->getDepthMetaData().FrameID();
 			if ( image_frame_id != depth_frame_id ) {
@@ -1565,20 +1566,31 @@ struct KinFuLSApp
 
       cv::resize(colourFrame, colourFrame, depthFrame.size());
 
+      std::vector<unsigned short> depthFrameData;
+      std::vector<pcl::gpu::kinfuLS::PixelRGB> colourFrameData;
+
+      for(int x = 0; x < depthFrame.rows; ++x){
+        for (int y = 0; y < depthFrame.cols; ++y) {
+          unsigned short d = depthFrame.at<unsigned short>(x, y);
+          depthFrameData.push_back(d);
+          pcl::gpu::kinfuLS::PixelRGB r = colourFrame.at<pcl::gpu::kinfuLS::PixelRGB>(x,y);
+          colourFrameData.push_back(r);
+        }
+      }
 
       depth_.cols = depthFrame.cols;
 			depth_.rows = depthFrame.rows;
 			depth_.step = depthFrame.step;
-      depth_.data = (const unsigned short*)depthFrame.data;
+      depth_.data = &depthFrameData[0];
 
 
 			rgb24_.cols = colourFrame.cols;
 			rgb24_.rows = colourFrame.rows;
 			rgb24_.step = colourFrame.step;
-			rgb24_.data = (const pcl::gpu::kinfuLS::PixelRGB*)colourFrame.data;
+			rgb24_.data = &colourFrameData[0];
 
-      std::cout << "Depth Cols,rows,step: " << depth_.cols << "," <<  depth_.rows << "," <<depth_.step << std::endl; 
-      std::cout << "Color Cols,rows,step: " << rgb24_.cols << "," <<rgb24_.rows << "," <<rgb24_.step << std::endl; 
+      std::cout << "Depth Cols,rows,step: " << depth_.cols << "," <<  depth_.rows << "," <<depth_.step << std::endl;
+      std::cout << "Color Cols,rows,step: " << rgb24_.cols << "," <<rgb24_.rows << "," <<rgb24_.step << std::endl;
 
 			int image_frame_id = i;
 			int depth_frame_id = i;
@@ -1607,7 +1619,7 @@ struct KinFuLSApp
     }
 	}
 
-  #else 
+  #else
     #ifdef newNI
   void startMainLoop (string oni_file)
 	{
@@ -1616,7 +1628,7 @@ struct KinFuLSApp
 
     device.open(oni_file.c_str());
     std::cout << OpenNI::getExtendedError() << std::endl ;
-    
+
     depthStream.create(device, SENSOR_DEPTH);
     std::cout << OpenNI::getExtendedError() << std::endl ;
     colourStream.create(device, SENSOR_COLOR);
@@ -1624,7 +1636,7 @@ struct KinFuLSApp
 
     device.getPlaybackControl()->setSpeed(-1);
     std::cout << OpenNI::getExtendedError() << std::endl ;
-    
+
     depthStream.start();
     std::cout << OpenNI::getExtendedError() << std::endl ;
     colourStream.start();
@@ -1633,14 +1645,14 @@ struct KinFuLSApp
     int numFrames = device.getPlaybackControl()->getNumberOfFrames(depthStream);
     std::cout << numFrames << std::endl;
 
-    frame_counter_ = 0;    
+    frame_counter_ = 0;
     //frameCtr = 0;
 
     boost::mutex ffs;
     for (int i = 0; i < numFrames; ++i) {
-      
+
       boost::mutex::scoped_lock lock(ffs);
-      
+
       //get a frame
       VideoFrameRef depthFrame, colourFrame;
 
@@ -1654,7 +1666,7 @@ struct KinFuLSApp
 
 			rgb24_.cols = colourFrame.getWidth();
 			rgb24_.rows = colourFrame.getHeight();
-			rgb24_.step = rgb24_.cols * rgb24_.elemSize(); 
+			rgb24_.step = rgb24_.cols * rgb24_.elemSize();
 			rgb24_.data = (const pcl::gpu::kinfuLS::PixelRGB*) colourFrame.getData();
 
 			int image_frame_id = colourFrame.getFrameIndex();
@@ -1726,6 +1738,8 @@ struct KinFuLSApp
           data_ready_cond_.wait (lock);
         }
 
+        std::cout << "Depth Cols,rows,step: " << depth_.cols << "," <<  depth_.rows << "," <<depth_.step << std::endl;
+        std::cout << "Color Cols,rows,step: " << rgb24_.cols << "," <<rgb24_.rows << "," <<rgb24_.step << std::endl;
         try { this->execute (depth_, rgb24_, has_data); }
         catch (const std::bad_alloc& /*e*/) { cout << "Bad alloc" << endl; break; }
         catch (const std::exception& /*e*/) { cout << "Exception" << endl; break; }

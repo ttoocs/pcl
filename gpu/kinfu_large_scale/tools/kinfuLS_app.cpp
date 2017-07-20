@@ -1006,8 +1006,12 @@ struct KinFuLSApp
   void
   initRegistration ()
   {
-    registration_ = capture_.providesCallback<pcl::ONIGrabber::sig_cb_openni_image_depth_image> ();
-    cout << "Registration mode: " << (registration_ ? "On" : "Off (not supported by source)") << endl;
+    #ifdef CVIN
+      registration_ = true; 
+    #else
+      registration_ = capture_.providesCallback<pcl::ONIGrabber::sig_cb_openni_image_depth_image> ();
+      cout << "Registration mode: " << (registration_ ? "On" : "Off (not supported by source)") << endl;
+    #endif
   }
 
   void
@@ -1534,13 +1538,13 @@ struct KinFuLSApp
   #ifdef CVIN
   void startMainLoop (string oni_file)
 	{
-    const string depthFrames = "depthFrames/"
-    const string colourFrames = "colourFrames/"
+    const string depthFrames = "depthframes/";
+    const string colourFrames = "colourframes/";
 
     int numFrames = (int)std::count_if(boost::filesystem::directory_iterator(boost::filesystem::path(oni_file + depthFrames)),
                                         boost::filesystem::directory_iterator(),
                                         [](const boost::filesystem::directory_entry& e)
-                                        {return e.path().extension() == ".pcd";}
+                                        {return e.path().extension() == ".jpg";}
     );
 
     std::cout << "Detected " << numFrames << " frames in total." << std::endl;
@@ -1549,13 +1553,13 @@ struct KinFuLSApp
       //get a frame
       cv::Mat depthFrame, colourFrame;
 
-      string depthFrameName = oni_file + depthFrames + "image" + std::to_string(i) + ".jpg";
-      string colourFrameName = oni_file + colourFrames + "image" + std::to_string(i) + ".jpg";
+      string depthFrameName = oni_file + depthFrames + "Image" + std::to_string(i) + ".jpg";
+      string colourFrameName = oni_file + colourFrames + "Image" + std::to_string(i) + ".jpg";
 
-      depthFrame = cv::imread(depthFrameName, cv::CV_LOAD_ANY_DEPTH);
-      colourFrames = cv::imread(colourFrameName, cv::CV_LOAD_IMAGE_COLOR);
+      depthFrame = cv::imread(depthFrameName, CV_LOAD_IMAGE_ANYDEPTH);
+      colourFrame = cv::imread(colourFrameName, CV_LOAD_IMAGE_COLOR);
 
-      depth_.cols = depthFrame.cols
+      depth_.cols = depthFrame.cols;
 			depth_.rows = depthFrame.rows;
 			depth_.step = depthFrame.step;
       depth_.data = (const unsigned short*)depthFrame.data;
@@ -1563,7 +1567,7 @@ struct KinFuLSApp
 			rgb24_.cols = colourFrame.cols;
 			rgb24_.rows = colourFrame.rows;
 			rgb24_.step = colourFrame.step;
-			rgb24_.data = (const pcl::gpu::PixelRGB*)colourFrame.data;
+			rgb24_.data = (const pcl::gpu::kinfuLS::PixelRGB*)colourFrame.data;
 
 			int image_frame_id = i;
 			int depth_frame_id = i;
@@ -1574,7 +1578,7 @@ struct KinFuLSApp
 				frame_id_ = depth_frame_id;
 			}
 
-			if ( rgbd_odometry_ || kintinuous_ ) {
+			if ( rgbd_odometry_ ) {
 				depthFlt0_.copyTo( depthFlt1_ );
 				grayImage0_.copyTo( grayImage1_ );
 
@@ -1585,10 +1589,10 @@ struct KinFuLSApp
 				depth_mat.convertTo( depthFlt0_, CV_32FC1, 1./1000 );
 			}
 
-      cout << "Processing frame " << frameCtr << " out of " << numFrames << endl;
+      cout << "Processing frame " << frame_counter_ << " out of " << numFrames << endl;
 
       // execute
-      execute(depth_, rgb24_);
+      execute(depth_, rgb24_, true);
     }
 	}
 
@@ -1962,9 +1966,13 @@ main (int argc, char* argv[])
     }
     else if (pc::parse_argument (argc, argv, "-oni", oni_file) > 0)
     {
-      triggered_capture = true;
-      bool repeat = false; // Only run ONI file once
-      capture.reset (new pcl::ONIGrabber (oni_file, repeat, !triggered_capture));
+      #ifdef CVIN
+        //Nothin.
+      #else
+        triggered_capture = true;
+        bool repeat = false; // Only run ONI file once
+        capture.reset (new pcl::ONIGrabber (oni_file, repeat, !triggered_capture));
+      #endif
     }
     else if (pc::parse_argument (argc, argv, "-pcd", pcd_dir) > 0)
     {
@@ -2062,7 +2070,11 @@ main (int argc, char* argv[])
 
   // set verbosity level
   pcl::console::setVerbosityLevel(pcl::console::L_VERBOSE);
-  try { app.startMainLoop (triggered_capture); }
+  #if defined(newNI) || defined( CVIN)
+    try { app.startMainLoop (oni_file);}
+  #else
+    try { app.startMainLoop (triggered_capture); }
+  #endif
   catch (const pcl::PCLException& /*e*/) { cout << "PCLException" << endl; }
   catch (const std::bad_alloc& /*e*/) { cout << "Bad alloc" << endl; }
   catch (const std::exception& /*e*/) { cout << "Exception" << endl; }

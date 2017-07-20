@@ -51,9 +51,9 @@ Work in progress: patch by Marco (AUG,19th 2012)
 
 #include <pcl/console/parse.h>
 
-#define newNI
+#define CVIN
 
-#ifdef newNI
+#if defined(newNI) || defined(CVIN)
 #include <openni2/OpenNI.h>
 #include <opencv2/opencv.hpp>
 using namespace openni;
@@ -1538,7 +1538,70 @@ struct KinFuLSApp
     data_ready_cond_.notify_one();
   }
 
-  #ifdef newNI
+  #ifdef CVIN
+
+  void startMainLoop (string oni_file)
+	{
+    const string depthFrames = "depthFrames/"
+    const string colourFrames = "colourFrames/"
+
+    int numFrames = (int)std::count_if(boost::filesystem::directory_iterator(boost::filesystem::path(oni_file + depthFrames)),
+                                        boost::filesystem::directory_iterator(),
+                                        [](const boost::filesystem::directory_entry& e)
+                                        {return e.path().extension() == ".pcd";}
+    );
+
+    std::cout << "Detected " << numFrames << " frames in total." << std::endl;
+
+    for (int i = 0; i < numFrames; ++i) {
+      //get a frame
+      cv::Mat depthFrame, colourFrame;
+
+      string depthFrameName = oni_file + depthFrames + "image" + std::to_string(i) + ".jpg";
+      string colourFrameName = oni_file + colourFrames + "image" + std::to_string(i) + ".jpg";
+
+      depthFrame = cv::imread(depthFrameName, cv::CV_LOAD_ANY_DEPTH);
+      colourFrames = cv::imread(colourFrameName, cv::CV_LOAD_IMAGE_COLOR);
+
+      depth_.cols = depthFrame.cols
+			depth_.rows = depthFrame.rows;
+			depth_.step = depthFrame.step;
+      depth_.data = (const unsigned short*)depthFrame.data;
+
+			rgb24_.cols = colourFrame.cols;
+			rgb24_.rows = colourFrame.rows;
+			rgb24_.step = colourFrame.step;
+			rgb24_.data = (const pcl::gpu::PixelRGB*)colourFrame.data;
+
+			int image_frame_id = i;
+			int depth_frame_id = i;
+			if ( image_frame_id != depth_frame_id ) {
+				frame_id_ = depth_frame_id;
+				PCL_WARN( "Triggered frame number asynchronized : depth %d, image %d\n", depth_frame_id, image_frame_id );
+			} else {
+				frame_id_ = depth_frame_id;
+			}
+
+			if ( rgbd_odometry_ || kintinuous_ ) {
+				depthFlt0_.copyTo( depthFlt1_ );
+				grayImage0_.copyTo( grayImage1_ );
+
+				cv::Mat depth_mat(depthFrame);
+				cv::Mat image_mat(colourFrame);
+
+				cv::cvtColor( image_mat, grayImage0_, CV_RGB2GRAY );
+				depth_mat.convertTo( depthFlt0_, CV_32FC1, 1./1000 );
+			}
+
+      cout << "Processing frame " << frameCtr << " out of " << numFrames << endl;
+
+      // execute
+      execute(depth_, rgb24_);
+    }
+	}
+
+  #else 
+    #ifdef newNI
   void startMainLoop (string oni_file)
 	{
     openni::Device device;
@@ -1675,6 +1738,7 @@ struct KinFuLSApp
     }
     c.disconnect();
   }
+  #endif
   #endif
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

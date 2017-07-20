@@ -1555,7 +1555,7 @@ struct KinFuLSApp
 
     for (int i = 0; i < numFrames; ++i) {
       //get a frame
-      cv::Mat depthFrame, colourFrame;
+      cv::Mat depthFrame, colourFrame, colourFrameIn;
 
       string depthFrameName = oni_file + depthFrames + "Image" + std::to_string(i) + ".jpg";
       string colourFrameName = oni_file + colourFrames + "Image" + std::to_string(i) + ".jpg";
@@ -1563,15 +1563,22 @@ struct KinFuLSApp
       depthFrame = cv::imread(depthFrameName, CV_LOAD_IMAGE_ANYDEPTH);
       colourFrame = cv::imread(colourFrameName, CV_LOAD_IMAGE_COLOR);
 
+      cv::resize(colourFrame, colourFrame, depthFrame.size());
+
+
       depth_.cols = depthFrame.cols;
 			depth_.rows = depthFrame.rows;
 			depth_.step = depthFrame.step;
       depth_.data = (const unsigned short*)depthFrame.data;
 
+
 			rgb24_.cols = colourFrame.cols;
 			rgb24_.rows = colourFrame.rows;
 			rgb24_.step = colourFrame.step;
 			rgb24_.data = (const pcl::gpu::kinfuLS::PixelRGB*)colourFrame.data;
+
+      std::cout << "Depth Cols,rows,step: " << depth_.cols << "," <<  depth_.rows << "," <<depth_.step << std::endl; 
+      std::cout << "Color Cols,rows,step: " << rgb24_.cols << "," <<rgb24_.rows << "," <<rgb24_.step << std::endl; 
 
 			int image_frame_id = i;
 			int depth_frame_id = i;

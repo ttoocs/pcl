@@ -1544,24 +1544,24 @@ struct KinFuLSApp
     int numFrames = (int)std::count_if(boost::filesystem::directory_iterator(boost::filesystem::path(oni_file + depthFrames)),
                                         boost::filesystem::directory_iterator(),
                                         [](const boost::filesystem::directory_entry& e)
-                                        {return e.path().extension() == ".jpg";}
+                                        {return e.path().extension() == ".png";}
     );
 
     std::cout << "Detected " << numFrames << " frames in total." << std::endl;
 
-    for (int i = 0; i < numFrames; ++i) {
+    for (int i = 1; i < numFrames; ++i) {
       //get a frame
       cv::Mat depthFrame, colourFrame, colourFrameIn;
 
-      string depthFrameName = oni_file + depthFrames + "Image" + std::to_string(i) + ".jpg";
+      string depthFrameName = oni_file + depthFrames + "Image" + std::to_string(i) + ".png";
       string colourFrameName = oni_file + colourFrames + "Image" + std::to_string(i) + ".jpg";
 
       depthFrame = cv::imread(depthFrameName, CV_LOAD_IMAGE_ANYDEPTH);
       colourFrame = cv::imread(colourFrameName, CV_LOAD_IMAGE_COLOR);
-
+      
       cv::resize(colourFrame, colourFrame, depthFrame.size());
 
-      depthFrame.convertTo(depthFrame,CV_16U);
+//      depthFrame.convertTo(depthFrame,CV_16U);
 //      cv::cvtColor(depthFrame, depthFrame, CV_16U);
 
       std::vector<unsigned short> depthFrameData;

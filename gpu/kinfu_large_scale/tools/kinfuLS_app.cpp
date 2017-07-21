@@ -1566,6 +1566,9 @@ struct KinFuLSApp
 
       cv::resize(colourFrame, colourFrame, depthFrame.size());
 
+      depthFrame.convertTo(depthFrame,CV_16U);
+//      cv::cvtColor(depthFrame, depthFrame, CV_16U);
+
       std::vector<unsigned short> depthFrameData;
       std::vector<pcl::gpu::kinfuLS::PixelRGB> colourFrameData;
 

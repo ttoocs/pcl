@@ -11,6 +11,7 @@ find_package(OpenCV REQUIRED )
 add_definitions(
   -DHAVE_OPENCV
   -g
+  -O0
 )
 
 link_libraries(

@@ -1620,9 +1620,9 @@ struct KinFuLSApp
 
       // execute
       execute(depth_, rgb24_, true);
-    }
-    if( record_log_ ){
-      writeLogFile ();
+      if( record_log_ ){
+        writeLogFile ();
+      }
     }
 	}
 

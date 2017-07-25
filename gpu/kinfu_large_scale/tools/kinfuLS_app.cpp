@@ -1563,7 +1563,10 @@ struct KinFuLSApp
 
       depthFrame = cv::imread(depthFrameName, CV_LOAD_IMAGE_ANYDEPTH);
       colourFrame = cv::imread(colourFrameName, CV_LOAD_IMAGE_COLOR);
-      
+
+      cv::cvtColor(colourFrame, colourFrame, CV_RGB2BGR);
+
+      cv::resize(depthFrame, depthFrame, cv::Size(640, 480));
       cv::resize(colourFrame, colourFrame, depthFrame.size());
 
 //      depthFrame.convertTo(depthFrame,CV_16U);
@@ -1574,9 +1577,13 @@ struct KinFuLSApp
 
       for(int x = 0; x < depthFrame.rows; ++x){
         for (int y = 0; y < depthFrame.cols; ++y) {
-          unsigned short d = depthFrame.at<unsigned short>(x, y);
-          depthFrameData.push_back(d);
           pcl::gpu::kinfuLS::PixelRGB r = colourFrame.at<pcl::gpu::kinfuLS::PixelRGB>(x,y);
+          unsigned short d = depthFrame.at<unsigned short>(x, y);
+
+          if (r.r == 0 && r.g == 0 && r.b == 0)
+            d = 0;
+
+          depthFrameData.push_back(d);
           colourFrameData.push_back(r);
         }
       }
@@ -1586,14 +1593,13 @@ struct KinFuLSApp
 			depth_.step = depthFrame.step;
       depth_.data = &depthFrameData[0];
 
-
 			rgb24_.cols = colourFrame.cols;
 			rgb24_.rows = colourFrame.rows;
 			rgb24_.step = colourFrame.step;
 			rgb24_.data = &colourFrameData[0];
 
-      std::cout << "Depth Cols,rows,step: " << depth_.cols << "," <<  depth_.rows << "," <<depth_.step << std::endl;
-      std::cout << "Color Cols,rows,step: " << rgb24_.cols << "," <<rgb24_.rows << "," <<rgb24_.step << std::endl;
+//      std::cout << "Depth Cols,rows,step: " << depth_.cols << "," <<  depth_.rows << "," <<depth_.step << std::endl;
+//      std::cout << "Color Cols,rows,step: " << rgb24_.cols << "," <<rgb24_.rows << "," <<rgb24_.step << std::endl;
 
 			int image_frame_id = i;
 			int depth_frame_id = i;
@@ -1619,6 +1625,9 @@ struct KinFuLSApp
 
       // execute
       execute(depth_, rgb24_, true);
+    }
+    if( record_log_ ){
+      writeLogFile ();
     }
 	}
 

@@ -1561,7 +1561,9 @@ struct KinFuLSApp
       string depthFrameName = oni_file + depthFrames + "Image" + std::to_string(i) + ".png";
       string colourFrameName = oni_file + colourFrames + "Image" + std::to_string(i) + ".jpg";
 
-      depthFrame = cv::imread(depthFrameName, CV_LOAD_IMAGE_ANYDEPTH);
+      
+//      depthFrame = cv::imread(depthFrameName, CV_LOAD_IMAGE_ANYDEPTH);
+      depthFrame = cv::imread(depthFrameName,  cv::IMREAD_ANYDEPTH);
       colourFrame = cv::imread(colourFrameName, CV_LOAD_IMAGE_COLOR);
 
       cv::cvtColor(colourFrame, colourFrame, CV_RGB2BGR);

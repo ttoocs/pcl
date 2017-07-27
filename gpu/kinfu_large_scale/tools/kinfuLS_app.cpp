@@ -1554,7 +1554,7 @@ struct KinFuLSApp
 
     std::cout << "Detected " << numFrames << " frames in total." << std::endl;
 
-    for (int i = 1; i < numFrames; ++i) {
+    for (int i = 0; i < numFrames; ++i) {
       //get a frame
       cv::Mat depthFrame, colourFrame, colourFrameIn;
 

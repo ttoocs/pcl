@@ -1549,12 +1549,25 @@ struct KinFuLSApp
 
     std::cout << "Detected " << numFrames << " frames in total." << std::endl;
 
+    bool hasZero = boost::filesystem::exists(oni_file + depthFrames + "Image0.png");
+
+    if(! hasZero){ //Offset fix.
+      numFrames--;
+    }
+
     for (int i = 0; i < numFrames; ++i) {
       //get a frame
       cv::Mat depthFrame, colourFrame, colourFrameIn;
 
-      string depthFrameName = oni_file + depthFrames + "Image" + std::to_string(i) + ".png";
-      string colourFrameName = oni_file + colourFrames + "Image" + std::to_string(i) + ".jpg";
+      string depthFrameName;
+      string colourFrameName;
+      if(hasZero){
+        depthFrameName = oni_file + depthFrames + "Image" + std::to_string(i) + ".png";
+        colourFrameName = oni_file + colourFrames + "Image" + std::to_string(i) + ".jpg";
+      }else{
+        depthFrameName = oni_file + depthFrames + "Image" + std::to_string(i+1) + ".png";
+        colourFrameName = oni_file + colourFrames + "Image" + std::to_string(i+1) + ".jpg";
+      }
 
       
 //      depthFrame = cv::imread(depthFrameName, CV_LOAD_IMAGE_ANYDEPTH);

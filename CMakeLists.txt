@@ -19,6 +19,9 @@ if(POLICY CMP0054)
   cmake_policy(SET CMP0054 OLD) # Silent warnings about quoted variables
 endif()
 
+#CudaFudgeOption
+option(USE_COCL "Use Cuda On CL instead of cuda" OFF)
+
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "possible configurations" FORCE)
 
 # In case the user does not setup CMAKE_BUILD_TYPE, assume it's RelWithDebInfo

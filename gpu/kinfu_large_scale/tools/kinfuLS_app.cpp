@@ -54,9 +54,9 @@ Work in progress: patch by Marco (AUG,19th 2012)
 #define newNI
 
 #ifdef newNI
-#include <openni2/OpenNI.h>
-#include <opencv2/opencv.hpp>
-using namespace openni;
+  #include <openni2/OpenNI.h>
+  #include <opencv2/opencv.hpp>
+  using namespace openni;
 #endif
 
 #include <boost/filesystem.hpp>
@@ -1541,6 +1541,7 @@ struct KinFuLSApp
   #ifdef newNI
   void startMainLoop (string oni_file)
 	{
+    std::cout << "Starting main loop." << std::endl;
     openni::Device device;
     openni::VideoStream depthStream, colourStream;
 

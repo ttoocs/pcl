@@ -1557,7 +1557,7 @@ struct KinFuLSApp
 
     for (int i = 0; i < numFrames; ++i) {
       //get a frame
-      cv::Mat depthFrame, colourFrame, colourFrameIn;
+      cv::Mat depthFrame, colourFrame, tmp;
 
       string depthFrameName;
       string colourFrameName;
@@ -1575,7 +1575,11 @@ struct KinFuLSApp
       colourFrame = cv::imread(colourFrameName, CV_LOAD_IMAGE_COLOR);
 
       cv::cvtColor(colourFrame, colourFrame, CV_RGB2BGR);
-
+ 
+  //TODO: Crop it again.
+      tmp = depthFrame(cv::Rect(0,0,512,424));
+      depthFrame = tmp;   
+   
       cv::resize(depthFrame, depthFrame, cv::Size(640, 480));
       cv::resize(colourFrame, colourFrame, depthFrame.size());
 

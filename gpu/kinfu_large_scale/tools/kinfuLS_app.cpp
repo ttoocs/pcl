@@ -1576,9 +1576,10 @@ struct KinFuLSApp
 
       cv::cvtColor(colourFrame, colourFrame, CV_RGB2BGR);
  
+      //Now implmented in ni2recorder.
   //TODO: Crop it again.
-      tmp = depthFrame(cv::Rect(0,0,512,424));
-      depthFrame = tmp;   
+  //      tmp = depthFrame(cv::Rect(0,0,512,424));
+  //    depthFrame = tmp;   
    
       cv::resize(depthFrame, depthFrame, cv::Size(640, 480));
       cv::resize(colourFrame, colourFrame, depthFrame.size());
